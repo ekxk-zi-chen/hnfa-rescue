@@ -8,6 +8,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const LIFF_CLIENT_ID = process.env.LIFF_CLIENT_ID;
+console.log('SUPABASE_URL', SUPABASE_URL);
+console.log('SUPABASE_SERVICE_KEY', !!SUPABASE_SERVICE_KEY);
+console.log('JWT_SECRET', !!JWT_SECRET);
+console.log('LIFF_CLIENT_ID', process.env.LIFF_CLIENT_ID);
 
 // 建立 Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
