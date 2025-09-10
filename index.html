@@ -44,12 +44,6 @@
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             overflow: hidden;
-            animation: fadeIn 0.5s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         
         .header {
@@ -70,17 +64,6 @@
             opacity: 0.9;
         }
         
-        .header::after {
-            content: '';
-            position: absolute;
-            bottom: -10px;
-            left: 0;
-            right: 0;
-            height: 20px;
-            background: white;
-            border-radius: 50% 50% 0 0;
-        }
-        
         .content {
             padding: 30px 25px;
         }
@@ -92,12 +75,6 @@
             font-size: 14px;
             display: flex;
             align-items: center;
-            animation: slideIn 0.3s ease;
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         
         .status-box.info {
@@ -135,7 +112,6 @@
             border-radius: 8px;
             margin-bottom: 20px;
             border-left: 4px solid #8bc34a;
-            animation: fadeIn 0.5s ease;
         }
         
         .user-info h3 {
@@ -145,7 +121,6 @@
         
         .form-container {
             display: none;
-            animation: fadeIn 0.5s ease;
         }
         
         .form-group {
@@ -159,7 +134,7 @@
             color: #444;
         }
         
-        input, textarea, select {
+        input, textarea {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #ddd;
@@ -168,7 +143,7 @@
             transition: border-color 0.3s;
         }
         
-        input:focus, textarea:focus, select:focus {
+        input:focus, textarea:focus {
             outline: none;
             border-color: var(--primary);
         }
@@ -192,14 +167,11 @@
         
         .submit-btn:hover {
             box-shadow: 0 4px 12px rgba(0, 195, 0, 0.3);
-            transform: translateY(-2px);
         }
         
         .submit-btn:disabled {
             background: #cccccc;
             cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
         }
         
         .login-btn {
@@ -210,7 +182,6 @@
         
         .login-btn:hover {
             box-shadow: 0 4px 12px rgba(0, 132, 255, 0.3);
-            transform: translateY(-2px);
         }
         
         .demo-btn {
@@ -220,7 +191,6 @@
         
         .demo-btn:hover {
             box-shadow: 0 4px 12px rgba(158, 158, 158, 0.3);
-            transform: translateY(-2px);
         }
         
         .debug-toggle {
@@ -254,7 +224,6 @@
             border-radius: 8px;
             margin-bottom: 20px;
             border-left: 4px solid var(--warning);
-            animation: fadeIn 0.5s ease;
         }
         
         .instructions h3 {
@@ -385,12 +354,12 @@
             </div>
             
             <div class="problem-solution">
-                <h3>Session問題解決方案</h3>
+                <h3>登入問題解決方案</h3>
                 <p>如果您遇到登入循環問題，請嘗試：</p>
                 <ol>
                     <li>點擊"清除登入狀態"按鈕清除本地Session</li>
                     <li>刷新頁面後重新登入</li>
-                    <li>如果問題持續，請聯繫技術支援</li>
+                    <li>如果問題持續，請使用演示模式或聯繫技術支援</li>
                 </ol>
             </div>
             
@@ -415,8 +384,8 @@
             API_BASE: "https://hnfa-rescue-rhlk5hhw9-ekxk-zi-chens-projects.vercel.app/api",
             DEBUG: true,
             ENABLE_DEMO_MODE: true,
-            SESSION_MAX_RETRIES: 3, // Session驗證最大重試次數
-            SESSION_RETRY_DELAY: 1000 // 重試延遲(毫秒)
+            SESSION_MAX_RETRIES: 2,
+            SESSION_RETRY_DELAY: 1000
         };
 
         // 全局變數
@@ -426,13 +395,15 @@
         let IS_DEMO_MODE = false;
         let LIFF_INITIALIZED = false;
         let SESSION_RETRY_COUNT = 0;
+        let IS_EXTERNAL_BROWSER = false;
 
         // ---------- Session管理函數 ----------
         function clearSession() {
             localStorage.removeItem('sessionToken');
+            localStorage.removeItem('loginRedirect');
             SESSION_TOKEN = null;
             SESSION_RETRY_COUNT = 0;
-            addDebugInfo('已清除本地Session');
+            addDebugInfo('已清除本地Session和重定向標記');
             showStatus('已清除登入狀態，請重新登入', 'info');
             showLoginOptions();
         }
@@ -446,12 +417,10 @@
         function validateSessionFormat(token) {
             if (!token || typeof token !== 'string') return false;
             
-            // 簡單的格式驗證 - 實際應根據您的Session格式調整
             try {
                 const parts = token.split('.');
                 if (parts.length !== 3) return false;
                 
-                // 檢查是否是有效的JWT格式
                 const payload = JSON.parse(atob(parts[1]));
                 if (!payload.exp) return false;
                 
@@ -469,7 +438,6 @@
             statusTextEl.textContent = message;
             statusEl.className = 'status-box ' + type;
             
-            // 更新圖標
             const iconMap = {
                 info: '⏳',
                 error: '❌',
@@ -488,7 +456,6 @@
             const time = new Date().toLocaleTimeString();
             debugEl.innerHTML += `<div>[${time}] ${info}</div>`;
             
-            // 自動滾動到底部
             debugEl.scrollTop = debugEl.scrollHeight;
         }
 
@@ -519,6 +486,21 @@
             addDebugInfo('開始初始化應用');
             
             try {
+                // 檢查是否為重定向回來的
+                const urlParams = new URLSearchParams(window.location.search);
+                const isRedirect = urlParams.get('liff.state') || localStorage.getItem('loginRedirect');
+                
+                if (isRedirect) {
+                    addDebugInfo('檢測到登入重定向回傳');
+                    localStorage.removeItem('loginRedirect');
+                    
+                    // 清理URL參數避免循環
+                    if (window.history.replaceState) {
+                        const cleanUrl = window.location.origin + window.location.pathname;
+                        window.history.replaceState({}, document.title, cleanUrl);
+                    }
+                }
+                
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
@@ -527,6 +509,7 @@
                 
                 // 檢查是否在 LINE 環境中
                 const isInLINE = liff.isInClient();
+                IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
                 
                 // 檢查並驗證現有的sessionToken
@@ -547,7 +530,7 @@
                                 displayName: result.displayName,
                                 userId: result.userId
                             });
-                            SESSION_RETRY_COUNT = 0; // 重置重試計數器
+                            SESSION_RETRY_COUNT = 0;
                             return;
                         } else {
                             addDebugInfo('sessionToken 無效，已清除');
@@ -590,7 +573,6 @@
                 addDebugInfo('初始化錯誤: ' + error.message);
                 showStatus('初始化失敗: ' + error.message, 'error');
                 
-                // 即使初始化失敗，也顯示登入選項
                 showLoginOptions();
             }
         }
@@ -617,13 +599,11 @@
             } catch (error) {
                 addDebugInfo('驗證請求失敗: ' + error.message);
                 
-                // 增加重試計數器
                 SESSION_RETRY_COUNT++;
                 
                 if (SESSION_RETRY_COUNT < CONFIG.SESSION_MAX_RETRIES) {
                     addDebugInfo(`驗證失敗，將在 ${CONFIG.SESSION_RETRY_DELAY/1000} 秒後重試 (${SESSION_RETRY_COUNT}/${CONFIG.SESSION_MAX_RETRIES})`);
                     
-                    // 延遲後重試
                     await new Promise(resolve => setTimeout(resolve, CONFIG.SESSION_RETRY_DELAY));
                     return await verifyToken(idToken, sessionToken);
                 } else {
@@ -700,7 +680,6 @@
             } else {
                 showStatus(IS_DEMO_MODE ? '演示模式已啟用' : '驗證成功，請填寫表單', 'success');
                 
-                // 3秒後隱藏狀態消息
                 setTimeout(() => {
                     document.getElementById('status').style.display = 'none';
                 }, 3000);
@@ -725,7 +704,6 @@
             showStatus('正在提交表單...');
             
             try {
-                // 演示模式下不實際發送數據
                 if (IS_DEMO_MODE) {
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     showStatus('演示模式：表單提交成功！', 'success');
@@ -746,7 +724,6 @@
                     } else {
                         showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
                         
-                        // 如果session無效，清除本地session
                         if (data.message && data.message.includes('session')) {
                             addDebugInfo('檢測到Session無效，將清除本地Session');
                             clearSession();
@@ -759,7 +736,6 @@
             } finally {
                 toggleLoader('submit', false);
                 
-                // 5秒後隱藏狀態消息
                 setTimeout(() => {
                     document.getElementById('status').style.display = 'none';
                 }, 5000);
@@ -789,17 +765,17 @@
                 toggleLoader('login', true);
                 
                 try {
-                    // 如果LIFF尚未初始化，先初始化
                     if (!LIFF_INITIALIZED) {
                         addDebugInfo('LIFF 尚未初始化，正在初始化...');
                         await liff.init({ liffId: CONFIG.LIFF_ID });
                         LIFF_INITIALIZED = true;
                     }
                     
-                    // 在外部瀏覽器中登入
                     if (!liff.isInClient()) {
-                        addDebugInfo('在外部瀏覽器中登入');
-                        liff.login({ redirectUri: window.location.href });
+                        addDebugInfo('在外部瀏覽器中登入，設置重定向標記');
+                        // 設置重定向標記，以便返回時識別
+                        localStorage.setItem('loginRedirect', 'true');
+                        liff.login({ redirectUri: window.location.origin + window.location.pathname });
                     } else {
                         addDebugInfo('在LINE環境中登入');
                         liff.login();
@@ -855,7 +831,6 @@
             // 設置事件監聽器
             setupEventListeners();
             
-            // 檢查 LIFF SDK 是否加載成功
             if (typeof liff === 'undefined') {
                 showStatus('LIFF SDK 加載失敗，請刷新頁面', 'error');
                 showLoginOptions();
@@ -875,7 +850,6 @@
                     showStatus('LIFF 初始化失敗，請使用演示模式', 'error');
                     showLoginOptions();
                     
-                    // 啟用演示模式按鈕
                     if (CONFIG.ENABLE_DEMO_MODE) {
                         document.getElementById('demo-btn').style.display = 'block';
                     }
