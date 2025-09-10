@@ -1,5 +1,4 @@
-// handler.js
-
+// verify.js
 import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
 import { verifyIdToken } from "./utils/line";
@@ -13,6 +12,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://ekxk-zi-chen.github.io";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// ---- CORS ----
 function setCorsHeaders(res, origin = "*") {
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -20,35 +20,36 @@ function setCorsHeaders(res, origin = "*") {
 }
 
 export default async function handler(req, res) {
+  // 1️⃣ 最前面就處理 OPTIONS
+  setCorsHeaders(res, CORS_ORIGIN);
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
   try {
-    // 先加 CORS header
-    setCorsHeaders(res, CORS_ORIGIN);
-
-    // OPTIONS 預檢
-    if (req.method === "OPTIONS") {
-      return res.status(204).end();
-    }
-
-    if (req.method !== "POST") {
-      return res.status(405).json({ status: "error", message: "Method not allowed" });
-    }
-
+    // 2️⃣ 安全解析 body
     let body = {};
-    try {
-      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    } catch (err) {
-      console.error("JSON parse error:", err);
-      return res.status(400).json({ status: "error", message: "Invalid JSON" });
+    if (req.body) {
+      if (typeof req.body === "string") {
+        body = JSON.parse(req.body);
+      } else {
+        body = req.body;
+      }
     }
 
     const { idToken, sessionToken } = body || {};
 
+    // 3️⃣ 確認環境變數
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET || !LIFF_CLIENT_ID) {
       console.error("Missing env vars");
       return res.status(500).json({ status: "error", message: "Server env not configured" });
     }
 
-    // sessionToken 驗證
+    // 4️⃣ sessionToken 驗證
     if (sessionToken) {
       try {
         const decoded = jwt.verify(sessionToken, JWT_SECRET);
@@ -60,15 +61,15 @@ export default async function handler(req, res) {
         });
       } catch (e) {
         console.error("sessionToken invalid:", e);
-        // fallback to idToken
       }
     }
 
+    // 5️⃣ idToken 必須存在
     if (!idToken) {
       return res.status(400).json({ status: "error", message: "缺少 idToken 或 sessionToken" });
     }
 
-    // 驗證 LINE idToken
+    // 6️⃣ 驗證 LINE idToken
     let profile;
     try {
       profile = await verifyIdToken(idToken);
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
 
     const userId = profile.sub;
 
-    // 查 Supabase users
+    // 7️⃣ 查 Supabase users
     let userData;
     try {
       const { data, error } = await supabase
@@ -91,15 +92,10 @@ export default async function handler(req, res) {
         .select("*")
         .eq("user_id", userId)
         .single();
-
-      if (error) {
-        console.error("Supabase query error:", error);
-        return res.status(500).json({ status: "error", message: "Supabase 查詢錯誤" });
-      }
-
+      if (error) throw error;
       userData = data;
     } catch (err) {
-      console.error("Supabase request failed:", err);
+      console.error("Supabase query failed:", err);
       return res.status(500).json({ status: "error", message: "Supabase 查詢失敗" });
     }
 
@@ -107,29 +103,27 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: "needsignup", userId });
     }
 
-    const permissions = { role: userData.role };
+    // 8️⃣ 建立新的 sessionToken
     let newSessionToken;
     try {
-      newSessionToken = createSessionToken(userId, permissions);
+      newSessionToken = createSessionToken(userId, { role: userData.role });
     } catch (err) {
       console.error("createSessionToken failed:", err);
       return res.status(500).json({ status: "error", message: "無法建立 sessionToken" });
     }
 
+    // 9️⃣ 回傳成功
     return res.status(200).json({
       status: "ok",
       userId,
       displayName: userData.display_name,
-      permissions,
+      permissions: { role: userData.role },
       sessionToken: newSessionToken,
     });
+
   } catch (err) {
     console.error("Unhandled verify handler error:", err);
     setCorsHeaders(res, CORS_ORIGIN);
-    return res.status(500).json({
-      status: "error",
-      message: "伺服器錯誤",
-      detail: String(err),
-    });
+    return res.status(500).json({ status: "error", message: "伺服器錯誤", detail: String(err) });
   }
 }
