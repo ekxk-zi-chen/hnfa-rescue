@@ -1,42 +1,3 @@
-// api/verify.js
-import jwt from 'jsonwebtoken';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const JWT_SECRET = process.env.JWT_SECRET;
-const LIFF_CLIENT_ID = process.env.LIFF_CLIENT_ID;
-// 可在 Vercel 環境變數設定此值，或暫時用 '*' 測試
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-function setCorsHeaders(res, origin) {
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // 若需 cookies 或 credentials，開下面一行並在前端 fetch 加 credentials
-  // res.setHeader('Access-Control-Allow-Credentials', 'true');
-}
-
-async function verifyIdToken(idToken) {
-  try {
-    const r = await fetch(`https://api.line.me/oauth2/v2.1/verify?id_token=${encodeURIComponent(idToken)}&client_id=${LIFF_CLIENT_ID}`);
-    if (!r.ok) {
-      console.error('LINE verify status', r.status);
-      return null;
-    }
-    return await r.json();
-  } catch (e) {
-    console.error('LINE verify error', e);
-    return null;
-  }
-}
-
-function createSessionToken(userId, permissions = {}) {
-  return jwt.sign({ userId, permissions, iat: Math.floor(Date.now() / 1000) }, JWT_SECRET, { expiresIn: '24h' });
-}
-
 export default async function handler(req, res) {
   // 一律先設定 CORS header
   setCorsHeaders(res, CORS_ORIGIN);
@@ -46,12 +7,21 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  if (req.method !== 'POST') {
+    return res.status(405).json({ status: 'error', message: 'Method not allowed' });
+  }
+
   try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ status: 'error', message: 'Method not allowed' });
+    // 🟢 手動 parse JSON
+    let body = {};
+    try {
+      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    } catch (err) {
+      console.error("JSON parse error:", err);
+      return res.status(400).json({ status: 'error', message: 'Invalid JSON' });
     }
 
-    const { idToken, sessionToken } = req.body || {};
+    const { idToken, sessionToken } = body || {};
 
     // env check
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET || !LIFF_CLIENT_ID) {
