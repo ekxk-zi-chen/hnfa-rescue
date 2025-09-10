@@ -592,12 +592,25 @@
                 ID_TOKEN = liff.getIDToken();
                 addDebugInfo('已獲取 ID Token');
                 
-                // 只有當 sessionToken 不存在時才重新登入
-                if (isTokenExpired(ID_TOKEN) && !SESSION_TOKEN) {
-                    addDebugInfo('ID Token 已過期且沒有 sessionToken，重新登入');
-                    liff.login();
-                    return;
+                if (!SESSION_TOKEN) {
+                    ID_TOKEN = liff.getIDToken();
+                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('沒有有效 ID Token，重新登入');
+                        liff.login();
+                        return;
+                    }
+                    await verifyIdToken(ID_TOKEN);
+                } else {
+                    // 使用 SESSION_TOKEN 驗證
+                    const result = await verifyToken(null, SESSION_TOKEN);
+                    if (result && result.status === 'ok') {
+                        renderUserInterface(result);
+                    } else {
+                        clearSession();
+                        showLoginOptions();
+                    }
                 }
+
                 
                 // 驗證 ID Token
                 showStatus('正在驗證身份...');
