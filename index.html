@@ -501,42 +501,37 @@
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
-            
+        
             try {
                 // 檢查是否為重定向回來的
                 const urlParams = new URLSearchParams(window.location.search);
                 const isRedirect = urlParams.get('liff.state') || localStorage.getItem('loginRedirect');
-                
+        
                 if (isRedirect) {
                     addDebugInfo('檢測到登入重定向回傳');
                     localStorage.removeItem('loginRedirect');
-                
-                    // 清理 URL 參數
+        
                     if (window.history.replaceState) {
                         const cleanUrl = window.location.origin + window.location.pathname;
                         window.history.replaceState({}, document.title, cleanUrl);
                     }
-                
-                    // **重要：回來後必須初始化 LIFF 並取得 ID Token**
-                    if (!LIFF_INITIALIZED) await liff.init({ liffId: CONFIG.LIFF_ID });
-                    LIFF_INITIALIZED = true;
-                
-                    ID_TOKEN = liff.getIDToken(); // 取得回傳 token
+        
+                    if (!LIFF_INITIALIZED) {
+                        await liff.init({ liffId: CONFIG.LIFF_ID });  // ✅ 這裡才用 await
+                        LIFF_INITIALIZED = true;
+                    }
+        
+                    ID_TOKEN = liff.getIDToken();
                     if (ID_TOKEN && !isTokenExpired(ID_TOKEN)) {
-                        await verifyIdToken(ID_TOKEN); // 驗證 token
-                        return; // 成功後結束初始化
+                        await verifyIdToken(ID_TOKEN);
+                        return;
                     } else {
                         addDebugInfo('ID Token 無效或過期，請重新登入');
                         showLoginOptions();
                         return;
                     }
                 }
-            } catch (err) {
-                console.error('發生錯誤:', err);
-                addDebugInfo('初始化錯誤: ' + err.message);
-                showLoginOptions();
-            }
-        }
+
 
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
