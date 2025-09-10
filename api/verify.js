@@ -1,4 +1,3 @@
-// verify.js 
 import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
 import { verifyIdToken } from "./utils/line";
@@ -12,47 +11,48 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://ekxk-zi-chen.github.io";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// ---- CORS ----
-function setCorsHeaders(res, origin = "*") {
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
 export default async function handler(req, res) {
-  // 1️⃣ 最前面就處理 OPTIONS
-  setCorsHeaders(res, CORS_ORIGIN);
+  // 只在 OPTIONS 请求时设置 CORS
   if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     return res.status(204).end();
   }
 
   if (req.method !== "POST") {
+    res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
   try {
-    // 2️⃣ 安全解析 body
-    let body = {};
-    if (req.body) {
-      if (typeof req.body === "string") {
-        body = JSON.parse(req.body);
-      } else {
-        body = req.body;
-      }
+    // 更健壮的请求体解析
+    let body;
+    try {
+      body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    } catch (parseError) {
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(400).json({ 
+        status: "error", 
+        message: "Invalid JSON format" 
+      });
     }
 
     const { idToken, sessionToken } = body || {};
 
-    // 3️⃣ 確認環境變數
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET || !LIFF_CLIENT_ID) {
-      console.error("Missing env vars");
-      return res.status(500).json({ status: "error", message: "Server env not configured" });
+    // 环境变量检查（改为警告而不是直接返回错误）
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      console.warn("Supabase env vars not configured");
+    }
+    if (!JWT_SECRET) {
+      console.warn("JWT_SECRET not configured");
     }
 
-    // 4️⃣ sessionToken 驗證
+    // sessionToken 验证
     if (sessionToken) {
       try {
         const decoded = jwt.verify(sessionToken, JWT_SECRET);
+        res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
         return res.status(200).json({
           status: "ok",
           userId: decoded.userId,
@@ -60,31 +60,44 @@ export default async function handler(req, res) {
           sessionToken,
         });
       } catch (e) {
-        console.error("sessionToken invalid:", e);
+        console.warn("sessionToken invalid:", e.message);
+        // 继续处理 idToken
       }
     }
 
-    // 5️⃣ idToken 必須存在
+    // idToken 必须存在
     if (!idToken) {
-      return res.status(400).json({ status: "error", message: "缺少 idToken 或 sessionToken" });
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(400).json({ 
+        status: "error", 
+        message: "缺少 idToken" 
+      });
     }
 
-    // 6️⃣ 驗證 LINE idToken
+    // 验证 LINE idToken
     let profile;
     try {
-      profile = await verifyIdToken(idToken);
+      profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
     } catch (err) {
       console.error("verifyIdToken error:", err);
-      return res.status(401).json({ status: "error", message: "idToken 驗證失敗" });
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(401).json({ 
+        status: "error", 
+        message: "idToken 驗證失敗" 
+      });
     }
 
     if (!profile || !profile.sub) {
-      return res.status(401).json({ status: "error", message: "idToken 驗證失敗" });
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(401).json({ 
+        status: "error", 
+        message: "idToken 驗證失敗" 
+      });
     }
 
     const userId = profile.sub;
 
-    // 7️⃣ 查 Supabase users
+    // 查询 Supabase
     let userData;
     try {
       const { data, error } = await supabase
@@ -92,27 +105,44 @@ export default async function handler(req, res) {
         .select("*")
         .eq("user_id", userId)
         .single();
-      if (error) throw error;
+      
+      if (error) {
+        if (error.code === 'PGRST116') { // 没有找到记录
+          res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+          return res.status(200).json({ 
+            status: "needsignup", 
+            userId 
+          });
+        }
+        throw error;
+      }
       userData = data;
     } catch (err) {
       console.error("Supabase query failed:", err);
-      return res.status(500).json({ status: "error", message: "Supabase 查詢失敗" });
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(500).json({ 
+        status: "error", 
+        message: "数据库查询失败" 
+      });
     }
 
-    if (!userData) {
-      return res.status(200).json({ status: "needsignup", userId });
-    }
-
-    // 8️⃣ 建立新的 sessionToken
+    // 创建 sessionToken
     let newSessionToken;
     try {
-      newSessionToken = createSessionToken(userId, { role: userData.role });
+      newSessionToken = createSessionToken(userId, { 
+        role: userData.role 
+      });
     } catch (err) {
       console.error("createSessionToken failed:", err);
-      return res.status(500).json({ status: "error", message: "無法建立 sessionToken" });
+      res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+      return res.status(500).json({ 
+        status: "error", 
+        message: "无法建立 sessionToken" 
+      });
     }
 
-    // 9️⃣ 回傳成功
+    // 成功响应
+    res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
     return res.status(200).json({
       status: "ok",
       userId,
@@ -122,8 +152,11 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("Unhandled verify handler error:", err);
-    setCorsHeaders(res, CORS_ORIGIN);
-    return res.status(500).json({ status: "error", message: "伺服器錯誤", detail: String(err) });
+    console.error("Unhandled error:", err);
+    res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
+    return res.status(500).json({ 
+      status: "error", 
+      message: "服务器内部错误" 
+    });
   }
 }
