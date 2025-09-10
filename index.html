@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>花蓮特搜網頁</title>
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js" onload="console.log('LIFF SDK 加载成功')" onerror="console.error('LIFF SDK 加载失败')"></script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;}
         .form-container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
@@ -21,6 +21,14 @@
         .user-info { background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00C300; display:none;}
         .debug-info { background-color: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; color: #666; display:none;}
     </style>
+    <script>
+        // 全局错误处理
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('全局错误:', msg, 'at', url, ':', lineNo);
+            document.getElementById('status').textContent = '发生错误: ' + msg;
+            return false;
+        };
+    </script>
 </head>
 <body>
 <div class="form-container">
@@ -69,7 +77,6 @@ function showStatus(msg, type='info'){
     if(type==='error') el.className += ' error';
     if(type==='success') el.className += ' success';
 }
-
 function addDebugInfo(info){
     if(!CONFIG.DEBUG_) return;
     const debugEl = document.getElementById('debug-content');
@@ -92,10 +99,9 @@ function isIdTokenExpired(token){
 // ---------- 初始化 App ----------
 async function startApp() {
     try {
-        showStatus('正在初始化...');
-        await liff.init({ liffId: CONFIG.LIFF_ID });
-        addDebugInfo('LIFF 初始化成功');
-
+        console.log('開始初始化應用');
+        showStatus('正在初始化應用...');
+        
         // 檢查是否在 LINE 環境中
         if (!liff.isInClient()) {
             addDebugInfo('不在 LINE 環境中，顯示登入按鈕');
@@ -282,24 +288,46 @@ document.getElementById('myForm').addEventListener('submit', function(e) {
     submitForm(formData);
 });
 
-// ---------- LIFF 事件監聽 ----------
-liff.ready.then(() => {
-    addDebugInfo('LIFF ready');
-    startApp();
-}).catch((err) => {
-    console.error('LIFF 初始化失敗:', err);
-    showStatus('LINE 功能初始化失敗', 'error');
-    addDebugInfo('LIFF 初始化失敗: ' + err.message);
-    showLoginOptions();
+// ---------- 啟動 ----------
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM 已加载');
+    showStatus('正在初始化 LIFF...');
+    
+    // 检查 LIFF SDK 是否已加载
+    if (typeof liff === 'undefined') {
+        console.error('LIFF SDK 未加载');
+        showStatus('LIFF 功能加载失败，请刷新页面', 'error');
+        document.getElementById('login-section').style.display = 'block';
+        return;
+    }
+    
+    // 添加 LIFF 初始化超时
+    const initTimeout = setTimeout(() => {
+        console.error('LIFF 初始化超时');
+        showStatus('初始化超时，请刷新页面', 'error');
+        document.getElementById('login-section').style.display = 'block';
+    }, 10000); // 10秒超时
+    
+    try {
+        liff.init({ liffId: CONFIG.LIFF_ID })
+            .then(() => {
+                clearTimeout(initTimeout);
+                console.log('LIFF 初始化成功');
+                startApp();
+            })
+            .catch(err => {
+                clearTimeout(initTimeout);
+                console.error('LIFF 初始化失败:', err);
+                showStatus('LIFF 初始化失败: ' + err.message, 'error');
+                document.getElementById('login-section').style.display = 'block';
+            });
+    } catch (e) {
+        clearTimeout(initTimeout);
+        console.error('LIFF 初始化异常:', e);
+        showStatus('初始化异常: ' + e.message, 'error');
+        document.getElementById('login-section').style.display = 'block';
+    }
 });
-
-// 確保頁面載入後初始化
-if (window.liff) {
-    liff.ready.then(() => {
-        addDebugInfo('LIFF ready (直接)');
-        startApp();
-    });
-}
 </script>
 
 </body>
