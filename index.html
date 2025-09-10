@@ -20,6 +20,7 @@
         .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
         .user-info { background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00C300; display:none;}
         .debug-info { background-color: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; color: #666; display:none;}
+        .instructions { background-color: #fff4e6; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #ffa94d;}
     </style>
     <script>
         // 全局错误处理
@@ -33,6 +34,10 @@
 <body>
 <div class="form-container">
     <h1>花搜點麵線app</h1>
+    <div id="instructions" class="instructions">
+        <strong>使用說明：</strong>
+        <p>在LINE中打開此應用可自動登入，在電腦上使用需先點擊登入按鈕</p>
+    </div>
     <div id="status" class="status">載入中...</div>
     <div id="debug-info" class="debug-info"><strong>除錯資訊：</strong><div id="debug-content"></div></div>
     <div id="user-info" class="user-info">
@@ -103,13 +108,10 @@ async function startApp() {
         showStatus('正在初始化應用...');
         
         // 檢查是否在 LINE 環境中
-        if (!liff.isInClient()) {
-            addDebugInfo('不在 LINE 環境中，顯示登入按鈕');
-            showLoginOptions();
-            //return;
-        }
-
-        // 先驗證 sessionToken
+        const isInLINE = liff.isInClient();
+        addDebugInfo('是否在LINE環境中: ' + isInLINE);
+        
+        // 先驗證 sessionToken (無論是否在LINE環境中)
         if (SESSION_TOKEN) {
             addDebugInfo('有本地 sessionToken，嘗試驗證...');
             const result = await verifyTokenAtServer(null, SESSION_TOKEN);
@@ -122,12 +124,20 @@ async function startApp() {
                 });
                 return;
             } else {
-                addDebugInfo('sessionToken 無效，刪除並走 LIFF 登入');
+                addDebugInfo('sessionToken 無效，刪除');
                 localStorage.removeItem('sessionToken');
                 SESSION_TOKEN = null;
             }
         }
 
+        // 不在LINE環境中，顯示登入選項
+        if (!isInLINE) {
+            addDebugInfo('不在 LINE 環境中，顯示登入按鈕');
+            showLoginOptions();
+            return;
+        }
+
+        // 在LINE環境中，繼續LIFF流程
         // 檢查 LIFF 登入狀態
         if (!liff.isLoggedIn()) {
             addDebugInfo('用戶未登入，嘗試登入');
@@ -227,9 +237,18 @@ async function verifyIdTokenFlow(idToken) {
 
 // ---------- 顯示登入按鈕 ----------
 function showLoginOptions() {
-    showStatus('請登入 LINE');
+    showStatus('請登入 LINE 或刷新頁面');
     document.getElementById('login-section').style.display = 'block';
-    document.getElementById('manual-login-btn').onclick = () => liff.login();
+    document.getElementById('manual-login-btn').onclick = () => {
+        // 嘗試使用LIFF登入，如果失敗則跳轉到LINE登入頁面
+        if (liff.isInClient()) {
+            liff.login();
+        } else {
+            // 外部瀏覽器處理
+            showStatus('正在跳轉到LINE登入頁面...');
+            liff.login({ redirectUri: window.location.href });
+        }
+    };
     document.getElementById('refresh-btn').onclick = () => location.reload();
 }
 
@@ -242,6 +261,7 @@ function renderForm(profile) {
     document.getElementById('user-info').style.display = 'block';
     document.getElementById('login-section').style.display = 'none';
     document.getElementById('myForm').style.display = 'block';
+    document.getElementById('instructions').style.display = 'none';
     showStatus('');
 }
 
@@ -298,6 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('LIFF SDK 未加载');
         showStatus('LIFF 功能加载失败，请刷新页面', 'error');
         document.getElementById('login-section').style.display = 'block';
+        document.getElementById('instructions').style.display = 'block';
         return;
     }
     
@@ -306,6 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('LIFF 初始化超时');
         showStatus('初始化超时，请刷新页面', 'error');
         document.getElementById('login-section').style.display = 'block';
+        document.getElementById('instructions').style.display = 'block';
     }, 10000); // 10秒超时
     
     try {
@@ -320,12 +342,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('LIFF 初始化失败:', err);
                 showStatus('LIFF 初始化失败: ' + err.message, 'error');
                 document.getElementById('login-section').style.display = 'block';
+                document.getElementById('instructions').style.display = 'block';
+                
+                // 即使LIFF初始化失败，也尝试使用现有的sessionToken
+                if (SESSION_TOKEN) {
+                    addDebugInfo('LIFF初始化失败，但存在sessionToken，尝试验证');
+                    verifyTokenAtServer(null, SESSION_TOKEN)
+                        .then(result => {
+                            if (result && result.status === 'ok') {
+                                renderForm({ 
+                                    displayName: result.displayName, 
+                                    userId: result.userId 
+                                });
+                            }
+                        });
+                }
             });
     } catch (e) {
         clearTimeout(initTimeout);
         console.error('LIFF 初始化异常:', e);
         showStatus('初始化异常: ' + e.message, 'error');
         document.getElementById('login-section').style.display = 'block';
+        document.getElementById('instructions').style.display = 'block';
     }
 });
 </script>
