@@ -560,23 +560,41 @@
                 if (!isInLINE) {
                     addDebugInfo('不在 LINE 環境中，顯示登入選項');
                     showLoginOptions();
-                    return;
+                    // 不要return;
                 }
                 
                 // 在 LINE 環境中，檢查登入狀態
                 if (!liff.isLoggedIn()) {
-                    addDebugInfo('用戶未登入，嘗試登入');
-                    liff.login();
-                    return;
+                    addDebugInfo('用戶未登入，但先檢查本地 sessionToken');
+                    if (SESSION_TOKEN) {
+                        addDebugInfo('本地 sessionToken 存在，先驗證');
+                        const result = await verifyToken(null, SESSION_TOKEN);
+                        if (result && result.status === 'ok') {
+                            addDebugInfo('sessionToken 驗證成功，使用現有 session');
+                            renderUserInterface({
+                                displayName: result.displayName,
+                                userId: result.userId
+                            });
+                            return;
+                        } else {
+                            addDebugInfo('sessionToken 無效，顯示登入選項');
+                            clearSession();
+                            showLoginOptions();
+                            return;
+                        }
+                    } else {
+                        addDebugInfo('沒有本地 sessionToken，顯示登入選項');
+                        showLoginOptions();
+                        return;
+                    }
                 }
-                
                 // 獲取 ID Token
                 ID_TOKEN = liff.getIDToken();
                 addDebugInfo('已獲取 ID Token');
                 
-                // 檢查 Token 是否過期
-                if (isTokenExpired(ID_TOKEN)) {
-                    addDebugInfo('ID Token 已過期，重新登入');
+                // 只有當 sessionToken 不存在時才重新登入
+                if (isTokenExpired(ID_TOKEN) && !SESSION_TOKEN) {
+                    addDebugInfo('ID Token 已過期且沒有 sessionToken，重新登入');
                     liff.login();
                     return;
                 }
