@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head> 
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花蓮特搜網頁</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;}
+        .form-container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
+        .form-group { margin-bottom: 20px;}
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333;}
+        input, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; box-sizing: border-box;}
+        .submit-btn, .login-btn, .refresh-btn { padding: 15px 30px; border: none; border-radius: 5px; font-size: 18px; cursor: pointer; width: 100%; margin-top: 10px; }
+        .submit-btn { background-color: #00C300; color:white;}
+        .refresh-btn { background-color: #0084ff; color:white;}
+        .submit-btn:disabled, .login-btn:disabled { background-color: #ccc; cursor: not-allowed;}
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; background-color: #f0f8ff;}
+        .error { background-color: #ffe6e6; color: #d8000c; border: 1px solid #d8000c;}
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;}
+        .user-info { background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00C300; display:none;}
+        .debug-info { background-color: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 12px; color: #666; display:none;}
+    </style>
+</head>
+<body>
+<div class="form-container">
+    <h1>花搜點麵線app</h1>
+    <div id="status" class="status">載入中...</div>
+    <div id="debug-info" class="debug-info"><strong>除錯資訊：</strong><div id="debug-content"></div></div>
+    <div id="user-info" class="user-info">
+        <strong>初次登入請輸入您的真實姓名：</strong>
+        <div>LINE稱號：<span id="display-name"></span></div>
+        <div style="display:none;">UserID：<span id="user-id"></span></div>
+    </div>
+    <div id="login-section" style="display:none;">
+        <button type="button" class="login-btn" id="manual-login-btn">登入 LINE</button>
+        <button type="button" class="refresh-btn" id="refresh-btn">重新載入頁面</button>
+    </div>
+    <form id="myForm" style="display:none;">
+        <input type="hidden" id="lineUserId" name="lineUserId">
+        <div class="form-group">
+            <label for="name">真實姓名：</label>
+            <input type="text" id="name" name="name" required placeholder="請輸入您的真實姓名">
+        </div>
+        <div class="form-group">
+            <label for="message">補充說明（可選）：</label>
+            <textarea id="message" name="message" rows="1"></textarea>
+        </div>
+        <button type="submit" class="submit-btn" id="submit-btn">送出表單</button>
+    </form>
+</div>
+
+<script>
+const CONFIG = {
+    LIFF_ID: "你的LIFF_ID",
+    API_VERIFY: "/api/verify",
+    DEBUG_: true
+};
+
+let ID_TOKEN = null;    // LINE idToken
+let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;  // 從 localStorage 讀取 sessionToken
+let PROFILE = null;
+
+// ---------- 狀態顯示 ----------
+function showStatus(msg, type='info'){
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status';
+    if(type==='error') el.className += ' error';
+    if(type==='success') el.className += ' success';
+}
+function addDebugInfo(info){
+    if(!CONFIG.DEBUG_) return;
+    const debugEl = document.getElementById('debug-content');
+    debugEl.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${info}</div>`;
+    document.getElementById('debug-info').style.display='block';
+}
+
+// ---------- 初始化 App ----------
+async function startApp() {
+    try {
+        await liff.init({ liffId: CONFIG.LIFF_ID });
+        addDebugInfo('LIFF 初始化成功');
+        
+        if (SESSION_TOKEN) {
+            addDebugInfo('有本地 sessionToken，嘗試驗證...');
+            const result = await verifyTokenAtServer(null, SESSION_TOKEN);
+            if (result && result.status==='ok') {
+                addDebugInfo('sessionToken 驗證成功');
+                renderForm({ displayName: result.displayName, userId: result.userId });
+                return;
+            } else {
+                addDebugInfo('sessionToken 無效，刪除並走 LIFF 登入');
+                localStorage.removeItem('sessionToken');
+                SESSION_TOKEN = null;
+            }
+        }
+
+        // 沒有 session 或失效，走 LIFF 登入流程
+        if(!liff.isLoggedIn()){
+            showLoginOptions();
+            return;
+        }
+
+        ID_TOKEN = liff.getIDToken();
+        addDebugInfo('取得 idToken 長度：' + (ID_TOKEN ? ID_TOKEN.length : 0));
+        showStatus('驗證中，請稍候...');
+        
+        const result = await verifyTokenAtServer(ID_TOKEN);
+        if(result.status==='ok'){
+            addDebugInfo('idToken 驗證成功');
+            localStorage.setItem('sessionToken', result.sessionToken);
+            renderForm({ displayName: result.displayName, userId: result.userId });
+        } else if(result.status==='needsignup'){
+            addDebugInfo('使用者需要註冊，跳轉報名頁面');
+            window.location.href = `signup.html`;
+        } else {
+            showStatus('驗證失敗，請重新登入', 'error');
+            showLoginOptions();
+        }
+
+    } catch(e){
+        console.error(e);
+        showStatus('系統錯誤，請稍後重試', 'error');
+    }
+}
+
+// ---------- 顯示登入按鈕 ----------
+function showLoginOptions(){
+    showStatus('請登入 LINE');
+    document.getElementById('login-section').style.display='block';
+    document.getElementById('manual-login-btn').onclick = ()=> liff.login();
+    document.getElementById('refresh-btn').onclick = ()=> location.reload();
+}
+
+// ---------- 呼叫後端 API 驗證 ----------
+async function verifyTokenAtServer(idToken=null, sessionToken=null){
+    try {
+        const payload = { idToken, sessionToken };
+        const res = await fetch(CONFIG.API_VERIFY, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        if(!res.ok) throw new Error('伺服器回應錯誤: ' + res.status);
+        const data = await res.json();
+        addDebugInfo('後端回傳: ' + JSON.stringify(data));
+        return data;
+    } catch(e){
+        addDebugInfo('verifyTokenAtServer 錯誤: ' + e.message);
+        return null;
+    }
+}
+
+// ---------- 表單渲染 ----------
+function renderForm(profile){
+    PROFILE = profile;
+    document.getElementById('display-name').textContent = profile.displayName || '';
+    document.getElementById('user-id').textContent = '(已隱藏)';
+    document.getElementById('user-info').style.display='block';
+    document.getElementById('login-section').style.display='none';
+    document.getElementById('myForm').style.display='block';
+    showStatus('');
+}
+
+// ---------- 表單提交 ----------
+async function submitForm(formData){
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = '送出中...';
+    try{
+        const payload = Object.assign({}, formData, { sessionToken: SESSION_TOKEN });
+        const res = await fetch(CONFIG.API_VERIFY, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if(data.status==='ok'){
+            showStatus('送出成功！', 'success');
+            document.getElementById('myForm').reset();
+        } else {
+            showStatus('送出失敗: ' + (data.message || '未知原因'), 'error');
+        }
+    } catch(err){
+        showStatus('送出失敗，請稍後再試', 'error');
+    } finally{
+        btn.disabled = false;
+        btn.textContent = '送出表單';
+    }
+}
+
+// ---------- 綁定表單 ----------
+document.getElementById('myForm').addEventListener('submit', function(e){
+    e.preventDefault();
+    const formData = {
+        timestamp: new Date().toLocaleString('zh-TW'),
+        displayName: document.getElementById('display-name').textContent,
+        lineUserId: document.getElementById('lineUserId').value,
+        name: document.getElementById('name').value,
+        message: document.getElementById('message').value
+    };
+    submitForm(formData);
+});
+
+// ---------- 啟動 ----------
+startApp();
+</script>
+</body>
+</html>
