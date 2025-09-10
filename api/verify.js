@@ -2,8 +2,8 @@
 
 import jwt from "jsonwebtoken";
 import { createClient } from "@supabase/supabase-js";
-import { verifyIdToken } from "./utils/line"; 
-import { createSessionToken } from "./utils/jwt"; 
+import { verifyIdToken } from "./utils/line";
+import { createSessionToken } from "./utils/jwt";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -20,26 +20,24 @@ function setCorsHeaders(res, origin = "*") {
 }
 
 export default async function handler(req, res) {
-  setCorsHeaders(res, CORS_ORIGIN);
-
-  // Preflight
-  if (req.method === "OPTIONS") {
-    setCorsHeaders(res, CORS_ORIGIN);
-    return res.status(204).end();
-  }
-
-  if (req.method !== "POST") {
-    setCorsHeaders(res, CORS_ORIGIN);
-    return res.status(405).json({ status: "error", message: "Method not allowed" });
-  }
-
   try {
+    // 先加 CORS header
+    setCorsHeaders(res, CORS_ORIGIN);
+
+    // OPTIONS 預檢
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ status: "error", message: "Method not allowed" });
+    }
+
     let body = {};
     try {
       body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     } catch (err) {
       console.error("JSON parse error:", err);
-      setCorsHeaders(res, CORS_ORIGIN);
       return res.status(400).json({ status: "error", message: "Invalid JSON" });
     }
 
@@ -47,66 +45,86 @@ export default async function handler(req, res) {
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET || !LIFF_CLIENT_ID) {
       console.error("Missing env vars");
-      setCorsHeaders(res, CORS_ORIGIN);
       return res.status(500).json({ status: "error", message: "Server env not configured" });
     }
 
+    // sessionToken 驗證
     if (sessionToken) {
       try {
         const decoded = jwt.verify(sessionToken, JWT_SECRET);
-        setCorsHeaders(res, CORS_ORIGIN);
         return res.status(200).json({
           status: "ok",
           userId: decoded.userId,
           permissions: decoded.permissions,
           sessionToken,
         });
-      } catch (e) {}
+      } catch (e) {
+        console.error("sessionToken invalid:", e);
+        // fallback to idToken
+      }
     }
 
     if (!idToken) {
-      setCorsHeaders(res, CORS_ORIGIN);
       return res.status(400).json({ status: "error", message: "缺少 idToken 或 sessionToken" });
     }
 
-    const profile = await verifyIdToken(idToken);
+    // 驗證 LINE idToken
+    let profile;
+    try {
+      profile = await verifyIdToken(idToken);
+    } catch (err) {
+      console.error("verifyIdToken error:", err);
+      return res.status(401).json({ status: "error", message: "idToken 驗證失敗" });
+    }
+
     if (!profile || !profile.sub) {
-      setCorsHeaders(res, CORS_ORIGIN);
       return res.status(401).json({ status: "error", message: "idToken 驗證失敗" });
     }
 
     const userId = profile.sub;
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+    // 查 Supabase users
+    let userData;
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
 
-    if (error) {
-      console.error("Supabase query error", error);
-      setCorsHeaders(res, CORS_ORIGIN);
-      return res.status(500).json({ status: "error", message: "Supabase 查詢錯誤" });
+      if (error) {
+        console.error("Supabase query error:", error);
+        return res.status(500).json({ status: "error", message: "Supabase 查詢錯誤" });
+      }
+
+      userData = data;
+    } catch (err) {
+      console.error("Supabase request failed:", err);
+      return res.status(500).json({ status: "error", message: "Supabase 查詢失敗" });
     }
 
-    if (!data) {
-      setCorsHeaders(res, CORS_ORIGIN);
+    if (!userData) {
       return res.status(200).json({ status: "needsignup", userId });
     }
 
-    const permissions = { role: data.role };
-    const newSessionToken = createSessionToken(userId, permissions);
+    const permissions = { role: userData.role };
+    let newSessionToken;
+    try {
+      newSessionToken = createSessionToken(userId, permissions);
+    } catch (err) {
+      console.error("createSessionToken failed:", err);
+      return res.status(500).json({ status: "error", message: "無法建立 sessionToken" });
+    }
 
-    setCorsHeaders(res, CORS_ORIGIN);
     return res.status(200).json({
       status: "ok",
       userId,
-      displayName: data.display_name,
+      displayName: userData.display_name,
       permissions,
       sessionToken: newSessionToken,
     });
   } catch (err) {
-    console.error("verify handler error", err);
+    console.error("Unhandled verify handler error:", err);
     setCorsHeaders(res, CORS_ORIGIN);
     return res.status(500).json({
       status: "error",
