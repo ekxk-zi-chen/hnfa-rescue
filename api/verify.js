@@ -1,4 +1,5 @@
-// api/verify.js
+// api/verify.js 
+
 import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 
