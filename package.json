@@ -2,11 +2,10 @@
   "name": "hnfa-rescue",
   "version": "1.0.0",
   "type": "module",
+  "engines": { "node": "22.x" },
   "dependencies": {
     "@supabase/supabase-js": "^2.27.0",
-    "jsonwebtoken": "^9.0.2"
-  },
-  "engines": {
-    "node": "22.x"
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.1"
   }
 }
