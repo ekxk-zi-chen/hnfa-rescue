@@ -531,9 +531,13 @@
                         return;
                     }
                 }
+            } catch (err) {
+                console.error('發生錯誤:', err);
+                addDebugInfo('初始化錯誤: ' + err.message);
+                showLoginOptions();
+            }
+        }
 
-                }
-                
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
