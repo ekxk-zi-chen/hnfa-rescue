@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>花蓮特搜網頁 - 點麵線系統</title>
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <title>花蓮特搜網頁 - 表單優化</title>
     <style>
         :root {
             --primary: #00C300;
@@ -291,6 +290,12 @@
             background: #f1f1f1;
             color: #666;
         }
+        
+        .autofill-hint {
+            font-size: 12px;
+            color: var(--gray);
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -340,7 +345,18 @@
                     <input type="hidden" id="lineUserId" name="lineUserId">
                     <div class="form-group">
                         <label for="name">真實姓名：</label>
-                        <input type="text" id="name" name="name" required placeholder="請輸入您的真實姓名">
+                        <input type="text" id="name" name="name" autocomplete="name" required placeholder="請輸入您的真實姓名">
+                        <div class="autofill-hint">瀏覽器可以自動填充您的姓名</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">電子郵件（選填）：</label>
+                        <input type="email" id="email" name="email" autocomplete="email" placeholder="請輸入您的電子郵件">
+                        <div class="autofill-hint">瀏覽器可以自動填充您的電子郵件</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">電話號碼（選填）：</label>
+                        <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="請輸入您的電話號碼">
+                        <div class="autofill-hint">瀏覽器可以自動填充您的電話號碼</div>
                     </div>
                     <div class="form-group">
                         <label for="message">補充說明（可選）：</label>
@@ -354,13 +370,14 @@
             </div>
             
             <div class="problem-solution">
-                <h3>登入問題解決方案</h3>
-                <p>如果您遇到登入循環問題，請嘗試：</p>
+                <h3>表單自動填充說明</h3>
+                <p>我們已優化表單以支持瀏覽器自動填充功能：</p>
                 <ol>
-                    <li>點擊"清除登入狀態"按鈕清除本地Session</li>
-                    <li>刷新頁面後重新登入</li>
-                    <li>如果問題持續，請使用演示模式或聯繫技術支援</li>
+                    <li>姓名欄位: autocomplete="name"</li>
+                    <li>電子郵件欄位: autocomplete="email"</li>
+                    <li>電話欄位: autocomplete="tel"</li>
                 </ol>
+                <p>這將幫助瀏覽器正確識別和自動填充表單字段。</p>
             </div>
             
             <div class="debug-toggle">
@@ -753,6 +770,8 @@
                     displayName: document.getElementById('display-name').textContent,
                     lineUserId: document.getElementById('lineUserId').value,
                     name: document.getElementById('name').value,
+                    email: document.getElementById('email').value,
+                    phone: document.getElementById('phone').value,
                     message: document.getElementById('message').value
                 };
                 
