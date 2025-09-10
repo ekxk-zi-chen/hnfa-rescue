@@ -107,6 +107,11 @@ async function startApp() {
         showStatus('驗證中，請稍候...');
         
         const result = await verifyTokenAtServer(ID_TOKEN);
+        if (!result) {
+          addDebugInfo('後端無回應或 CORS/網路錯誤');
+          showStatus('伺服器無回應或驗證失敗，請稍後重試', 'error');
+          return;
+        }
         if(result.status==='ok'){
             addDebugInfo('idToken 驗證成功');
             localStorage.setItem('sessionToken', result.sessionToken);
@@ -115,6 +120,7 @@ async function startApp() {
             addDebugInfo('使用者需要註冊，跳轉報名頁面');
             window.location.href = `signup.html`;
         } else {
+            addDebugInfo('後端回傳錯誤：' + JSON.stringify(result));
             showStatus('驗證失敗，請重新登入', 'error');
             showLoginOptions();
         }
