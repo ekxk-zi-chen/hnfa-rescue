@@ -223,26 +223,6 @@
             transform: translateY(-2px);
         }
         
-        .tab-container {
-            display: flex;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #eee;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            font-weight: 600;
-            color: var(--gray-dark);
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        
-        .tab.active {
-            color: var(--primary);
-            border-bottom: 3px solid var(--primary);
-        }
-        
         .debug-toggle {
             text-align: center;
             margin-top: 20px;
@@ -327,6 +307,21 @@
             color: var(--success);
             margin-bottom: 10px;
         }
+        
+        .session-controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
+        
+        .session-controls button {
+            width: auto;
+            padding: 8px 12px;
+            font-size: 12px;
+            margin-right: 5px;
+            background: #f1f1f1;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -355,6 +350,11 @@
                 <h3>用戶資訊</h3>
                 <p>LINE名稱：<span id="display-name"></span></p>
                 <p>用戶ID：<span id="user-id"></span></p>
+                
+                <div class="session-controls">
+                    <button id="clear-session-btn">清除登入狀態</button>
+                    <button id="refresh-session-btn">刷新Session</button>
+                </div>
             </div>
             
             <div id="login-section" style="display: none;">
@@ -364,11 +364,6 @@
                 </button>
                 <p style="text-align: center; margin: 10px 0; color: #666;">或</p>
                 <button class="demo-btn" id="demo-btn">使用演示模式</button>
-            </div>
-            
-            <div class="tab-container" id="form-tabs" style="display: none;">
-                <div class="tab active" data-tab="checkin">登記表單</div>
-                <div class="tab" data-tab="profile">個人資料</div>
             </div>
             
             <div id="checkin-form" class="form-container">
@@ -389,37 +384,13 @@
                 </form>
             </div>
             
-            <div id="profile-form" class="form-container" style="display: none;">
-                <form id="profileForm">
-                    <div class="form-group">
-                        <label for="fullname">完整姓名：</label>
-                        <input type="text" id="fullname" name="fullname" required placeholder="請輸入您的完整姓名">
-                    </div>
-                    <div class="form-group">
-                        <label for="phone">聯絡電話：</label>
-                        <input type="tel" id="phone" name="phone" placeholder="請輸入您的聯絡電話">
-                    </div>
-                    <div class="form-group">
-                        <label for="department">所屬單位：</label>
-                        <select id="department" name="department">
-                            <option value="">請選擇單位</option>
-                            <option value="rescue">救援隊</option>
-                            <option value="medical">醫療組</option>
-                            <option value="logistics">後勤組</option>
-                            <option value="command">指揮中心</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="submit-btn" id="save-profile-btn">儲存個人資料</button>
-                </form>
-            </div>
-            
             <div class="problem-solution">
-                <h3>常見問題解決方案</h3>
-                <p>如果遇到登入問題，請嘗試：</p>
+                <h3>Session問題解決方案</h3>
+                <p>如果您遇到登入循環問題，請嘗試：</p>
                 <ol>
-                    <li>確認您的LINE應用程式是最新版本</li>
-                    <li>清除瀏覽器緩存後重新嘗試</li>
-                    <li>嘗試使用手機版LINE開啟此應用</li>
+                    <li>點擊"清除登入狀態"按鈕清除本地Session</li>
+                    <li>刷新頁面後重新登入</li>
+                    <li>如果問題持續，請聯繫技術支援</li>
                 </ol>
             </div>
             
@@ -443,7 +414,9 @@
             LIFF_ID: "2007782293-RgkE5pPW",
             API_BASE: "https://hnfa-rescue-rhlk5hhw9-ekxk-zi-chens-projects.vercel.app/api",
             DEBUG: true,
-            ENABLE_DEMO_MODE: true
+            ENABLE_DEMO_MODE: true,
+            SESSION_MAX_RETRIES: 3, // Session驗證最大重試次數
+            SESSION_RETRY_DELAY: 1000 // 重試延遲(毫秒)
         };
 
         // 全局變數
@@ -452,6 +425,41 @@
         let PROFILE = null;
         let IS_DEMO_MODE = false;
         let LIFF_INITIALIZED = false;
+        let SESSION_RETRY_COUNT = 0;
+
+        // ---------- Session管理函數 ----------
+        function clearSession() {
+            localStorage.removeItem('sessionToken');
+            SESSION_TOKEN = null;
+            SESSION_RETRY_COUNT = 0;
+            addDebugInfo('已清除本地Session');
+            showStatus('已清除登入狀態，請重新登入', 'info');
+            showLoginOptions();
+        }
+
+        function saveSession(token) {
+            localStorage.setItem('sessionToken', token);
+            SESSION_TOKEN = token;
+            addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
+        }
+
+        function validateSessionFormat(token) {
+            if (!token || typeof token !== 'string') return false;
+            
+            // 簡單的格式驗證 - 實際應根據您的Session格式調整
+            try {
+                const parts = token.split('.');
+                if (parts.length !== 3) return false;
+                
+                // 檢查是否是有效的JWT格式
+                const payload = JSON.parse(atob(parts[1]));
+                if (!payload.exp) return false;
+                
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
 
         // ---------- 工具函數 ----------
         function showStatus(message, type = 'info') {
@@ -521,22 +529,30 @@
                 const isInLINE = liff.isInClient();
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
                 
-                // 先嘗試使用現有的 sessionToken 驗證
+                // 檢查並驗證現有的sessionToken
                 if (SESSION_TOKEN) {
-                    addDebugInfo('發現本地 sessionToken，嘗試驗證');
-                    const result = await verifyToken(null, SESSION_TOKEN);
-                    
-                    if (result && result.status === 'ok') {
-                        addDebugInfo('sessionToken 驗證成功');
-                        renderUserInterface({
-                            displayName: result.displayName,
-                            userId: result.userId
-                        });
-                        return;
+                    if (!validateSessionFormat(SESSION_TOKEN)) {
+                        addDebugInfo('SessionToken格式無效，已清除');
+                        clearSession();
+                    } else if (isTokenExpired(SESSION_TOKEN)) {
+                        addDebugInfo('SessionToken已過期，已清除');
+                        clearSession();
                     } else {
-                        addDebugInfo('sessionToken 無效，已清除');
-                        localStorage.removeItem('sessionToken');
-                        SESSION_TOKEN = null;
+                        addDebugInfo('發現有效的本地sessionToken，嘗試驗證');
+                        const result = await verifyToken(null, SESSION_TOKEN);
+                        
+                        if (result && result.status === 'ok') {
+                            addDebugInfo('sessionToken 驗證成功');
+                            renderUserInterface({
+                                displayName: result.displayName,
+                                userId: result.userId
+                            });
+                            SESSION_RETRY_COUNT = 0; // 重置重試計數器
+                            return;
+                        } else {
+                            addDebugInfo('sessionToken 無效，已清除');
+                            clearSession();
+                        }
                     }
                 }
                 
@@ -600,7 +616,20 @@
                 return data;
             } catch (error) {
                 addDebugInfo('驗證請求失敗: ' + error.message);
-                return null;
+                
+                // 增加重試計數器
+                SESSION_RETRY_COUNT++;
+                
+                if (SESSION_RETRY_COUNT < CONFIG.SESSION_MAX_RETRIES) {
+                    addDebugInfo(`驗證失敗，將在 ${CONFIG.SESSION_RETRY_DELAY/1000} 秒後重試 (${SESSION_RETRY_COUNT}/${CONFIG.SESSION_MAX_RETRIES})`);
+                    
+                    // 延遲後重試
+                    await new Promise(resolve => setTimeout(resolve, CONFIG.SESSION_RETRY_DELAY));
+                    return await verifyToken(idToken, sessionToken);
+                } else {
+                    addDebugInfo('已達到最大重試次數，放棄驗證');
+                    return null;
+                }
             }
         }
 
@@ -616,8 +645,7 @@
             switch (result.status) {
                 case 'ok':
                     addDebugInfo('ID Token 驗證成功');
-                    localStorage.setItem('sessionToken', result.sessionToken);
-                    SESSION_TOKEN = result.sessionToken;
+                    saveSession(result.sessionToken);
                     renderUserInterface({
                         displayName: result.displayName,
                         userId: result.userId
@@ -652,9 +680,7 @@
             showStatus('請登入 LINE 或使用演示模式');
             document.getElementById('login-section').style.display = 'block';
             document.getElementById('user-info').style.display = 'none';
-            document.getElementById('form-tabs').style.display = 'none';
             document.getElementById('checkin-form').style.display = 'none';
-            document.getElementById('profile-form').style.display = 'none';
         }
 
         function renderUserInterface(profile) {
@@ -666,34 +692,19 @@
             
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('login-section').style.display = 'none';
-            document.getElementById('form-tabs').style.display = 'flex';
             document.getElementById('checkin-form').style.display = 'block';
             document.getElementById('instructions').style.display = 'none';
             
-            // 如果需要註冊，顯示個人資料表單
             if (profile.needsSignup) {
-                switchToTab('profile');
                 showStatus('請先填寫個人資料完成註冊', 'warning');
             } else {
                 showStatus(IS_DEMO_MODE ? '演示模式已啟用' : '驗證成功，請填寫表單', 'success');
+                
+                // 3秒後隱藏狀態消息
+                setTimeout(() => {
+                    document.getElementById('status').style.display = 'none';
+                }, 3000);
             }
-            
-            // 3秒後隱藏狀態消息
-            setTimeout(() => {
-                document.getElementById('status').style.display = 'none';
-            }, 3000);
-        }
-
-        function switchToTab(tabName) {
-            // 更新標籤狀態
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
-            
-            // 顯示對應表單
-            document.getElementById('checkin-form').style.display = tabName === 'checkin' ? 'block' : 'none';
-            document.getElementById('profile-form').style.display = tabName === 'profile' ? 'block' : 'none';
         }
 
         function enableDemoMode() {
@@ -734,6 +745,12 @@
                         document.getElementById('checkinForm').reset();
                     } else {
                         showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
+                        
+                        // 如果session無效，清除本地session
+                        if (data.message && data.message.includes('session')) {
+                            addDebugInfo('檢測到Session無效，將清除本地Session');
+                            clearSession();
+                        }
                     }
                 }
             } catch (error) {
@@ -741,53 +758,6 @@
                 addDebugInfo('提交錯誤: ' + error.message);
             } finally {
                 toggleLoader('submit', false);
-                
-                // 5秒後隱藏狀態消息
-                setTimeout(() => {
-                    document.getElementById('status').style.display = 'none';
-                }, 5000);
-            }
-        }
-
-        async function submitProfileForm(formData) {
-            const saveBtn = document.getElementById('save-profile-btn');
-            saveBtn.disabled = true;
-            saveBtn.textContent = '儲存中...';
-            
-            showStatus('正在儲存個人資料...');
-            
-            try {
-                // 演示模式下不實際發送數據
-                if (IS_DEMO_MODE) {
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    showStatus('演示模式：個人資料已儲存！', 'success');
-                    switchToTab('checkin');
-                } else {
-                    const payload = Object.assign({}, formData, { 
-                        sessionToken: SESSION_TOKEN,
-                        userId: PROFILE.userId
-                    });
-                    const response = await fetch(CONFIG.API_BASE + '/profile', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.status === 'ok') {
-                        showStatus('個人資料已儲存！', 'success');
-                        switchToTab('checkin');
-                    } else {
-                        showStatus('儲存失敗: ' + (data.message || '未知錯誤'), 'error');
-                    }
-                }
-            } catch (error) {
-                showStatus('儲存失敗，請稍後再試', 'error');
-                addDebugInfo('儲存錯誤: ' + error.message);
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = '儲存個人資料';
                 
                 // 5秒後隱藏狀態消息
                 setTimeout(() => {
@@ -811,26 +781,6 @@
                 };
                 
                 submitCheckinForm(formData);
-            });
-            
-            // 個人資料表單提交
-            document.getElementById('profileForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = {
-                    fullname: document.getElementById('fullname').value,
-                    phone: document.getElementById('phone').value,
-                    department: document.getElementById('department').value
-                };
-                
-                submitProfileForm(formData);
-            });
-            
-            // 標籤切換
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    switchToTab(this.getAttribute('data-tab'));
-                });
             });
             
             // 登入按鈕
@@ -858,6 +808,27 @@
                     addDebugInfo('登入錯誤: ' + error.message);
                     showStatus('登入失敗: ' + error.message, 'error');
                     toggleLoader('login', false);
+                }
+            });
+            
+            // 清除Session按鈕
+            document.getElementById('clear-session-btn').addEventListener('click', clearSession);
+            
+            // 刷新Session按鈕
+            document.getElementById('refresh-session-btn').addEventListener('click', async function() {
+                addDebugInfo('手動刷新Session');
+                showStatus('正在刷新Session...');
+                
+                if (SESSION_TOKEN) {
+                    const result = await verifyToken(null, SESSION_TOKEN);
+                    
+                    if (result && result.status === 'ok') {
+                        showStatus('Session刷新成功', 'success');
+                    } else {
+                        showStatus('Session刷新失敗', 'error');
+                    }
+                } else {
+                    showStatus('沒有可刷新的Session', 'warning');
                 }
             });
             
