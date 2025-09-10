@@ -57,8 +57,8 @@ const CONFIG = {
     DEBUG_: true
 };
 
-let ID_TOKEN = null;    // LINE idToken
-let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;  // 從 localStorage 讀取 sessionToken
+let ID_TOKEN = null;
+let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;
 let PROFILE = null;
 
 // ---------- 狀態顯示 ----------
@@ -76,12 +76,25 @@ function addDebugInfo(info){
     document.getElementById('debug-info').style.display='block';
 }
 
+// ---------- 檢查 token 過期 ----------
+function isIdTokenExpired(token){
+    if(!token) return true;
+    try{
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const exp = payload.exp;
+        return (Date.now()/1000) > exp;
+    } catch(e){
+        return true;
+    }
+}
+
 // ---------- 初始化 App ----------
 async function startApp() {
     try {
         await liff.init({ liffId: CONFIG.LIFF_ID });
         addDebugInfo('LIFF 初始化成功');
-        
+
+        // 先驗證 sessionToken
         if (SESSION_TOKEN) {
             addDebugInfo('有本地 sessionToken，嘗試驗證...');
             const result = await verifyTokenAtServer(null, SESSION_TOKEN);
@@ -96,7 +109,7 @@ async function startApp() {
             }
         }
 
-        // 沒有 session 或失效，走 LIFF 登入流程
+        // 檢查 LIFF 登入狀態
         if(!liff.isLoggedIn()){
             showLoginOptions();
             return;
@@ -104,39 +117,21 @@ async function startApp() {
 
         ID_TOKEN = liff.getIDToken();
         addDebugInfo('取得 idToken 長度：' + (ID_TOKEN ? ID_TOKEN.length : 0));
+
+        // token 過期自動登入
+        if(isIdTokenExpired(ID_TOKEN)){
+            addDebugInfo('idToken 過期，自動登入 LIFF');
+            liff.login();
+            return;
+        }
+
         showStatus('驗證中，請稍候...');
-        
-        const result = await verifyTokenAtServer(ID_TOKEN);
-        if (!result) {
-          addDebugInfo('後端無回應或 CORS/網路錯誤');
-          showStatus('伺服器無回應或驗證失敗，請稍後重試', 'error');
-          return;
-        }
-        if(result.status==='ok'){
-            addDebugInfo('idToken 驗證成功');
-            localStorage.setItem('sessionToken', result.sessionToken);
-            renderForm({ displayName: result.displayName, userId: result.userId });
-        } else if(result.status==='needsignup'){
-            addDebugInfo('使用者需要註冊，跳轉報名頁面');
-            window.location.href = `signup.html`;
-        } else {
-            addDebugInfo('後端回傳錯誤：' + JSON.stringify(result));
-            showStatus('驗證失敗，請重新登入', 'error');
-            showLoginOptions();
-        }
+        await verifyIdTokenFlow(ID_TOKEN);
 
     } catch(e){
         console.error(e);
         showStatus('系統錯誤，請稍後重試', 'error');
     }
-}
-
-// ---------- 顯示登入按鈕 ----------
-function showLoginOptions(){
-    showStatus('請登入 LINE');
-    document.getElementById('login-section').style.display='block';
-    document.getElementById('manual-login-btn').onclick = ()=> liff.login();
-    document.getElementById('refresh-btn').onclick = ()=> location.reload();
 }
 
 // ---------- 呼叫後端 API 驗證 ----------
@@ -156,6 +151,41 @@ async function verifyTokenAtServer(idToken=null, sessionToken=null){
         addDebugInfo('verifyTokenAtServer 錯誤: ' + e.message);
         return null;
     }
+}
+
+// ---------- 驗證 idToken 流程 ----------
+async function verifyIdTokenFlow(idToken){
+    const result = await verifyTokenAtServer(idToken);
+    if(!result){
+        addDebugInfo('後端無回應或 CORS/網路錯誤');
+        showStatus('伺服器無回應或驗證失敗，請稍後重試', 'error');
+        return;
+    }
+
+    if(result.status==='ok'){
+        addDebugInfo('idToken 驗證成功');
+        localStorage.setItem('sessionToken', result.sessionToken);
+        SESSION_TOKEN = result.sessionToken;
+        renderForm({ displayName: result.displayName, userId: result.userId });
+    } else if(result.status==='needsignup'){
+        addDebugInfo('使用者需要註冊，跳轉報名頁面');
+        window.location.href = `signup.html`;
+    } else if(result.status==='unauthorized'){
+        addDebugInfo('idToken 驗證失敗，重新登入 LIFF');
+        liff.login();
+    } else {
+        addDebugInfo('後端回傳錯誤：' + JSON.stringify(result));
+        showStatus('驗證失敗，請重新登入', 'error');
+        showLoginOptions();
+    }
+}
+
+// ---------- 顯示登入按鈕 ----------
+function showLoginOptions(){
+    showStatus('請登入 LINE');
+    document.getElementById('login-section').style.display='block';
+    document.getElementById('manual-login-btn').onclick = ()=> liff.login();
+    document.getElementById('refresh-btn').onclick = ()=> location.reload();
 }
 
 // ---------- 表單渲染 ----------
@@ -212,5 +242,6 @@ document.getElementById('myForm').addEventListener('submit', function(e){
 // ---------- 啟動 ----------
 startApp();
 </script>
+
 </body>
 </html>
