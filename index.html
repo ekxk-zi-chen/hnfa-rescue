@@ -531,30 +531,22 @@
                 
                 // 檢查並驗證現有的sessionToken
                 if (SESSION_TOKEN) {
-                    if (!validateSessionFormat(SESSION_TOKEN)) {
-                        addDebugInfo('SessionToken格式無效，已清除');
-                        clearSession();
-                    } else if (isTokenExpired(SESSION_TOKEN)) {
-                        addDebugInfo('SessionToken已過期，已清除');
-                        clearSession();
+                    if (!validateSessionFormat(SESSION_TOKEN) || isTokenExpired(SESSION_TOKEN)) {
+                        addDebugInfo('Session 無效或過期，不要直接清除，先隱藏 login 再試');
+                        // clearSession();  // <-- 先不要清除，避免重複 login
                     } else {
-                        addDebugInfo('發現有效的本地sessionToken，嘗試驗證');
                         const result = await verifyToken(null, SESSION_TOKEN);
-                        
                         if (result && result.status === 'ok') {
-                            addDebugInfo('sessionToken 驗證成功');
-                            renderUserInterface({
-                                displayName: result.displayName,
-                                userId: result.userId
-                            });
-                            SESSION_RETRY_COUNT = 0;
+                            renderUserInterface(result);
                             return;
                         } else {
-                            addDebugInfo('sessionToken 無效，已清除');
-                            clearSession();
+                            addDebugInfo('sessionToken 驗證失敗，顯示登入選項');
+                            showLoginOptions();
+                            return;
                         }
                     }
                 }
+
                 
                 // 不在 LINE 環境中，顯示登入選項
                 if (!isInLINE) {
@@ -595,8 +587,7 @@
                 if (!SESSION_TOKEN) {
                     ID_TOKEN = liff.getIDToken();
                     if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('沒有有效 ID Token，重新登入');
-                        liff.login();
+                        showLoginOptions(); // 提示登入
                         return;
                     }
                     await verifyIdToken(ID_TOKEN);
@@ -877,34 +868,27 @@
         }
 
         // ---------- 初始化應用 ----------
-        document.addEventListener('DOMContentLoaded', function() {
-            // 設置事件監聽器
+        document.addEventListener('DOMContentLoaded', async () => {
             setupEventListeners();
-            
+        
             if (typeof liff === 'undefined') {
                 showStatus('LIFF SDK 加載失敗，請刷新頁面', 'error');
                 showLoginOptions();
                 return;
             }
-            
-            // 初始化 LIFF
-            liff.init({ liffId: CONFIG.LIFF_ID })
-                .then(() => {
-                    addDebugInfo('LIFF 初始化成功');
-                    LIFF_INITIALIZED = true;
-                    initializeApp();
-                })
-                .catch(error => {
-                    console.error('LIFF 初始化失敗:', error);
-                    addDebugInfo('LIFF 初始化失敗: ' + error.message);
-                    showStatus('LIFF 初始化失敗，請使用演示模式', 'error');
-                    showLoginOptions();
-                    
-                    if (CONFIG.ENABLE_DEMO_MODE) {
-                        document.getElementById('demo-btn').style.display = 'block';
-                    }
-                });
+        
+            try {
+                await liff.init({ liffId: CONFIG.LIFF_ID });
+                LIFF_INITIALIZED = true;
+                addDebugInfo('LIFF 初始化成功');
+                await initializeApp(); // 只初始化一次
+            } catch (err) {
+                showStatus('LIFF 初始化失敗', 'error');
+                addDebugInfo('LIFF 初始化失敗: ' + err.message);
+                showLoginOptions();
+            }
         });
+
     </script>
 </body>
 </html>
