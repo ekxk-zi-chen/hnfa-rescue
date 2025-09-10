@@ -2,23 +2,20 @@
 import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 
-// env
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const LIFF_CLIENT_ID = process.env.LIFF_CLIENT_ID;
-// 設定允許的 origin，例如 https://hnfa-rescue-1dm6jp64t-ekxk-zi-chens-projects.vercel.app
-// 在 Vercel Dashboard 用環境變數 CORS_ORIGIN 設定，或先用 '*' 作測試（不建議正式放 *）
+// 可在 Vercel 環境變數設定此值，或暫時用 '*' 測試
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// helper: set CORS headers on the response object
-function setCorsHeaders(res, origin = '*') {
+function setCorsHeaders(res, origin) {
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // 若要允許憑證(cookie/authorization)，設定以下（但要配合前端 fetch 的 credentials）
+  // 若需 cookies 或 credentials，開下面一行並在前端 fetch 加 credentials
   // res.setHeader('Access-Control-Allow-Credentials', 'true');
 }
 
@@ -41,8 +38,10 @@ function createSessionToken(userId, permissions = {}) {
 }
 
 export default async function handler(req, res) {
-  // 處理 preflight
+  // 一律先設定 CORS header
   setCorsHeaders(res, CORS_ORIGIN);
+
+  // preflight
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
@@ -54,9 +53,9 @@ export default async function handler(req, res) {
 
     const { idToken, sessionToken } = req.body || {};
 
-    // quick env check
+    // env check
     if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !JWT_SECRET || !LIFF_CLIENT_ID) {
-      console.error('Missing env vars', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_KEY: !!SUPABASE_SERVICE_KEY, JWT_SECRET: !!JWT_SECRET, LIFF_CLIENT_ID: !!LIFF_CLIENT_ID });
+      console.error('Missing env vars');
       return res.status(500).json({ status: 'error', message: 'Server env not configured' });
     }
 
@@ -66,8 +65,7 @@ export default async function handler(req, res) {
         const decoded = jwt.verify(sessionToken, JWT_SECRET);
         return res.status(200).json({ status: 'ok', userId: decoded.userId, permissions: decoded.permissions, sessionToken });
       } catch (e) {
-        // invalid token -> fallback to idToken flow
-        console.log('session invalid, fallback to idToken');
+        // 無效 -> fallback to idToken
       }
     }
 
@@ -81,7 +79,6 @@ export default async function handler(req, res) {
     }
     const userId = profile.sub;
 
-    // supabase 查詢
     const { data, error } = await supabase.from('users').select('*').eq('user_id', userId).single();
     if (error) {
       console.error('Supabase query error', error);
