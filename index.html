@@ -510,12 +510,28 @@
                 if (isRedirect) {
                     addDebugInfo('檢測到登入重定向回傳');
                     localStorage.removeItem('loginRedirect');
-                    
-                    // 清理URL參數避免循環
+                
+                    // 清理 URL 參數
                     if (window.history.replaceState) {
                         const cleanUrl = window.location.origin + window.location.pathname;
                         window.history.replaceState({}, document.title, cleanUrl);
                     }
+                
+                    // **重要：回來後必須初始化 LIFF 並取得 ID Token**
+                    if (!LIFF_INITIALIZED) await liff.init({ liffId: CONFIG.LIFF_ID });
+                    LIFF_INITIALIZED = true;
+                
+                    ID_TOKEN = liff.getIDToken(); // 取得回傳 token
+                    if (ID_TOKEN && !isTokenExpired(ID_TOKEN)) {
+                        await verifyIdToken(ID_TOKEN); // 驗證 token
+                        return; // 成功後結束初始化
+                    } else {
+                        addDebugInfo('ID Token 無效或過期，請重新登入');
+                        showLoginOptions();
+                        return;
+                    }
+                }
+
                 }
                 
                 // 初始化 LIFF
