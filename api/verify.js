@@ -7,26 +7,35 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 const LIFF_CLIENT_ID = process.env.LIFF_CLIENT_ID;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://ekxk-zi-chen.github.io";
+const CORS_ORIGIN = process.env.CORS_ORIGIN || null; // 若想強制固定 origin，可在 env 設定
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // === CORS helper ===
-function setCorsHeaders(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*"); // 或指定前端 URL
+function setCorsHeaders(res, origin) {
+  // origin: 字串 (例如 "https://ekxk-zi-chen.github.io") 或 "*" 
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  // 告訴快取／代理回應會依 Origin 變化
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // 注意：此版本不設 Access-Control-Allow-Credentials
 }
 
 export default async function handler(req, res) {
-  // 預檢請求
+  // 決定要回的 origin：若有 env 指定，就用 env（強制）；否則使用 request origin；再沒有則用 '*'
+  const reqOrigin = req.headers.origin || null;
+  const replyOrigin = CORS_ORIGIN || reqOrigin || "*";
+
+  // 預檢請求（OPTIONS）
   if (req.method === "OPTIONS") {
-    setCorsHeaders(res);
-    return res.status(200).end();
+    setCorsHeaders(res, replyOrigin);
+    // 204 No Content 比 200 更常用於預檢
+    return res.status(204).end();
   }
 
-  // 其他情況，一律帶上 CORS
-  setCorsHeaders(res);
+  // 其他情況一律帶上 CORS header（避免主請求漏掉）
+  setCorsHeaders(res, replyOrigin);
 
   if (req.method !== "POST") {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
