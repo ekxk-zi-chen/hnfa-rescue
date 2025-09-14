@@ -1,28 +1,24 @@
-import { createClient } from "@supabase/supabase-js";
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>HNFA Rescue 測試</title>
+</head>
+<body>
+  <h1>測試呼叫 Supabase API</h1>
+  <button id="callApi">呼叫 /api/hello</button>
+  <pre id="result"></pre>
 
-export default async function handler(req, res) {
-  try {
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY
-    );
-
-    // 測試查詢資料表 (假設有一個 profiles 表，至少一筆資料)
-    const { data, error } = await supabase.from("equipment").select("*").limit(1);
-
-    if (error) {
-      throw error;
-    }
-
-    res.status(200).json({
-      message: "成功連到 Supabase 🚀",
-      sample: data,
-      time: new Date().toISOString()
+  <script>
+    document.getElementById("callApi").addEventListener("click", async () => {
+      try {
+        const res = await fetch("https://hnfa-rescue.vercel.app/api/verify");
+        const data = await res.json();
+        document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("result").textContent = "錯誤：" + err;
+      }
     });
-  } catch (err) {
-    res.status(500).json({
-      message: "Supabase 連線錯誤",
-      error: err.message
-    });
-  }
-}
+  </script>
+</body>
+</html>
