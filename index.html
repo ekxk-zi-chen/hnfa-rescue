@@ -539,10 +539,14 @@
                     ID_TOKEN = liff.getIDToken();
                     addDebugInfo('已獲取 ID Token');
                     
-                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                        showLoginOptions();
-                        return;
-                    }
+                if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
+                    addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                    localStorage.setItem('loginRedirect', 'true'); // 標記重定向
+                    liff.login({
+                        redirectUri: window.location.origin + window.location.pathname
+                    });
+                    return;
+                }
                     
                     // 驗證 ID Token
                     await verifyIdToken(ID_TOKEN);
