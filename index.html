@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>花蓮特搜網頁 - 正式版</title>
     <style>
+        /* 樣式保持不變 */
         :root {
             --primary: #00C300;
             --primary-dark: #009900;
@@ -600,10 +601,16 @@
 
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
-            addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0,20)+'...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0,20)+'...' : null}`);
+            // 修正 sessionToken 處理，確保不會傳遞 'undefined' 字串
+            const sanitizedSessionToken = (sessionToken && sessionToken !== 'undefined') ? sessionToken : null;
+            
+            addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0,20)+'...' : null}, sessionToken=${sanitizedSessionToken ? sanitizedSessionToken.substring(0,20)+'...' : null}`);
         
             try {
-                const payload = { idToken: idToken || null, sessionToken: sessionToken || null };
+                const payload = { 
+                    idToken: idToken || null, 
+                    sessionToken: sanitizedSessionToken 
+                };
                 addDebugInfo('[verifyToken] payload prepared: ' + JSON.stringify(payload));
         
                 const response = await fetch(CONFIG.API_BASE, {
