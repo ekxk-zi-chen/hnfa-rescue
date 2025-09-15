@@ -399,13 +399,28 @@
 
         // ---------- Session管理函數 ----------
         function clearSession() {
+            // 清 localStorage
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('loginRedirect');
+            localStorage.removeItem('liff.state');      // 如果有 LIFF 內部快取也清
+            localStorage.removeItem('liff.userId');     // 可選，確保全新登入
+        
+            // 清全局變數
             SESSION_TOKEN = null;
-            addDebugInfo('已清除本地Session和重定向標記');
+            ID_TOKEN = null;
+            PROFILE = null;
+        
+            // 登出 LIFF SDK
+            if (LIFF_INITIALIZED && liff.isLoggedIn()) {
+                liff.logout();
+                addDebugInfo('LIFF SDK 已登出');
+            }
+        
+            addDebugInfo('已清除本地Session、ID Token、LIFF快取');
             showStatus('已清除登入狀態，請重新登入', 'info');
             showLoginOptions();
         }
+
 
         function saveSession(token) {
             localStorage.setItem('sessionToken', token);
