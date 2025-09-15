@@ -397,7 +397,6 @@
         let LIFF_INITIALIZED = false;
         let IS_EXTERNAL_BROWSER = false;
 
-
         // 在 script 執行初始階段（靠近變數宣告後）
         let rawSession = localStorage.getItem('sessionToken');
         if (!rawSession || rawSession === 'undefined') {
@@ -435,9 +434,6 @@
             showLoginOptions();
         }
 
-
-
-        
         function saveSession(token) {
             if (!token || token === 'undefined') {
                 addDebugInfo('saveSession: invalid token, not saving');
@@ -447,7 +443,6 @@
             SESSION_TOKEN = token;
             addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
         }
-
 
         function validateSessionFormat(token) {
             if (!token || typeof token !== 'string') return false;
@@ -580,12 +575,14 @@
                 try {
                     const extIdToken = liff.getIDToken();
                     addDebugInfo('外部瀏覽器嘗試取得 ID Token: ' + (extIdToken ? (extIdToken.substring(0,20) + '...') : 'null'));
-                    if (extIdToken && !isTokenExpired(extIdToken)) {
-                        addDebugInfo('外部瀏覽器拿到有效 ID Token，進行驗證');
+                    
+                    // 修改這裡：只要有 ID Token 就嘗試驗證，不檢查是否過期
+                    if (extIdToken) {
+                        addDebugInfo('外部瀏覽器拿到 ID Token，嘗試進行驗證');
                         await verifyIdToken(extIdToken);
                         return;
                     } else {
-                        addDebugInfo('外部瀏覽器未取得有效 ID Token，等待使用者手動登入');
+                        addDebugInfo('外部瀏覽器未取得 ID Token，等待使用者手動登入');
                     }
                 } catch (e) {
                     addDebugInfo('外部瀏覽器取 ID Token 發生錯誤（可忽略）: ' + (e && e.message || e));
@@ -600,8 +597,6 @@
                 showLoginOptions();
             }
         }
-
-
 
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
