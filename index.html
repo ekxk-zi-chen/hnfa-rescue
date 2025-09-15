@@ -501,15 +501,12 @@
                     }
                     
                     ID_TOKEN = liff.getIDToken();
-                    if (!ID_TOKEN) {
-                        addDebugInfo('未取得 ID Token，請登入');
-                        showLoginOptions();
-                        return;
-                    }
-                    
-                    if (isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('ID Token 已過期，請登入');
-                        showLoginOptions();
+                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                        localStorage.setItem('loginRedirect', 'true'); // 設定重定向標記
+                        liff.login({
+                            redirectUri: window.location.origin + window.location.pathname
+                        });
                         return;
                     }
                     
@@ -517,6 +514,7 @@
                     await verifyIdToken(ID_TOKEN);
                     return;
                 }
+
 
                 // 檢查並驗證現有的sessionToken
                 if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
@@ -539,17 +537,18 @@
                     ID_TOKEN = liff.getIDToken();
                     addDebugInfo('已獲取 ID Token');
                     
-                if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                    addDebugInfo('ID Token 過期或不存在，強制重新登入');
-                    localStorage.setItem('loginRedirect', 'true'); // 標記重定向
-                    liff.login({
-                        redirectUri: window.location.origin + window.location.pathname
-                    });
-                    return;
-                }
+                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                        localStorage.setItem('loginRedirect', 'true'); // 設定重定向標記
+                        liff.login({
+                            redirectUri: window.location.origin + window.location.pathname
+                        });
+                        return;
+                    }
                     
                     // 驗證 ID Token
                     await verifyIdToken(ID_TOKEN);
+
                 } else {
                     // 不在 LINE 環境中，顯示登入選項
                     addDebugInfo('不在 LINE 環境中，顯示登入選項');
