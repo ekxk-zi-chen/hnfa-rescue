@@ -402,12 +402,12 @@
             // 清 localStorage
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('loginRedirect');
-            localStorage.removeItem('liff.state');      // 如果有 LIFF 內部快取也清
-            localStorage.removeItem('liff.userId');     // 可選，確保全新登入
+            localStorage.removeItem('liff.state');  // 如果有 LIFF 內部快取也清
+            localStorage.removeItem('liff.userId'); // 可選，確保全新登入
         
             // 清全局變數
             SESSION_TOKEN = null;
-            ID_TOKEN = null;
+            ID_TOKEN = null;  // ✅ 清掉 LIFF 內部 token
             PROFILE = null;
         
             // 登出 LIFF SDK
@@ -416,10 +416,10 @@
                 addDebugInfo('LIFF SDK 已登出');
             }
         
-            addDebugInfo('已清除本地Session、ID Token、LIFF快取');
-            showStatus('已清除登入狀態，請重新登入', 'info');
+            // 顯示登入選項
             showLoginOptions();
         }
+
 
 
         function saveSession(token) {
@@ -489,13 +489,16 @@
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
-            // 🔹 先檢查本地 SessionToken 是否過期
-            if (SESSION_TOKEN && isTokenExpired(SESSION_TOKEN)) {
-                addDebugInfo('本地 SessionToken 已過期，清除');
-                clearSession();
-                // 注意 clearSession() 會顯示登入選項並結束
-                return;
+            // 🔹 先檢查本地 SessionToken 是否過期或不存在
+            if (!SESSION_TOKEN || isTokenExpired(SESSION_TOKEN)) {
+                addDebugInfo('SessionToken 無效或已過期，清除舊 session 與 LIFF 登入');
+                clearSession(); // 這會清掉 SESSION_TOKEN, ID_TOKEN
+                if (liff.isLoggedIn()) {
+                    await liff.logout(); // 確保 LIFF 內部快取的 token 被清掉
+                }
+                ID_TOKEN = null;
             }
+
 
             try {
                 // 初始化 LIFF
@@ -525,13 +528,13 @@
                     ID_TOKEN = liff.getIDToken();
                     if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
                         addDebugInfo('ID Token 過期或不存在，強制重新登入');
-                        clearSession(); // 先清掉 sessionToken 和 loginRedirect
-                        localStorage.setItem('loginRedirect', 'true'); // 設定重定向標記
-                        liff.login({
-                            redirectUri: window.location.origin + window.location.pathname
-                        });
+                        clearSession();
+                        if (liff.isLoggedIn()) await liff.logout(); // ✅ 確保拿到新的 token
+                        localStorage.setItem('loginRedirect', 'true'); 
+                        liff.login({ redirectUri: window.location.origin + window.location.pathname });
                         return;
                     }
+
                     
                     // 驗證 ID Token
                     await verifyIdToken(ID_TOKEN);
@@ -595,7 +598,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ idToken, sessionToken })
+                    body: JSON.stringify({ idToken, sessionToken: SESSION_TOKEN || null })
                 });
                 
                 if (!response.ok) {
