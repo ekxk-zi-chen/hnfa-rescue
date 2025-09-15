@@ -500,7 +500,13 @@
             addDebugInfo('開始初始化應用');
         
             try {
-                // 初始化 LIFF
+                // 如果本地 session token 已過期，先清本地（不立刻中斷流程）
+                if (SESSION_TOKEN && isTokenExpired(SESSION_TOKEN)) {
+                    addDebugInfo('本地 SessionToken 已過期，先清本地 session');
+                    clearLocalSession(); // 只清本地狀態
+                }
+        
+                // 初始化 LIFF（一定要先 init，才能調 getIDToken / isInClient）
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 LIFF_INITIALIZED = true;
@@ -510,52 +516,79 @@
                 IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
         
-                // 嘗試驗證現有 sessionToken
+                // 1) 優先嘗試用現有 sessionToken 驗證（若有）
                 if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
-                    ID_TOKEN = liff.getIDToken();
-                    const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
+                    addDebugInfo('嘗試以現有 sessionToken 驗證後端');
+                    // 先取得 ID token（如果有）
+                    let potentialIdToken = null;
+                    try { potentialIdToken = liff.getIDToken(); } catch(e){ /* ignore if not available */ }
+        
+                    const result = await verifyToken(potentialIdToken, SESSION_TOKEN);
                     if (result && result.status === 'ok') {
+                        addDebugInfo('使用現有 SessionToken 驗證成功，render UI');
                         renderUserInterface(result);
-                        addDebugInfo('使用現有 SessionToken 初始化完成');
-                        return;
+                        return; // 既然 session 可用就結束初始化
                     } else {
-                        addDebugInfo('SessionToken 無效或驗證失敗，清理本地 session');
-                        clearLocalSession(); // ✅ 只清本地，不阻斷流程
+                        addDebugInfo('現有 SessionToken 驗證失敗或無效，清除本地 session（但不終止初始化）');
+                        clearLocalSession();
                     }
                 }
         
-                // 如果在 LINE 內部，處理登入和 ID Token
+                // 2) 如果在 LINE client，優先使用 LIFF 的 ID token 流程
                 if (isInLINE) {
+                    addDebugInfo('在 LINE client 內，進行 LIFF 登入/驗證檢查');
+        
                     if (!liff.isLoggedIn()) {
-                        addDebugInfo('用戶未登入，調用 login()');
+                        addDebugInfo('LIFF 顯示未登入，呼叫 liff.login() (LINE client 內會跳登入流程)');
                         liff.login({ redirectUri: window.location.origin + window.location.pathname });
                         return;
                     }
         
+                    // 取 ID token
                     ID_TOKEN = liff.getIDToken();
+                    addDebugInfo('取得 ID Token: ' + (ID_TOKEN ? (ID_TOKEN.substring(0,20) + '...') : 'null'));
+        
                     if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                        addDebugInfo('ID Token 不存在或已過期，在 LINE client 內強制重新登入');
                         localStorage.setItem('loginRedirect', 'true');
                         liff.login({ redirectUri: window.location.origin + window.location.pathname });
                         return;
                     }
         
+                    // 驗證 ID token（會建立 session）
                     await verifyIdToken(ID_TOKEN);
-                } else {
-                    // 外部瀏覽器也顯示登入提示，但不 return，流程繼續
-                    addDebugInfo('外部瀏覽器，顯示登入提示，但流程繼續');
-                    showLoginOptions();
+                    return;
                 }
         
-                addDebugInfo('初始化完成，進入後續流程');
+                // 3) 外部瀏覽器：顯示登入選項，但不要 return (流程繼續)
+                addDebugInfo('外部瀏覽器，顯示登入提示，但流程繼續');
+                showLoginOptions();
+        
+                // 在外部瀏覽器仍可嘗試拿 ID_TOKEN（若 user 在同一瀏覽器登入過 LIFF）
+                try {
+                    const extIdToken = liff.getIDToken();
+                    addDebugInfo('外部瀏覽器嘗試取得 ID Token: ' + (extIdToken ? (extIdToken.substring(0,20) + '...') : 'null'));
+                    if (extIdToken && !isTokenExpired(extIdToken)) {
+                        addDebugInfo('外部瀏覽器拿到有效 ID Token，進行驗證');
+                        await verifyIdToken(extIdToken);
+                        return;
+                    } else {
+                        addDebugInfo('外部瀏覽器未取得有效 ID Token，等待使用者手動登入');
+                    }
+                } catch (e) {
+                    addDebugInfo('外部瀏覽器取 ID Token 發生錯誤（可忽略）: ' + (e && e.message || e));
+                }
+        
+                addDebugInfo('初始化完成，進入後續流程（UI 已顯示）');
         
             } catch (error) {
                 console.error('初始化錯誤:', error);
-                addDebugInfo('初始化錯誤: ' + error.message);
-                showStatus('初始化失敗: ' + error.message, 'error');
+                addDebugInfo('初始化錯誤: ' + (error && error.message || error));
+                showStatus('初始化失敗: ' + (error && error.message || error), 'error');
                 showLoginOptions();
             }
         }
+
 
 
         // ---------- Token 驗證 ----------
