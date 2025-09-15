@@ -397,18 +397,26 @@
         let LIFF_INITIALIZED = false;
         let IS_EXTERNAL_BROWSER = false;
 
-        // ---------- Session管理函數 ----------
-        function clearSession() {
+
+        
+        function clearLocalSession() {
             // 清 localStorage
             localStorage.removeItem('sessionToken');
             localStorage.removeItem('loginRedirect');
-            localStorage.removeItem('liff.state');  // 如果有 LIFF 內部快取也清
-            localStorage.removeItem('liff.userId'); // 可選，確保全新登入
+            localStorage.removeItem('liff.state');
+            localStorage.removeItem('liff.userId');
         
             // 清全局變數
             SESSION_TOKEN = null;
-            ID_TOKEN = null;  // ✅ 清掉 LIFF 內部 token
+            ID_TOKEN = null; // ✅ 清掉 LIFF 內部 token
             PROFILE = null;
+        
+            addDebugInfo('本地 session 已清理（未登出 LIFF）');
+        }
+
+        // ---------- Session管理函數 ----------
+        function clearSession() {
+            clearLocalSession(); // 先清本地 session
         
             // 登出 LIFF SDK
             if (LIFF_INITIALIZED && liff.isLoggedIn()) {
@@ -419,6 +427,7 @@
             // 顯示登入選項
             showLoginOptions();
         }
+
 
 
 
@@ -489,97 +498,54 @@
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
-            // 🔹 先檢查本地 SessionToken 是否過期或不存在
-            if (!SESSION_TOKEN || isTokenExpired(SESSION_TOKEN)) {
-                addDebugInfo('SessionToken 無效或已過期，清除舊 session 與 LIFF 登入');
-                clearSession(); // 這會清掉 SESSION_TOKEN, ID_TOKEN
-                if (liff.isLoggedIn()) {
-                    await liff.logout(); // 確保 LIFF 內部快取的 token 被清掉
-                }
-                ID_TOKEN = null;
-            }
-
-
+        
             try {
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 LIFF_INITIALIZED = true;
                 addDebugInfo('LIFF 初始化成功');
-
-                // 檢查是否在 LINE 環境中
+        
                 const isInLINE = liff.isInClient();
                 IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
-
-                // 檢查是否為重定向回來的
-                const urlParams = new URLSearchParams(window.location.search);
-                const isRedirect = urlParams.get('liff.state') || localStorage.getItem('loginRedirect');
-                
-                if (isRedirect) {
-                    addDebugInfo('檢測到登入重定向回傳');
-                    localStorage.removeItem('loginRedirect');
-                    
-                    if (window.history.replaceState) {
-                        const cleanUrl = window.location.origin + window.location.pathname;
-                        window.history.replaceState({}, document.title, cleanUrl);
-                    }
-                    
-                    ID_TOKEN = liff.getIDToken();
-                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('ID Token 過期或不存在，強制重新登入');
-                        clearSession();
-                        if (liff.isLoggedIn()) await liff.logout(); // ✅ 確保拿到新的 token
-                        localStorage.setItem('loginRedirect', 'true'); 
-                        liff.login({ redirectUri: window.location.origin + window.location.pathname });
-                        return;
-                    }
-
-                    
-                    // 驗證 ID Token
-                    await verifyIdToken(ID_TOKEN);
-                    return;
-                }
-
-
-                // 檢查並驗證現有的sessionToken
+        
+                // 嘗試驗證現有 sessionToken
                 if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
                     ID_TOKEN = liff.getIDToken();
                     const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
                     if (result && result.status === 'ok') {
                         renderUserInterface(result);
                         return;
+                    } else {
+                        addDebugInfo('SessionToken 無效或驗證失敗，清理本地 session');
+                        clearLocalSession(); // ✅ 只清本地，初始化流程不直接跳登入
                     }
                 }
-
-                // 在 LINE 環境中但沒有有效session，獲取ID Token
+        
+                // 如果在 LINE 內，但沒有有效 session
                 if (isInLINE) {
                     if (!liff.isLoggedIn()) {
-                        addDebugInfo('用戶未登入，調用login()');
-                        liff.login();
+                        addDebugInfo('用戶未登入，調用 login()');
+                        liff.login({ redirectUri: window.location.origin + window.location.pathname });
                         return;
                     }
-                    
+        
                     ID_TOKEN = liff.getIDToken();
-                    addDebugInfo('已獲取 ID Token');
-                    
                     if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
                         addDebugInfo('ID Token 過期或不存在，強制重新登入');
-                        localStorage.setItem('loginRedirect', 'true'); // 設定重定向標記
-                        liff.login({
-                            redirectUri: window.location.origin + window.location.pathname
-                        });
+                        localStorage.setItem('loginRedirect', 'true');
+                        liff.login({ redirectUri: window.location.origin + window.location.pathname });
                         return;
                     }
-                    
-                    // 驗證 ID Token
+        
                     await verifyIdToken(ID_TOKEN);
-
                 } else {
                     // 不在 LINE 環境中，顯示登入選項
                     addDebugInfo('不在 LINE 環境中，顯示登入選項');
                     showLoginOptions();
                 }
+        
             } catch (error) {
                 console.error('初始化錯誤:', error);
                 addDebugInfo('初始化錯誤: ' + error.message);
