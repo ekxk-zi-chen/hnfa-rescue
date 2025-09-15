@@ -398,7 +398,14 @@
         let IS_EXTERNAL_BROWSER = false;
 
 
-        
+        // 在 script 執行初始階段（靠近變數宣告後）
+        let rawSession = localStorage.getItem('sessionToken');
+        if (!rawSession || rawSession === 'undefined') {
+            rawSession = null;
+            localStorage.removeItem('sessionToken');
+        }
+        SESSION_TOKEN = rawSession;
+
         function clearLocalSession() {
             // 清 localStorage
             localStorage.removeItem('sessionToken');
@@ -430,12 +437,17 @@
 
 
 
-
+        
         function saveSession(token) {
+            if (!token || token === 'undefined') {
+                addDebugInfo('saveSession: invalid token, not saving');
+                return;
+            }
             localStorage.setItem('sessionToken', token);
             SESSION_TOKEN = token;
             addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
         }
+
 
         function validateSessionFormat(token) {
             if (!token || typeof token !== 'string') return false;
@@ -593,26 +605,37 @@
 
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
+            addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0,20)+'...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0,20)+'...' : null}`);
+        
             try {
-                addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0,20)+'...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0,20)+'...' : null}`);
-                
+                const payload = { idToken: idToken || null, sessionToken: sessionToken || null };
+                addDebugInfo('[verifyToken] payload prepared: ' + JSON.stringify(payload));
+        
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ idToken, sessionToken: SESSION_TOKEN || null })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    mode: 'cors',
+                    credentials: 'omit'
                 });
-                
+        
+                addDebugInfo('[verifyToken] fetch finished, status=' + response.status);
+        
+                const text = await response.text();
+                addDebugInfo('[verifyToken] raw response text: ' + text);
+        
+                let data = null;
+                try { data = JSON.parse(text); } catch (e) { /* not JSON */ }
+        
                 if (!response.ok) {
-                    throw new Error(`伺服器錯誤: ${response.status}`);
+                    addDebugInfo('[verifyToken] server returned error', response.status, data || text);
+                    return { status: 'error', httpStatus: response.status, message: data?.message || text || 'HTTP error' };
                 }
-                
-                const data = await response.json();
-                addDebugInfo('伺服器回應: ' + JSON.stringify(data));
+        
+                addDebugInfo('[verifyToken] server returned OK', data);
                 return data;
-            } catch (error) {
-                addDebugInfo('驗證請求失敗: ' + error.message);
+            } catch (err) {
+                addDebugInfo('[verifyToken] fetch exception: ' + (err && err.message || err));
                 return null;
             }
         }
