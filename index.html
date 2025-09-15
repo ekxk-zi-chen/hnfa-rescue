@@ -510,6 +510,7 @@
                     ID_TOKEN = liff.getIDToken();
                     if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
                         addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                        clearSession(); // 先清掉 sessionToken 和 loginRedirect
                         localStorage.setItem('loginRedirect', 'true'); // 設定重定向標記
                         liff.login({
                             redirectUri: window.location.origin + window.location.pathname
