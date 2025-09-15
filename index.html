@@ -516,14 +516,15 @@
                     const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
                     if (result && result.status === 'ok') {
                         renderUserInterface(result);
+                        addDebugInfo('使用現有 SessionToken 初始化完成');
                         return;
                     } else {
                         addDebugInfo('SessionToken 無效或驗證失敗，清理本地 session');
-                        clearLocalSession(); // ✅ 只清本地，初始化流程不直接跳登入
+                        clearLocalSession(); // ✅ 只清本地，不阻斷流程
                     }
                 }
         
-                // 如果在 LINE 內，但沒有有效 session
+                // 如果在 LINE 內部，處理登入和 ID Token
                 if (isInLINE) {
                     if (!liff.isLoggedIn()) {
                         addDebugInfo('用戶未登入，調用 login()');
@@ -541,10 +542,12 @@
         
                     await verifyIdToken(ID_TOKEN);
                 } else {
-                    // 不在 LINE 環境中，顯示登入選項
-                    addDebugInfo('不在 LINE 環境中，顯示登入選項');
+                    // 外部瀏覽器也顯示登入提示，但不 return，流程繼續
+                    addDebugInfo('外部瀏覽器，顯示登入提示，但流程繼續');
                     showLoginOptions();
                 }
+        
+                addDebugInfo('初始化完成，進入後續流程');
         
             } catch (error) {
                 console.error('初始化錯誤:', error);
@@ -553,6 +556,7 @@
                 showLoginOptions();
             }
         }
+
 
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
