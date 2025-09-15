@@ -474,6 +474,13 @@
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
+            // 🔹 先檢查本地 SessionToken 是否過期
+            if (SESSION_TOKEN && isTokenExpired(SESSION_TOKEN)) {
+                addDebugInfo('本地 SessionToken 已過期，清除');
+                clearSession();
+                // 注意 clearSession() 會顯示登入選項並結束
+                return;
+            }
 
             try {
                 // 初始化 LIFF
