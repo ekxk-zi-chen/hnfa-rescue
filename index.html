@@ -389,30 +389,28 @@
             API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
             DEBUG: false  // 生產環境關閉除錯模式
         };
-
+    
         // 全局變數
         let ID_TOKEN = null;
-        let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;
+        let SESSION_TOKEN = null; // 不再從localStorage讀取
         let PROFILE = null;
         let LIFF_INITIALIZED = false;
         let IS_EXTERNAL_BROWSER = false;
-
+    
         // ---------- Session管理函數 ----------
         function clearSession() {
-            localStorage.removeItem('sessionToken');
-            localStorage.removeItem('loginRedirect');
-            SESSION_TOKEN = null;
-            addDebugInfo('已清除本地Session和重定向標記');
+            SESSION_TOKEN = null; // 只清除記憶體中的session
+            addDebugInfo('已清除Session');
             showStatus('已清除登入狀態，請重新登入', 'info');
             showLoginOptions();
         }
-
+    
+        // 不再保存到localStorage
         function saveSession(token) {
-            localStorage.setItem('sessionToken', token);
             SESSION_TOKEN = token;
-            addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
+            addDebugInfo('已保存SessionToken到記憶體: ' + token.substring(0, 20) + '...');
         }
-
+    
         function validateSessionFormat(token) {
             if (!token || typeof token !== 'string') return false;
             try {
@@ -425,7 +423,7 @@
                 return false;
             }
         }
-
+    
         // ---------- 工具函數 ----------
         function showStatus(message, type = 'info') {
             const statusEl = document.getElementById('status');
@@ -442,7 +440,7 @@
             statusEl.querySelector('.status-icon').textContent = iconMap[type] || '⏳';
             statusEl.style.display = 'flex';
         }
-
+    
         function addDebugInfo(info) {
             if (!CONFIG.DEBUG) return;
             const debugEl = document.getElementById('debug-content');
@@ -450,7 +448,7 @@
             debugEl.innerHTML += `<div>[${time}] ${info}</div>`;
             debugEl.scrollTop = debugEl.scrollHeight;
         }
-
+    
         function toggleLoader(buttonId, show) {
             const loader = document.getElementById(buttonId + '-loader');
             const text = document.getElementById(buttonId + '-text');
@@ -459,7 +457,7 @@
                 text.style.display = show ? 'none' : 'inline';
             }
         }
-
+    
         function isTokenExpired(token) {
             if (!token) return true;
             try {
@@ -469,31 +467,30 @@
                 return true;
             }
         }
-
+    
         // ---------- 初始化流程 ----------
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
-
+    
             try {
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 LIFF_INITIALIZED = true;
                 addDebugInfo('LIFF 初始化成功');
-
+    
                 // 檢查是否在 LINE 環境中
                 const isInLINE = liff.isInClient();
                 IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
-
+    
                 // 檢查是否為重定向回來的
                 const urlParams = new URLSearchParams(window.location.search);
-                const isRedirect = urlParams.get('liff.state') || localStorage.getItem('loginRedirect');
+                const isRedirect = urlParams.get('liff.state');
                 
                 if (isRedirect) {
                     addDebugInfo('檢測到登入重定向回傳');
-                    localStorage.removeItem('loginRedirect');
                     
                     if (window.history.replaceState) {
                         const cleanUrl = window.location.origin + window.location.pathname;
@@ -517,18 +514,8 @@
                     await verifyIdToken(ID_TOKEN);
                     return;
                 }
-
-                // 檢查並驗證現有的sessionToken
-                if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
-                    ID_TOKEN = liff.getIDToken();
-                    const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
-                    if (result && result.status === 'ok') {
-                        renderUserInterface(result);
-                        return;
-                    }
-                }
-
-                // 在 LINE 環境中但沒有有效session，獲取ID Token
+    
+                // 在 LINE 環境中獲取ID Token
                 if (isInLINE) {
                     if (!liff.isLoggedIn()) {
                         addDebugInfo('用戶未登入，調用login()');
@@ -539,14 +526,11 @@
                     ID_TOKEN = liff.getIDToken();
                     addDebugInfo('已獲取 ID Token');
                     
-                if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
-                    addDebugInfo('ID Token 過期或不存在，強制重新登入');
-                    localStorage.setItem('loginRedirect', 'true'); // 標記重定向
-                    liff.login({
-                        redirectUri: window.location.origin + window.location.pathname
-                    });
-                    return;
-                }
+                    if (!ID_TOKEN || isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('ID Token 過期或不存在，強制重新登入');
+                        liff.login();
+                        return;
+                    }
                     
                     // 驗證 ID Token
                     await verifyIdToken(ID_TOKEN);
@@ -562,7 +546,7 @@
                 showLoginOptions();
             }
         }
-
+    
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
             try {
@@ -588,9 +572,9 @@
                 return null;
             }
         }
-
+    
         async function verifyIdToken(idToken) {
-            const result = await verifyToken(idToken, null);
+            const result = await verifyToken(idToken, SESSION_TOKEN);
             
             if (!result) {
                 showStatus('伺服器無回應，請稍後重試', 'error');
@@ -630,7 +614,7 @@
                     showLoginOptions();
             }
         }
-
+    
         // ---------- 用戶界面控制 ----------
         function showLoginOptions() {
             showStatus('請登入 LINE 帳戶');
@@ -638,7 +622,7 @@
             document.getElementById('user-info').style.display = 'none';
             document.getElementById('checkin-form').style.display = 'none';
         }
-
+    
         function renderUserInterface(profile) {
             PROFILE = profile;
             document.getElementById('display-name').textContent = profile.displayName || '用戶';
@@ -659,7 +643,7 @@
                 }, 3000);
             }
         }
-
+    
         // ---------- 表單處理 ----------
         async function submitCheckinForm(formData) {
             const submitBtn = document.getElementById('submit-btn');
@@ -667,7 +651,14 @@
             showStatus('正在提交表單...');
             
             try {
+                // 在LINE環境中，每次提交都獲取最新的ID Token
+                if (liff.isInClient() && liff.isLoggedIn()) {
+                    ID_TOKEN = liff.getIDToken();
+                    addDebugInfo('已刷新ID Token用於表單提交');
+                }
+                
                 const payload = Object.assign({}, formData, {
+                    idToken: ID_TOKEN,
                     sessionToken: SESSION_TOKEN
                 });
                 
@@ -684,10 +675,14 @@
                 if (data.status === 'ok') {
                     showStatus('表單提交成功！', 'success');
                     document.getElementById('checkinForm').reset();
+                    // 如果有新的session token，更新它
+                    if (data.sessionToken) {
+                        saveSession(data.sessionToken);
+                    }
                 } else {
                     showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
                     if (data.message && data.message.includes('session')) {
-                        addDebugInfo('檢測到Session無效，將清除本地Session');
+                        addDebugInfo('檢測到Session無效，將清除Session');
                         clearSession();
                     }
                 }
@@ -701,7 +696,7 @@
                 }, 5000);
             }
         }
-
+    
         // ---------- 事件監聽器設置 ----------
         function setupEventListeners() {
             // 表單提交
@@ -731,11 +726,7 @@
                         LIFF_INITIALIZED = true;
                     }
                     
-                    // 設置重定向標記，以便返回時識別
-                    localStorage.setItem('loginRedirect', 'true');
-                    liff.login({
-                        redirectUri: window.location.origin + window.location.pathname
-                    });
+                    liff.login();
                 } catch (error) {
                     addDebugInfo('登入錯誤: ' + error.message);
                     showStatus('登入失敗: ' + error.message, 'error');
@@ -760,7 +751,7 @@
                 }
             });
         }
-
+    
         // ---------- 初始化應用 ----------
         document.addEventListener('DOMContentLoaded', async () => {
             setupEventListeners();
