@@ -538,24 +538,19 @@
 
                     await verifyIdToken(ID_TOKEN);
                 } else {
-                    // 外部瀏覽器 → 顯示登入選項
-                    addDebugInfo('不在 LINE 環境中，顯示登入選項');
+                    // 外部瀏覽器 → 也走一樣流程
+                    addDebugInfo('外部瀏覽器，走與 LINE 相同流程');
 
-                    if (CONFIG.DEBUG) {
-                        // 外部測試模式：直接建立一組假 token
-                        ID_TOKEN = "FAKE_ID_TOKEN_FOR_TESTING";
-                        SESSION_TOKEN = localStorage.getItem("debugSession") || "FAKE_SESSION_FOR_TESTING";
-
-                        // 跑跟 LINE 環境一樣的驗證流程
-                        const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
-                        if (result && result.status === 'ok') {
-                            renderUserInterface(result);
-                        } else {
-                            showLoginOptions();
-                        }
-                    } else {
-                        showLoginOptions();
+                    if (!liff.isLoggedIn()) {
+                        addDebugInfo('外部環境未登入，觸發 login()');
+                        liff.login({ redirectUri: window.location.href });
+                        return;
                     }
+
+                    ID_TOKEN = await getFreshIdToken();
+                    if (!ID_TOKEN) return; // login redirect
+
+                    await verifyIdToken(ID_TOKEN);
                 }
             } catch (error) {
                 console.error('初始化錯誤:', error);
