@@ -521,6 +521,55 @@
                 return null;
             }
         }
+        // ---------- 取得最新有效 ID Token ----------
+        async function getLatestIdToken() {
+            try {
+                if (typeof liff === 'undefined') return null;
+
+                // 先拿快取 token
+                let token = liff.getIDToken ? liff.getIDToken() : null;
+
+                // 如果 token 存在且沒過期，直接回傳
+                if (token && !isTokenExpired(token)) {
+                    addDebugInfo('getLatestIdToken: token 有效, 長度=' + token.length);
+                    return token;
+                }
+
+                // token 不存在或過期 → 強制重新登入
+                addDebugInfo('getLatestIdToken: token 無效或已過期, 強制手動登入');
+
+                return new Promise((resolve, reject) => {
+                    // 設置一個監聽器，等登入完成再拿 token
+                    const checkLogin = async () => {
+                        if (liff.isLoggedIn()) {
+                            const newToken = liff.getIDToken ? liff.getIDToken() : null;
+                            if (newToken && !isTokenExpired(newToken)) {
+                                addDebugInfo('getLatestIdToken: 取得新的 token, 長度=' + newToken.length);
+                                resolve(newToken);
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    // 每 500ms 檢查一次 token
+                    const interval = setInterval(async () => {
+                        if (await checkLogin()) {
+                            clearInterval(interval);
+                        }
+                    }, 500);
+
+                    // 強制呼叫 LIFF 登入（使用 redirectUri）
+                    liff.login({
+                        redirectUri: window.location.origin + window.location.pathname
+                    });
+                });
+
+            } catch (err) {
+                addDebugInfo('getLatestIdToken 錯誤: ' + err.message);
+                return null;
+            }
+        }
 
         // ---------- 初始化流程 ----------
         async function initializeApp() {
@@ -546,7 +595,7 @@
 
                 // 先嘗試快取 session
                 if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
-                    const freshIdToken = await getFreshIdToken();
+                    const freshIdToken = await getLatestIdToken();
                     if (!freshIdToken) return; // login redirect
                     const result = await verifyToken(freshIdToken, SESSION_TOKEN);
                     if (result && result.status === 'ok') {
@@ -566,7 +615,7 @@
                     }
 
                     // 已登入則嘗試拿 token（getFreshIdToken 不會自動呼叫 login）
-                    ID_TOKEN = await getFreshIdToken();
+                    ID_TOKEN = await getLatestIdToken();
                     addDebugInfo('LINE client：getFreshIdToken 回傳長度=' + (ID_TOKEN ? ID_TOKEN.length : 0));
                     if (!ID_TOKEN) {
                         addDebugInfo('LINE client：已登入但未拿到 idToken，顯示登入選項讓使用者手動登入以完成授權');
@@ -586,7 +635,7 @@
 
                     if (extLoggedIn) {
                         // 使用者在該瀏覽器可能已登入 LINE，嘗試拿 idToken
-                        ID_TOKEN = await getFreshIdToken();
+                        ID_TOKEN = await getLatestIdToken();
                         addDebugInfo('外部瀏覽器：getFreshIdToken 回傳長度=' + (ID_TOKEN ? ID_TOKEN.length : 0));
                         if (ID_TOKEN) {
                             addDebugInfo('外部瀏覽器：取得 idToken -> 呼叫 verifyIdToken()');
@@ -834,4 +883,3 @@
 </body>
 </html>
 
-eyJraWQiOiIw
