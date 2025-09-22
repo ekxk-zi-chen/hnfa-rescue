@@ -540,10 +540,19 @@
                 } else {
                     // 外部瀏覽器 → 顯示登入選項
                     addDebugInfo('不在 LINE 環境中，顯示登入選項');
+
                     if (CONFIG.DEBUG) {
-                        // 測試模式，塞一顆假的 token 直接送 verify
+                        // 外部測試模式：直接建立一組假 token
                         ID_TOKEN = "FAKE_ID_TOKEN_FOR_TESTING";
-                        await verifyIdToken(ID_TOKEN);
+                        SESSION_TOKEN = localStorage.getItem("debugSession") || "FAKE_SESSION_FOR_TESTING";
+
+                        // 跑跟 LINE 環境一樣的驗證流程
+                        const result = await verifyToken(ID_TOKEN, SESSION_TOKEN);
+                        if (result && result.status === 'ok') {
+                            renderUserInterface(result);
+                        } else {
+                            showLoginOptions();
+                        }
                     } else {
                         showLoginOptions();
                     }
