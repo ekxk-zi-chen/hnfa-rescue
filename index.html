@@ -540,7 +540,13 @@
                 } else {
                     // 外部瀏覽器 → 顯示登入選項
                     addDebugInfo('不在 LINE 環境中，顯示登入選項');
-                    showLoginOptions();
+                    if (CONFIG.DEBUG) {
+                        // 測試模式，塞一顆假的 token 直接送 verify
+                        ID_TOKEN = "FAKE_ID_TOKEN_FOR_TESTING";
+                        await verifyIdToken(ID_TOKEN);
+                    } else {
+                        showLoginOptions();
+                    }
                 }
             } catch (error) {
                 console.error('初始化錯誤:', error);
