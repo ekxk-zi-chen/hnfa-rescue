@@ -537,13 +537,15 @@
                     if (!ID_TOKEN) return; // login redirect
                     await verifyIdToken(ID_TOKEN);
                 } else {
-                    // 外部瀏覽器
-                    addDebugInfo('外部瀏覽器 → 顯示登入選項');
-                    showLoginOptions();
-
-                    ID_TOKEN = await getFreshIdToken();
-                    if (!ID_TOKEN) return; // login redirect
-                    await verifyIdToken(ID_TOKEN);
+                    // 外部瀏覽器也嘗試拿 token 驗證
+                    ID_TOKEN = await getFreshIdToken(); // 嘗試拿 token
+                    if (ID_TOKEN) {
+                        addDebugInfo('外部瀏覽器取得 ID Token，開始驗證');
+                        await verifyIdToken(ID_TOKEN);
+                    } else {
+                        addDebugInfo('外部瀏覽器無有效 ID Token → 顯示登入選項');
+                        showLoginOptions();
+                    }
                 }
             } catch (error) {
                 console.error('初始化錯誤:', error);
