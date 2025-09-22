@@ -498,6 +498,8 @@
             addDebugInfo('開始初始化應用');
 
             try {
+                // 初始化 LIFF
+                addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 LIFF_INITIALIZED = true;
                 addDebugInfo('LIFF 初始化成功');
@@ -506,18 +508,13 @@
                 IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
 
-                // ---------- 1. 判斷是否剛從 login 重定向回來 ----------
-                const isRedirect = getUrlParam('liff.state') || localStorage.getItem('loginRedirect');
-                if (isRedirect) {
-                    clearRedirectState(); // 清掉重定向標記
-                    ID_TOKEN = await getFreshIdToken();
-                    if (ID_TOKEN && !isTokenExpired(ID_TOKEN)) {
-                        await verifyIdToken(ID_TOKEN);
-                        return; // 完成驗證後就結束，不再 login
-                    }
+                // 判斷是否重定向回來
+                if (getUrlParam('liff.state')) {
+                    addDebugInfo('檢測到登入重定向回傳');
+                    clearRedirectState();
                 }
 
-                // ---------- 2. 嘗試快取 session ----------
+                // 先嘗試快取 session
                 if (SESSION_TOKEN && validateSessionFormat(SESSION_TOKEN) && !isTokenExpired(SESSION_TOKEN)) {
                     const freshIdToken = await getFreshIdToken();
                     if (!freshIdToken) return; // login redirect
@@ -528,17 +525,31 @@
                     }
                 }
 
-                // ---------- 3. LINE 或外部瀏覽器，拿最新 ID Token ----------
-                ID_TOKEN = await getFreshIdToken();
-                if (!ID_TOKEN) {
-                    addDebugInfo('尚未登入或 token 過期，觸發 login()');
-                    localStorage.setItem('loginRedirect', 'true');
-                    liff.login({ redirectUri: window.location.href });
-                    return;
+                // 如果在 LINE 環境
+                if (isInLINE) {
+                    if (!liff.isLoggedIn()) {
+                        addDebugInfo('用戶未登入，觸發 login()');
+                        liff.login({ redirectUri: window.location.href });
+                        return;
+                    }
+
+                    ID_TOKEN = await getFreshIdToken();
+                    if (!ID_TOKEN) return; // login redirect
+
+                    await verifyIdToken(ID_TOKEN);
+                } else {
+                    if (!liff.isLoggedIn()) {
+                        addDebugInfo('用戶未登入，觸發 login()');
+                        liff.login({ redirectUri: window.location.href });
+                        return;
+                    }
+                    // 外部瀏覽器 → 顯示登入選項
+                    addDebugInfo('不在 LINE 環境中登入');
+
+                    ID_TOKEN = await getFreshIdToken();
+                    if (!ID_TOKEN) return; // login redirect
+                    await verifyIdToken(ID_TOKEN);
                 }
-
-                await verifyIdToken(ID_TOKEN);
-
             } catch (error) {
                 console.error('初始化錯誤:', error);
                 addDebugInfo('初始化錯誤: ' + error.message);
@@ -546,7 +557,6 @@
                 showLoginOptions();
             }
         }
-
 
 
         // ---------- Token 驗證 ----------
