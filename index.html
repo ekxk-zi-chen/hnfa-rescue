@@ -535,20 +535,16 @@
 
                     ID_TOKEN = await getFreshIdToken();
                     if (!ID_TOKEN) return; // login redirect
-
                     await verifyIdToken(ID_TOKEN);
                 } else {
-                    if (!liff.isLoggedIn()) {
-                        addDebugInfo('用戶未登入，觸發 login()');
-                        liff.login({ redirectUri: window.location.href });
-                        return;
+                    // 外部瀏覽器
+                    ID_TOKEN = await getFreshIdToken(); // 嘗試拿 token，如果沒有就顯示登入選項
+                    if (ID_TOKEN) {
+                        await verifyIdToken(ID_TOKEN);
+                    } else {
+                        addDebugInfo('外部瀏覽器無有效 token，顯示登入選項');
+                        showLoginOptions();
                     }
-                    // 外部瀏覽器 → 顯示登入選項
-                    addDebugInfo('不在 LINE 環境中登入');
-
-                    ID_TOKEN = await getFreshIdToken();
-                    if (!ID_TOKEN) return; // login redirect
-                    await verifyIdToken(ID_TOKEN);
                 }
             } catch (error) {
                 console.error('初始化錯誤:', error);
