@@ -541,15 +541,6 @@
             }
         }
         // ---------- Token 驗證 ----------
-        async function verifyIdToken() {
-            const idToken = liff.getIDToken(); // 🔑 不存全域，直接拿
-            const result = await verifyToken(idToken, null);
-        
-            if (!result) {
-                showStatus('伺服器無回應，請稍後重試', 'error');
-                showLoginOptions();
-                return;
-            }
         async function verifyIdToken(idToken) {
             const result = await verifyToken(idToken, null);
             
