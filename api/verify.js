@@ -1,4 +1,3 @@
-// api/verify.js
 import { createClient } from "@supabase/supabase-js";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
@@ -27,7 +26,6 @@ function createSessionToken(userId, payload = {}) {
   return jwt.sign({ userId, ...payload }, secret, { expiresIn: "1h" });
 }
 
-
 // ------------------- 主 handler -------------------
 export default async function handler(req, res) {
   // CORS
@@ -49,47 +47,51 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { idToken } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    if (!idToken) return res.status(400).json({ status: "error", message: "缺少 idToken" });
+    const { idToken, signup } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    // 驗證 LINE idToken
-    const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
-    const userId = profile.sub; // 只在後端使用
-    const displayName = profile.name || "用戶";
+    let userId = null;
+    let displayName = null;
+    let userData = null;
 
-    // 查詢 Supabase
-    const { data: userData, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-    
-    if (error && error.code !== "PGRST116") { // PGRST116 = 找不到資料
-      console.error("[handler] Supabase 查詢錯誤", error.message);
-      return res.status(500).json({ status: "error", message: "Database query error" });
+    if (!signup) {
+      // 非註冊模式 → 必須有 idToken
+      if (!idToken) return res.status(400).json({ status: "error", message: "缺少 idToken" });
+
+      // 驗證 LINE idToken
+      const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
+      userId = profile.sub;
+      displayName = profile.name || "用戶";
+
+      // 查詢 Supabase
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("[handler] Supabase 查詢錯誤", error.message);
+        return res.status(500).json({ status: "error", message: "Database query error" });
+      }
+
+      userData = data;
     }
-    
-    let needsSignup = false;
-    if (!userData) {
-      needsSignup = true;
-    } else {
-      // 確保 user_id 對應正確
-      console.log("找到 userData:", userData.user_id);
-    }
 
-    
-    // 建立 sessionToken，payload 可以只放 displayName
-    const newSessionToken = createSessionToken(userId, { displayName: profile.name || null });
-    
+    // 判斷是否需要註冊
+    const needsSignup = signup || !userData;
+
+    // 生成 sessionToken（如果 userId 可用）
+    const newSessionToken = userId ? createSessionToken(userId, { displayName }) : null;
+
     res.status(200).json({
       status: needsSignup ? "needsignup" : "ok",
-      displayName: userData?.display_name || profile.name || null,
+      displayName: userData?.display_name || displayName,
       sessionToken: newSessionToken
     });
 
-
   } catch (err) {
+    console.error(err);
     res.status(500).json({ status: "error", message: err.message });
   }
 }
