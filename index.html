@@ -637,11 +637,22 @@
             showStatus('正在提交表單...');
 
             try {
+                // 如果是註冊模式，必須要有 idToken（用來綁 LINE user）
+                if (isSignup && !ID_TOKEN) {
+                    showStatus('提交失敗：尚未取得 idToken，請重新登入', 'error');
+                    addDebugInfo('submit 被阻擋：isSignup && !ID_TOKEN');
+                    return;
+                }
+
                 const payload = Object.assign({}, formData, {
-                    sessionToken: SESSION_TOKEN,
-                    idToken: ID_TOKEN,
-                    signup: isSignup
+                    signup: isSignup,
+                    // 若存在就帶 idToken（signup 時會用到）
+                    idToken: ID_TOKEN || null,
+                    // 若已登入、或後端回了 sessionToken，也帶 sessionToken
+                    sessionToken: SESSION_TOKEN || null
                 });
+
+                addDebugInfo('送出註冊/表單 payload: ' + JSON.stringify(payload));
 
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
@@ -649,13 +660,30 @@
                     body: JSON.stringify(payload)
                 });
 
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`伺服器錯誤: ${response.status} ${errText}`);
+                }
+
                 const data = await response.json();
 
                 if (data.status === 'ok') {
                     showStatus('表單提交成功！', 'success');
                     document.getElementById('checkinForm').reset();
+
+                    // 如果後端回了 sessionToken（註冊成功或已存在 user），保存並進入系統
+                    if (data.sessionToken) {
+                        localStorage.setItem('sessionToken', data.sessionToken);
+                        SESSION_TOKEN = data.sessionToken;
+                    }
+                    // 例如跳轉到內頁
+                    window.location.href = 'test.html';
                 } else if (data.status === 'needsignup') {
                     showStatus('請完成註冊表單', 'warning');
+                    // 確保 UI 保持在註冊狀態
+                    PROFILE = PROFILE || {};
+                    PROFILE.needsSignup = true;
+                    renderUserInterface({ displayName: data.displayName || '新用戶', needsSignup: true });
                 } else {
                     showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
                 }
@@ -707,29 +735,36 @@
                     phone: document.getElementById('phone').value,
                     message: document.getElementById('message').value
                 };
-                submitCheckinForm(formData);
+
+                // 判斷目前是不是註冊模式（由 renderUserInterface 設定 PROFILE.needsSignup）
+                const isSignup = PROFILE && PROFILE.needsSignup === true;
+
+                // 如果是註冊模式，確保有 ID_TOKEN（若沒有就再向 LIFF 取一次）
+                if (isSignup && !ID_TOKEN && typeof liff !== 'undefined' && liff.isLoggedIn()) {
+                    ID_TOKEN = liff.getIDToken();
+                }
+
+                submitCheckinForm(formData, isSignup);
             });
 
             // 登入按鈕
             document.getElementById('manual-login-btn').addEventListener('click', async function() {
                 addDebugInfo('手動登入按鈕點擊');
                 toggleLoader('login', true);
-                
+
                 try {
-                    // 強制清除所有登入狀態，確保拿到新 token
                     if (liff.isLoggedIn()) {
                         addDebugInfo('清除現有登入狀態');
                         liff.logout();
                         await new Promise(resolve => setTimeout(resolve, 300));
                     }
-                    
-                    // 清除快取
+
                     localStorage.removeItem('liffState');
                     sessionStorage.clear();
-                    
+
                     addDebugInfo('執行強制重新登入');
                     liff.login();
-                    
+
                 } catch (error) {
                     addDebugInfo('登入錯誤: ' + error.message);
                     showStatus('登入失敗: ' + error.message, 'error');
@@ -737,6 +772,7 @@
                 }
             });
         }
+
 
         // ---------- 初始化 ----------
         document.addEventListener('DOMContentLoaded', function() {
