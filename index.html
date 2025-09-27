@@ -492,7 +492,7 @@
             }
         }
 
-        // ---------- 主要應用流程：檢查時間戳判斷是否為新登入 ----------
+        // ---------- 主要應用流程：登入回調後等待 SDK 更新 ----------
         async function startApp() {
             try {
                 showStatus('應用初始化中...');
@@ -503,37 +503,36 @@
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const timestamp = urlParams.get('t');
-                const forceParam = urlParams.get('force');
                 
-                // 如果有 force 參數，清除 URL 並重新開始
-                if (forceParam) {
-                    addDebugInfo('檢測到強制重新載入參數，清除 URL');
+                // 如果有時間戳，表示是登入回調
+                if (timestamp) {
+                    addDebugInfo('檢測到登入回調，等待 SDK 更新...');
+                    // 清理 URL
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                // 如果有時間戳且是最近5分鐘內的，認為是新登入
-                const isRecentLogin = timestamp && (Date.now() - parseInt(timestamp)) < 300000; // 5分鐘
-                
-                if (liff.isLoggedIn()) {
-                    if (isRecentLogin || forceParam) {
-                        addDebugInfo('檢測到新登入，嘗試取得 idToken');
-                        // 清理 URL
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                        
+                    
+                    // 關鍵：等待足夠時間讓 LIFF SDK 完全更新 token
+                    showStatus('登入成功，正在更新憑證...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // 等待3秒
+                    
+                    if (liff.isLoggedIn()) {
+                        // 等待後才取 token
+                        addDebugInfo('等待完成，現在取得 idToken');
                         ID_TOKEN = liff.getIDToken();
                         const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 50) + '...' : 'null';
-                        addDebugInfo(`新登入取得 idToken: ${tokenPrefix}`);
+                        addDebugInfo(`等待後取得 idToken: ${tokenPrefix}`);
                         
                         if (ID_TOKEN) {
                             await verifyWithBackend();
                             return;
                         }
-                    } else {
-                        addDebugInfo('檢測到可能是舊登入狀態，強制重新登入');
-                        await forceLogin();
-                        return;
                     }
+                }
+
+                // 如果已登入但沒有時間戳，表示是舊登入
+                if (liff.isLoggedIn()) {
+                    addDebugInfo('檢測到舊登入狀態，強制重新登入');
+                    await forceLogin();
+                    return;
                 }
 
                 // 沒有登入狀態，檢查 sessionToken
