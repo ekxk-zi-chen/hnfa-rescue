@@ -57,26 +57,33 @@ export default async function handler(req, res) {
     const userId = profile.sub; // 只在後端使用
     const displayName = profile.name || "用戶";
 
-    // 從 Supabase 取得使用者資料，判斷管理員欄位等後端邏輯
+    // 查詢 Supabase
     const { data: userData, error } = await supabase
       .from("users")
       .select("*")
       .eq("user_id", userId)
       .single();
-
-    if (error) {
-      return res.status(500).json({ status: "error", message: "Database query error", error: error.message });
+    
+    if (error && error.code !== "PGRST116") { // PGRST116 = 找不到資料
+      console.error("[handler] Supabase 查詢錯誤", error.message);
+      return res.status(500).json({ status: "error", message: "Database query error" });
     }
-
-    // JWT 只在後端驗證使用，不回傳敏感資料
-    const sessionToken = createSessionToken(userId);
-
-    // 回傳給前端
+    
+    let needsSignup = false;
+    if (!userData) {
+      // 使用者不存在 → 需要註冊
+      needsSignup = true;
+    }
+    
+    // 建立 sessionToken，payload 可以只放 displayName
+    const newSessionToken = createSessionToken(userId, { displayName: profile.name || null });
+    
     res.status(200).json({
-      status: "ok",
-      displayName,      // 前端只看到名字
-      sessionToken      // opaque token，前端拿來呼叫後端
+      status: needsSignup ? "needsignup" : "ok",
+      displayName: userData?.display_name || profile.name || null,
+      sessionToken: newSessionToken
     });
+
 
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
