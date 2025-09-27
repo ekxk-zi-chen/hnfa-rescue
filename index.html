@@ -509,58 +509,60 @@
                 showLoginOptions();
             }
         }
-        async function verifyWithBackend() {
+        async function verifyWithBackend(signup = false) {
             showStatus('驗證中，請稍後...', 'info');
-            
-            const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 30) + '...' : 'null';
-            addDebugInfo(`後端驗證使用的 idToken 前綴: ${tokenPrefix}`);
-            
-            // 暫時解碼 idToken 看看內容
-            if (ID_TOKEN) {
-                try {
-                    const payload = JSON.parse(atob(ID_TOKEN.split('.')[1]));
-                    addDebugInfo(`idToken 內容: iss=${payload.iss}, aud=${payload.aud}, exp=${payload.exp}`);
-                    addDebugInfo(`當前時間: ${Math.floor(Date.now() / 1000)}, 過期時間: ${payload.exp}`);
-                } catch (e) {
-                    addDebugInfo('解碼 idToken 失敗: ' + e.message);
-                }
-            }
-            
-            const verifyResult = await verifyTokenAtServer(ID_TOKEN, null);
 
-            if (!verifyResult || verifyResult.status === 'error') {
-                addDebugInfo('自己後端驗證失敗');
+            const payload = signup 
+                ? { signup: true }  // 註冊模式
+                : { idToken: ID_TOKEN || null, sessionToken: SESSION_TOKEN || null };
+
+            addDebugInfo('發送驗證請求 payload: ' + JSON.stringify(payload));
+
+            try {
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`伺服器錯誤: ${response.status}`);
+                }
+
+                const data = await response.json();
+                addDebugInfo('後端回傳: ' + JSON.stringify(data));
+
+                // 處理不同狀態
+                if (data.status === 'ok') {
+                    localStorage.setItem('sessionToken', data.sessionToken);
+                    SESSION_TOKEN = data.sessionToken;
+
+                    window.location.href = 'test.html';
+                    return true;
+                }
+
+                if (data.status === 'needsignup') {
+                    // 儲存 sessionToken（若有）
+                    if (data.sessionToken) {
+                        localStorage.setItem('sessionToken', data.sessionToken);
+                        SESSION_TOKEN = data.sessionToken;
+                    }
+
+                    renderUserInterface({
+                        displayName: data.displayName || '新用戶',
+                        needsSignup: true
+                    });
+                    return true;
+                }
+
+                return false;
+
+            } catch (err) {
+                addDebugInfo('驗證錯誤: ' + err.message);
                 showStatus('後端驗證失敗', 'error');
                 return false;
             }
-
-            if (verifyResult.status === 'ok') {
-                addDebugInfo('idToken 驗證成功，後端傳ok');
-                // 保存新的 sessionToken
-                localStorage.setItem('sessionToken', verifyResult.sessionToken);
-                SESSION_TOKEN = verifyResult.sessionToken;
-
-                // 直接跳轉到 test.html
-                window.location.href = 'test.html';
-                return true;
-            }
-
-            if (verifyResult.status === 'needsignup') {
-                addDebugInfo('需要註冊');
-                // 儲存 sessionToken
-                localStorage.setItem('sessionToken', verifyResult.sessionToken);
-                SESSION_TOKEN = verifyResult.sessionToken;
-
-                renderUserInterface({
-                    displayName: verifyResult.displayName || '新用戶',
-                    needsSignup: true
-                });
-                return true;
-            }
-            
-            return false;
         }
-
         // ---------- 後端驗證函數 ----------
         async function verifyTokenAtServer(idToken, sessionToken) {
             try {
@@ -630,12 +632,16 @@
         }
 
         // ---------- 表單處理 ----------
-        async function submitCheckinForm(formData) {
+        async function submitCheckinForm(formData, isSignup = false) {
             toggleLoader('submit', true);
             showStatus('正在提交表單...');
 
             try {
-                const payload = Object.assign({}, formData, { sessionToken: SESSION_TOKEN });
+                const payload = Object.assign({}, formData, {
+                    sessionToken: SESSION_TOKEN,
+                    signup: isSignup
+                });
+
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -647,23 +653,20 @@
                 if (data.status === 'ok') {
                     showStatus('表單提交成功！', 'success');
                     document.getElementById('checkinForm').reset();
+                } else if (data.status === 'needsignup') {
+                    showStatus('請完成註冊表單', 'warning');
                 } else {
                     showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
-                    if (data.message && data.message.includes('session')) {
-                        addDebugInfo('檢測到Session無效，將清除本地Session');
-                        clearSession();
-                    }
                 }
             } catch (error) {
                 showStatus('提交失敗，請稍後再試', 'error');
                 addDebugInfo('提交錯誤: ' + error.message);
             } finally {
                 toggleLoader('submit', false);
-                setTimeout(() => {
-                    document.getElementById('status').style.display = 'none';
-                }, 5000);
+                setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 5000);
             }
         }
+
 
         // ---------- Session 管理 ----------
         function clearSession() {
