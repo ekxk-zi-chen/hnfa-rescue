@@ -517,11 +517,14 @@
                     if (liff.isLoggedIn()) {
                         // 等待後才取 token
                         addDebugInfo('等待完成，現在取得 idToken');
-                        ID_TOKEN = liff.getIDToken();
-                        const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 50) + '...' : 'null';
+                        const newIdToken = liff.getIDToken();
+                        const tokenPrefix = newIdToken ? newIdToken.substring(0, 50) + '...' : 'null';
                         addDebugInfo(`等待後取得 idToken: ${tokenPrefix}`);
                         
-                        if (ID_TOKEN) {
+                        if (newIdToken) {
+                            // 重要：更新全域變數
+                            ID_TOKEN = newIdToken;
+                            addDebugInfo(`已更新全域 ID_TOKEN 變數: ${ID_TOKEN.substring(0, 30)}...`);
                             await verifyWithBackend();
                             return;
                         }
@@ -681,15 +684,18 @@
         // ---------- 後端驗證函數 ----------
         async function verifyTokenAtServer(idToken, sessionToken) {
             try {
-                const tokenInfo = idToken ? `idToken前綴=${idToken.substring(0, 30)}...` : 'idToken=null';
+                // 確保使用最新的 idToken
+                const actualIdToken = idToken || ID_TOKEN;
+                const tokenInfo = actualIdToken ? `idToken前綴=${actualIdToken.substring(0, 30)}...` : 'idToken=null';
                 const sessionInfo = sessionToken ? `sessionToken前綴=${sessionToken.substring(0, 20)}...` : 'sessionToken=null';
                 addDebugInfo(`發送驗證請求: ${tokenInfo}, ${sessionInfo}`);
+                addDebugInfo(`實際發送的 idToken 長度: ${actualIdToken ? actualIdToken.length : 0}`);
 
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        idToken: idToken || null, 
+                        idToken: actualIdToken || null, 
                         sessionToken: sessionToken || null 
                     })
                 });
