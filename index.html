@@ -426,7 +426,22 @@
             }
         }
 
-        // ---------- 主要應用流程（參考你的第二個網頁） ----------
+        // ---------- 檢查 token 是否過期 ----------
+        function isTokenExpired(token) {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const now = Math.floor(Date.now() / 1000);
+                const expiry = payload.exp;
+                addDebugInfo(`Token 檢查: 現在=${now}, 過期=${expiry}, 還有${expiry - now}秒`);
+                return now >= expiry;
+            } catch (e) {
+                addDebugInfo('Token 解析失敗: ' + e.message);
+                return true;
+            }
+        }
+
+        // ---------- 主要應用流程：進來就檢查 idToken ----------
         async function startApp() {
             try {
                 showStatus('應用初始化中...');
@@ -435,7 +450,27 @@
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 addDebugInfo('LIFF 初始化成功');
 
-                // 先檢查本機 sessionToken
+                // 關鍵：一進來就檢查當前 idToken 是否過期
+                if (liff.isLoggedIn()) {
+                    ID_TOKEN = liff.getIDToken();
+                    addDebugInfo('取得當前 idToken，長度: ' + (ID_TOKEN ? ID_TOKEN.length : 0));
+                    
+                    if (ID_TOKEN && isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('❌ idToken 已過期，強制登出重新登入');
+                        liff.logout();
+                        showStatus('登入已過期，請重新登入', 'warning');
+                        showLoginOptions();
+                        return;
+                    }
+                    
+                    if (ID_TOKEN) {
+                        addDebugInfo('✅ idToken 有效，進行後端驗證');
+                        await verifyWithBackend();
+                        return;
+                    }
+                }
+
+                // 沒有登入狀態，先檢查是否有 sessionToken
                 if (SESSION_TOKEN) {
                     addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
                     const result = await verifyTokenAtServer(null, SESSION_TOKEN);
@@ -446,17 +481,17 @@
                             displayName: result.displayName,
                             userId: result.userId
                         });
-                        return; // 驗證成功就結束
+                        return;
                     } else {
-                        // 驗證失敗，刪除無效 token
-                        addDebugInfo('sessionToken 無效或過期，清除本機資料');
+                        addDebugInfo('sessionToken 無效，清除本機資料');
                         localStorage.removeItem('sessionToken');
                         SESSION_TOKEN = null;
                     }
                 }
 
-                // 沒有有效 sessionToken 時，走 LIFF 流程
-                await startLiff();
+                // 都沒有有效登入，顯示登入選項
+                addDebugInfo('無有效登入狀態，顯示登入選項');
+                showLoginOptions();
 
             } catch (e) {
                 addDebugInfo('startApp 發生錯誤: ' + e.message);
@@ -465,35 +500,16 @@
             }
         }
 
-        async function startLiff() {
-            addDebugInfo('開始 LIFF 登入流程');
-
-            if (!liff.isLoggedIn()) {
-                addDebugInfo('用戶未登入，顯示登入選項');
-                showLoginOptions();
-                return;
-            }
-
-            // 取得 idToken
-            ID_TOKEN = liff.getIDToken();
-            addDebugInfo('取得 idToken，長度: ' + (ID_TOKEN ? ID_TOKEN.length : 0));
-
-            if (!ID_TOKEN) {
-                addDebugInfo('無法取得 idToken，強制重新登入');
-                liff.logout();
-                liff.login();
-                return;
-            }
-
+        async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
-
+            
             const verifyResult = await verifyTokenAtServer(ID_TOKEN, null);
 
             if (!verifyResult || verifyResult.status === 'error') {
-                addDebugInfo('idToken 驗證失敗，強制重新登入');
+                addDebugInfo('idToken 後端驗證失敗，強制重新登入');
                 showStatus('驗證失敗，請重新登入', 'error');
                 liff.logout();
-                liff.login();
+                showLoginOptions();
                 return;
             }
 
