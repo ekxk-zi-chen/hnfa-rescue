@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f9f9f9; 
+            color: #333;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            max-width: 400px;
+            margin: 40px auto;
+            text-align: center;
+        }
+        .card h1 { margin-bottom: 10px; }
+        .card p { font-size: 14px; color: #666; }
+        .token { 
+            word-break: break-all;
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>歡迎來到測試頁面</h1>
+        <p>您已成功登入，可以在這裡測試跳轉與 sessionToken</p>
+        <div id="token-display" class="token">Loading sessionToken...</div>
+        <button id="logout-btn">登出</button>
+    </div>
+
+    <script>
+        // 讀取 localStorage 的 sessionToken
+        const tokenDisplay = document.getElementById('token-display');
+        const sessionToken = localStorage.getItem('sessionToken');
+        if (sessionToken) {
+            tokenDisplay.textContent = sessionToken;
+        } else {
+            tokenDisplay.textContent = '尚未取得 sessionToken';
+        }
+
+        // 登出按鈕功能：清除 sessionToken 並回首頁
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('sessionToken');
+            alert('已登出，回首頁');
+            window.location.href = 'index.html'; // 假設原首頁是 index.html
+        });
+    </script>
+</body>
+</html>
