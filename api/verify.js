@@ -61,7 +61,18 @@ export default async function handler(req, res) {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
+    console.log("[DEBUG] 測試 SUPABASE_URL 是否能連線:", SUPABASE_URL);
+    try {
+      const testRes = await fetch(`${SUPABASE_URL}/rest/v1`, {
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`
+        }
+      });
+      console.log("[DEBUG] 測試 fetch 狀態碼:", testRes.status);
+    } catch (fetchErr) {
+      console.error("[DEBUG] 測試 fetch 失敗:", fetchErr);
+    }
     const { idToken, sessionToken } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     console.log("[handler] 收到的 token", { idToken: idToken?.substring(0, 20) + '...', sessionToken: sessionToken?.substring(0, 20) + '...' });
 
