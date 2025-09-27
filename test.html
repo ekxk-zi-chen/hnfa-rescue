@@ -1,61 +1,1365 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Page</title>
+    <title>花蓮特搜裝備管理系統</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px; 
-            background: #f9f9f9; 
-            color: #333;
+        :root {
+            --primary: #00C300;
+            --primary-dark: #009900;
+            --secondary: #0084ff;
+            --accent: #ff6b35;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --success: #4caf50;
+            --info: #2196f3;
+            --dark: #1a1a1a;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-600: #6c757d;
+            --gray-800: #343a40;
+            --gray-900: #212529;
         }
-        .card {
-            background: #fff;
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--gray-900);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            color: var(--primary-dark);
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .user-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 195, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-700);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-300);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 300px 1fr;
+            }
+        }
+
+        .sidebar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 1rem;
+            color: var(--gray-800);
+            font-size: 1.125rem;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-300);
             border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            padding: 20px;
-            max-width: 400px;
-            margin: 40px auto;
-            text-align: center;
+            transition: border-color 0.3s ease;
         }
-        .card h1 { margin-bottom: 10px; }
-        .card p { font-size: 14px; color: #666; }
-        .token { 
-            word-break: break-all;
-            font-family: monospace;
-            background: #f0f0f0;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 15px;
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .main-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .equipment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .equipment-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            border: 2px solid transparent;
+        }
+
+        .equipment-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            border-color: var(--primary);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 200px;
+            background: var(--gray-100);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-600);
+            font-size: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-available {
+            background: var(--success);
+            color: white;
+        }
+
+        .status-maintenance {
+            background: var(--warning);
+            color: white;
+        }
+
+        .status-unavailable {
+            background: var(--danger);
+            color: white;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--gray-900);
+        }
+
+        .card-subtitle {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-info {
+            margin-bottom: 1rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-label {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalShow 0.3s ease;
+        }
+
+        @keyframes modalShow {
+            from {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-600);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--gray-600);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--gray-200);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast-success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast-error {
+            border-left: 4px solid var(--danger);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .equipment-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .modal-content {
+                margin: 0.5rem;
+                max-height: 95vh;
+            }
+
+            .modal-body {
+                padding: 1.5rem;
+            }
+
+            .btn {
+                padding: 0.625rem 1.25rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        .user-management {
+            margin-top: 2rem;
+        }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .user-table th,
+        .user-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .user-table th {
+            background: var(--gray-100);
+            font-weight: 600;
+            color: var(--gray-800);
+        }
+
+        .permission-select {
+            padding: 0.5rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            background: white;
+        }
+
+        .history-modal .modal-content {
+            max-width: 800px;
+        }
+
+        .history-item {
+            padding: 1rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .history-user {
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+
+        .history-time {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+
+        .history-changes {
+            font-size: 0.875rem;
+        }
+
+        .change-item {
+            margin-bottom: 0.25rem;
+        }
+
+        .change-field {
+            font-weight: 600;
+        }
+
+        .change-old {
+            color: var(--danger);
+            text-decoration: line-through;
+            margin-right: 0.5rem;
+        }
+
+        .change-new {
+            color: var(--success);
         }
     </style>
 </head>
+
 <body>
-    <div class="card">
-        <h1>歡迎來到測試頁面</h1>
-        <p>您已成功登入，可以在這裡測試跳轉與 sessionToken</p>
-        <div id="token-display" class="token">Loading sessionToken...</div>
-        <button id="logout-btn">登出</button>
+    <div class="container">
+        <div class="header">
+            <h1>花蓮特搜裝備管理系統</h1>
+            <div class="user-info">
+                <div class="user-badge" id="userRole">載入中...</div>
+                <span id="userName">載入中...</span>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">登出</button>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <div class="sidebar">
+                <h3>篩選條件</h3>
+                <div class="filter-group">
+                    <label for="searchInput">搜尋器材</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="輸入器材名稱或編號">
+                </div>
+                <div class="filter-group">
+                    <label for="categoryFilter">分群組</label>
+                    <select id="categoryFilter" class="form-control">
+                        <option value="">全部群組</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="statusFilter">狀態</label>
+                    <select id="statusFilter" class="form-control">
+                        <option value="">全部狀態</option>
+                        <option value="可用">可用</option>
+                        <option value="維修中">維修中</option>
+                        <option value="不可用">不可用</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;" onclick="clearFilters()">清除篩選</button>
+
+                <!-- 用戶管理區塊 (僅管理員可見) -->
+                <div id="userManagementSection" class="user-management" style="display: none;">
+                    <h3>用戶管理</h3>
+                    <button class="btn btn-primary" style="width: 100%;" onclick="showUserManagement()">管理用戶權限</button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="content-header">
+                    <h2>裝備清單</h2>
+                    <div id="adminActions" style="display: none;">
+                        <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
+                    </div>
+                </div>
+
+                <div id="loadingIndicator" class="loading">
+                    <div class="spinner"></div>
+                    載入中...
+                </div>
+
+                <div id="equipmentGrid" class="equipment-grid" style="display: none;">
+                    <!-- 裝備卡片將在這裡動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯裝備 Modal -->
+    <div id="equipmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">新增裝備</h3>
+                <button class="close" onclick="closeModal('equipmentModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="equipmentForm">
+                    <input type="hidden" id="equipmentId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentName">器材名稱 *</label>
+                            <input type="text" id="equipmentName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentGroup">分群組 *</label>
+                            <input type="text" id="equipmentGroup" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentNumber">裝備編號 *</label>
+                            <input type="text" id="equipmentNumber" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentModel">型號</label>
+                            <input type="text" id="equipmentModel" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentLocation">特別位置</label>
+                            <input type="text" id="equipmentLocation" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentQuantity">數量 *</label>
+                            <input type="number" id="equipmentQuantity" class="form-control" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentImage">圖片檔案位置</label>
+                        <input type="url" id="equipmentImage" class="form-control" placeholder="https://example.com/image.jpg">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentManual">說明書連結</label>
+                        <input type="url" id="equipmentManual" class="form-control" placeholder="https://example.com/manual.pdf">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentVideo">教學影片相關</label>
+                        <input type="url" id="equipmentVideo" class="form-control" placeholder="https://youtube.com/watch?v=...">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentStatus">目前狀態 *</label>
+                        <select id="equipmentStatus" class="form-control" required>
+                            <option value="可用">可用</option>
+                            <option value="維修中">維修中</option>
+                            <option value="不可用">不可用</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentDescription">說明</label>
+                        <textarea id="equipmentDescription" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('equipmentModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用戶管理 Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">用戶管理</h3>
+                <button class="close" onclick="closeModal('userModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="usersList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        載入用戶資料中...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歷史紀錄 Modal -->
+    <div id="historyModal" class="modal history-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">更新歷史紀錄</h3>
+                <button class="close" onclick="closeModal('historyModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="historyList">
+                    <!-- 歷史紀錄將在這裡動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast">
+        <div id="toastMessage"></div>
     </div>
 
     <script>
-        // 讀取 localStorage 的 sessionToken
-        const tokenDisplay = document.getElementById('token-display');
-        const sessionToken = localStorage.getItem('sessionToken');
-        if (sessionToken) {
-            tokenDisplay.textContent = sessionToken;
-        } else {
-            tokenDisplay.textContent = '尚未取得 sessionToken';
+        // 配置常數
+        const CONFIG = {
+            API_BASE: "https://hnfa-rescue.vercel.app/api",
+            EQUIPMENT_TABLE: "equipment",
+            USERS_TABLE: "users"
+        };
+
+        // 全域變數
+        let currentUser = null;
+        let equipmentData = [];
+        let usersData = [];
+        let currentEditingId = null;
+
+        // 初始化應用
+        document.addEventListener('DOMContentLoaded', async function() {
+            await initializeApp();
+        });
+
+        async function initializeApp() {
+            try {
+                // 檢查 Session Token
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                if (!sessionToken) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                // 驗證用戶身份
+                await verifyUser(sessionToken);
+                
+                // 載入裝備資料
+                await loadEquipmentData();
+                
+                // 設置事件監聽器
+                setupEventListeners();
+                
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showToast('初始化失敗，請重新登入', 'error');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
         }
 
-        // 登出按鈕功能：清除 sessionToken 並回首頁
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            localStorage.removeItem('sessionToken');
-            alert('已登出，回首頁');
-            window.location.href = 'index.html'; // 假設原首頁是 index.html
-        });
+        async function verifyUser(sessionToken) {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE}/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken })
+                });
+
+                if (!response.ok) {
+                    throw new Error('驗證失敗');
+                }
+
+                const data = await response.json();
+                if (data.status !== 'ok') {
+                    throw new Error('用戶驗證失敗');
+                }
+
+                currentUser = {
+                    userId: data.userId,
+                    displayName: data.displayName,
+                    role: data.role || '一般用戶'
+                };
+
+                updateUserInterface();
+                
+            } catch (error) {
+                console.error('用戶驗證錯誤:', error);
+                throw error;
+            }
+        }
+
+        async function loadEquipmentData() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(`${CONFIG.API_BASE}/equipment`, {
+                    method: 'GET',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('載入裝備資料失敗');
+                }
+
+                const data = await response.json();
+                equipmentData = data.equipment || [];
+
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('equipmentGrid').style.display = 'grid';
+                
+                renderEquipment();
+                updateCategoryFilter();
+                
+            } catch (error) {
+                console.error('載入裝備資料失敗:', error);
+                // 使用假資料作為備用
+                equipmentData = getMockEquipmentData();
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('equipmentGrid').style.display = 'grid';
+                renderEquipment();
+                updateCategoryFilter();
+                showToast('載入資料失敗，使用示範資料', 'error');
+            }
+        }
+
+        function getMockEquipmentData() {
+            return [
+                {
+                    id: '1',
+                    器材名稱: '氧氣瓶',
+                    分群組: '醫療設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'MED-001',
+                    型號: 'OXY-500L',
+                    特別位置: '醫療車第二層',
+                    數量: 5,
+                    說明書連結: '',
+                    目前狀態: '可用',
+                    填表人: '張三',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    updated_at: new Date().toISOString(),
+                    說明: '用於急救和氧氣供應'
+                },
+                {
+                    id: '2',
+                    器材名稱: '繩索',
+                    分群組: '救援設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'RES-001',
+                    型號: 'ROPE-10MM',
+                    特別位置: '工具箱A',
+                    數量: 10,
+                    說明書連結: '',
+                    目前狀態: '可用',
+                    填表人: '李四',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    updated_at: new Date().toISOString(),
+                    說明: '10mm專業救援繩索'
+                },
+                {
+                    id: '3',
+                    器材名稱: '擔架',
+                    分群組: '醫療設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'MED-002',
+                    型號: 'STR-100',
+                    特別位置: '醫療車後箱',
+                    數量: 3,
+                    說明書連結: '',
+                    目前狀態: '維修中',
+                    填表人: '王五',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    updated_at: new Date().toISOString(),
+                    說明: '折疊式擔架，便於攜帶'
+                }
+            ];
+        }
+
+        function updateUserInterface() {
+            document.getElementById('userName').textContent = currentUser.displayName;
+            document.getElementById('userRole').textContent = currentUser.role;
+
+            // 根據權限顯示/隱藏功能
+            if (currentUser.role !== '一般用戶') {
+                document.getElementById('adminActions').style.display = 'block';
+            }
+
+            if (currentUser.role === '管理') {
+                document.getElementById('userManagementSection').style.display = 'block';
+            }
+        }
+
+        function setupEventListeners() {
+            // 搜尋和篩選事件
+            document.getElementById('searchInput').addEventListener('input', renderEquipment);
+            document.getElementById('categoryFilter').addEventListener('change', renderEquipment);
+            document.getElementById('statusFilter').addEventListener('change', renderEquipment);
+            
+            // 表單提交事件
+            document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
+        }
+
+        function renderEquipment() {
+            const grid = document.getElementById('equipmentGrid');
+            grid.innerHTML = '';
+
+            const filteredData = filterEquipment();
+
+            filteredData.forEach(equipment => {
+                const card = createEquipmentCard(equipment);
+                grid.appendChild(card);
+            });
+
+            if (filteredData.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">沒有找到符合條件的裝備</div>';
+            }
+        }
+
+        function filterEquipment() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            return equipmentData.filter(equipment => {
+                const matchesSearch = !searchTerm || 
+                    equipment.器材名稱.toLowerCase().includes(searchTerm) ||
+                    equipment.裝備編號.toLowerCase().includes(searchTerm);
+                
+                const matchesCategory = !categoryFilter || equipment.分群組 === categoryFilter;
+                const matchesStatus = !statusFilter || equipment.目前狀態 === statusFilter;
+
+                return matchesSearch && matchesCategory && matchesStatus;
+            });
+        }
+
+        function updateCategoryFilter() {
+            const categoryFilter = document.getElementById('categoryFilter');
+            const categories = [...new Set(equipmentData.map(item => item.分群組))];
+            
+            // 清空現有選項（保留"全部群組"）
+            while (categoryFilter.children.length > 1) {
+                categoryFilter.removeChild(categoryFilter.lastChild);
+            }
+            
+            // 添加新選項
+            categories.forEach(category => {
+                if (category) {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category;
+                    categoryFilter.appendChild(option);
+                }
+            });
+        }
+
+        function createEquipmentCard(equipment) {
+            const card = document.createElement('div');
+            card.className = 'equipment-card';
+            
+            const statusClass = equipment.目前狀態 === '可用' ? 'status-available' : 
+                               equipment.目前狀態 === '維修中' ? 'status-maintenance' : 'status-unavailable';
+
+            card.innerHTML = `
+                <div class="card-image">
+                    ${equipment.圖片檔案位置 ? 
+                        `<img src="${equipment.圖片檔案位置}" alt="${equipment.器材名稱}" onerror="this.style.display='none'; this.parentElement.innerHTML='📦';">` :
+                        '<div>📦</div>'
+                    }
+                    <div class="status-badge ${statusClass}">${equipment.目前狀態}</div>
+                </div>
+                <div class="card-content">
+                    <div class="card-title">${equipment.器材名稱}</div>
+                    <div class="card-subtitle">${equipment.分群組} - ${equipment.裝備編號}</div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            <span class="info-label">型號:</span>
+                            <span class="info-value">${equipment.型號 || '未指定'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">位置:</span>
+                            <span class="info-value">${equipment.特別位置 || '未指定'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">數量:</span>
+                            <span class="info-value">${equipment.數量}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">更新時間:</span>
+                            <span class="info-value">${formatDate(equipment.updated_at)}</span>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="viewEquipmentHistory('${equipment.id}')">歷史紀錄</button>
+                        ${equipment.說明書連結 ? `<button class="btn btn-secondary btn-sm" onclick="window.open('${equipment.說明書連結}', '_blank')">說明書</button>` : ''}
+                        ${equipment.教學影片相關 ? `<button class="btn btn-secondary btn-sm" onclick="window.open('${equipment.教學影片相關}', '_blank')">教學影片</button>` : ''}
+                        ${currentUser.role !== '一般用戶' ? `
+                            <button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-TW') + ' ' + date.toLocaleTimeString('zh-TW', {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function showAddEquipmentModal() {
+            document.getElementById('modalTitle').textContent = '新增裝備';
+            document.getElementById('equipmentForm').reset();
+            document.getElementById('equipmentId').value = '';
+            currentEditingId = null;
+            openModal('equipmentModal');
+        }
+
+        function editEquipment(id) {
+            const equipment = equipmentData.find(item => item.id === id);
+            if (!equipment) return;
+
+            document.getElementById('modalTitle').textContent = '編輯裝備';
+            document.getElementById('equipmentId').value = equipment.id;
+            document.getElementById('equipmentName').value = equipment.器材名稱;
+            document.getElementById('equipmentGroup').value = equipment.分群組;
+            document.getElementById('equipmentNumber').value = equipment.裝備編號;
+            document.getElementById('equipmentModel').value = equipment.型號 || '';
+            document.getElementById('equipmentLocation').value = equipment.特別位置 || '';
+            document.getElementById('equipmentQuantity').value = equipment.數量;
+            document.getElementById('equipmentImage').value = equipment.圖片檔案位置 || '';
+            document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
+            document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
+            document.getElementById('equipmentStatus').value = equipment.目前狀態;
+            document.getElementById('equipmentDescription').value = equipment.說明 || '';
+
+            currentEditingId = id;
+            openModal('equipmentModal');
+        }
+
+        async function handleEquipmentSubmit(e) {
+            e.preventDefault();
+            
+            const formData = {
+                器材名稱: document.getElementById('equipmentName').value,
+                分群組: document.getElementById('equipmentGroup').value,
+                裝備編號: document.getElementById('equipmentNumber').value,
+                型號: document.getElementById('equipmentModel').value,
+                特別位置: document.getElementById('equipmentLocation').value,
+                數量: parseInt(document.getElementById('equipmentQuantity').value),
+                圖片檔案位置: document.getElementById('equipmentImage').value,
+                說明書連結: document.getElementById('equipmentManual').value,
+                教學影片相關: document.getElementById('equipmentVideo').value,
+                目前狀態: document.getElementById('equipmentStatus').value,
+                說明: document.getElementById('equipmentDescription').value,
+                填表人: currentUser.displayName
+            };
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                let response;
+
+                if (currentEditingId) {
+                    // 更新現有裝備
+                    response = await fetch(`${CONFIG.API_BASE}/equipment/${currentEditingId}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${sessionToken}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                } else {
+                    // 新增裝備
+                    response = await fetch(`${CONFIG.API_BASE}/equipment`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${sessionToken}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                }
+
+                if (!response.ok) {
+                    throw new Error('儲存失敗');
+                }
+
+                const result = await response.json();
+                
+                // 更新本地資料
+                if (currentEditingId) {
+                    const index = equipmentData.findIndex(item => item.id === currentEditingId);
+                    if (index !== -1) {
+                        equipmentData[index] = { ...equipmentData[index], ...formData, updated_at: new Date().toISOString() };
+                    }
+                } else {
+                    equipmentData.push({ ...formData, id: result.id, updated_at: new Date().toISOString() });
+                }
+
+                closeModal('equipmentModal');
+                renderEquipment();
+                updateCategoryFilter();
+                showToast(`裝備${currentEditingId ? '更新' : '新增'}成功`, 'success');
+                
+            } catch (error) {
+                console.error('儲存裝備失敗:', error);
+                showToast('儲存失敗，請稍後再試', 'error');
+            }
+        }
+
+        async function deleteEquipment(id) {
+            if (!confirm('確定要刪除這個裝備嗎？此操作無法復原。')) {
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(`${CONFIG.API_BASE}/equipment/${id}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('刪除失敗');
+                }
+
+                equipmentData = equipmentData.filter(item => item.id !== id);
+                renderEquipment();
+                updateCategoryFilter();
+                showToast('裝備刪除成功', 'success');
+                
+            } catch (error) {
+                console.error('刪除裝備失敗:', error);
+                showToast('刪除失敗，請稍後再試', 'error');
+            }
+        }
+
+        function viewEquipmentHistory(id) {
+            const equipment = equipmentData.find(item => item.id === id);
+            if (!equipment) return;
+
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = `
+                <div class="history-item">
+                    <div class="history-header">
+                        <span class="history-user">${equipment.填表人}</span>
+                        <span class="history-time">${formatDate(equipment.updated_at)}</span>
+                    </div>
+                    <div class="history-changes">
+                        <div class="change-item">初始建立裝備記錄</div>
+                    </div>
+                </div>
+            `;
+
+            openModal('historyModal');
+        }
+
+        async function showUserManagement() {
+            if (currentUser.role !== '管理') {
+                showToast('權限不足', 'error');
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(`${CONFIG.API_BASE}/users`, {
+                    method: 'GET',
+                    headers: { 
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('載入用戶資料失敗');
+                }
+
+                const data = await response.json();
+                usersData = data.users || [];
+
+                renderUsersList();
+                openModal('userModal');
+                
+            } catch (error) {
+                console.error('載入用戶資料失敗:', error);
+                showToast('載入用戶資料失敗', 'error');
+            }
+        }
+
+        function renderUsersList() {
+            const usersList = document.getElementById('usersList');
+            
+            if (usersData.length === 0) {
+                usersList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #666;">沒有用戶資料</div>';
+                return;
+            }
+
+            usersList.innerHTML = `
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>顯示名稱</th>
+                            <th>權限</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${usersData.map(user => `
+                            <tr>
+                                <td>${user.displayName}</td>
+                                <td>
+                                    <select class="permission-select" onchange="updateUserPermission('${user.userId}', this.value)" 
+                                        ${user.userId === currentUser.userId ? 'disabled' : ''}>
+                                        <option value="一般用戶" ${user.role === '一般用戶' ? 'selected' : ''}>一般用戶</option>
+                                        <option value="救援" ${user.role === '救援' ? 'selected' : ''}>救援</option>
+                                        <option value="醫療" ${user.role === '醫療' ? 'selected' : ''}>醫療</option>
+                                        <option value="後勤" ${user.role === '後勤' ? 'selected' : ''}>後勤</option>
+                                        <option value="管理" ${user.role === '管理' ? 'selected' : ''}>管理</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    ${user.userId !== currentUser.userId ? 
+                                        `<button class="btn btn-danger btn-sm" onclick="deleteUser('${user.userId}')">刪除</button>` : 
+                                        '<span style="color: #666;">當前用戶</span>'
+                                    }
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function updateUserPermission(userId, newRole) {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(`${CONFIG.API_BASE}/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
+                    },
+                    body: JSON.stringify({ role: newRole })
+                });
+
+                if (!response.ok) {
+                    throw new Error('更新權限失敗');
+                }
+
+                showToast('權限更新成功', 'success');
+                
+            } catch (error) {
+                console.error('更新用戶權限失敗:', error);
+                showToast('更新權限失敗', 'error');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('確定要刪除這個用戶嗎？此操作無法復原。')) {
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(`${CONFIG.API_BASE}/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('刪除用戶失敗');
+                }
+
+                usersData = usersData.filter(user => user.userId !== userId);
+                renderUsersList();
+                showToast('用戶刪除成功', 'success');
+                
+            } catch (error) {
+                console.error('刪除用戶失敗:', error);
+                showToast('刪除用戶失敗', 'error');
+            }
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            renderEquipment();
+        }
+
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            toast.className = `toast toast-${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function logout() {
+            sessionStorage.removeItem('sessionToken');
+            window.location.href = 'index.html';
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.classList.remove('show');
+                }
+            });
+        }
     </script>
 </body>
+
 </html>
