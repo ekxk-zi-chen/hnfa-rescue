@@ -493,7 +493,8 @@
                             userId: result.userId
                         });
                         // 🟢 這裡加入跳轉
-                        setTimeout(() => { window.location.href = './test.html'; }, 700);
+                        addDebugInfo('子頁跳轉到 test.html');
+                        setTimeout(() => { window.location.href = 'test.html'; }, 700);
                         return;
                     } else {
                         addDebugInfo('sessionToken 無效，清除本地資料');
