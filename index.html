@@ -135,7 +135,8 @@
         }
 
         input,
-        textarea {
+        textarea,
+        select {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #ddd;
@@ -145,9 +146,14 @@
         }
 
         input:focus,
-        textarea:focus {
+        textarea:focus,
+        select:focus {
             outline: none;
             border-color: var(--primary);
+        }
+
+        select {
+            cursor: pointer;
         }
 
         button {
@@ -267,22 +273,37 @@
             <div id="checkin-form" class="form-container">
                 <form id="checkinForm">
                     <input type="hidden" id="lineUserId" name="lineUserId">
+                    
                     <div class="form-group">
-                        <label for="name">真實姓名：</label>
+                        <label for="name">真實姓名：*</label>
                         <input type="text" id="name" name="name" autocomplete="name" required placeholder="請輸入您的真實姓名">
                     </div>
+                    
                     <div class="form-group">
-                        <label for="email">電子郵件（選填）：</label>
+                        <label for="job">職稱：</label>
+                        <input type="text" id="job" name="job" placeholder="例如：組長、隊員、志工等">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="unit">單位：</label>
+                        <input type="text" id="unit" name="unit" placeholder="請輸入您的所屬單位或組織">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">電子郵件：</label>
                         <input type="email" id="email" name="email" autocomplete="email" placeholder="請輸入您的電子郵件">
                     </div>
+                    
                     <div class="form-group">
-                        <label for="phone">電話號碼（選填）：</label>
+                        <label for="phone">電話號碼：</label>
                         <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="請輸入您的電話號碼">
                     </div>
+                    
                     <div class="form-group">
-                        <label for="message">補充說明（可選）：</label>
-                        <textarea id="message" name="message" rows="3" placeholder="如有其他需要說明的資訊，請在此填寫"></textarea>
+                        <label for="script">申請備註：</label>
+                        <textarea id="script" name="script" rows="3" placeholder="如有其他需要說明的資訊，請在此填寫"></textarea>
                     </div>
+                    
                     <button type="submit" class="submit-btn" id="submit-btn">
                         <span class="loader" id="submit-loader" style="display: none;"></span>
                         <span id="submit-text">送出表單</span>
@@ -353,9 +374,6 @@
             debugEl.appendChild(msgDiv);
             debugEl.scrollTop = debugEl.scrollHeight;
         }
-
-
-
 
         function toggleLoader(buttonId, show) {
             const loader = document.getElementById(buttonId + '-loader');
@@ -509,6 +527,7 @@
                 showLoginOptions();
             }
         }
+        
         async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
 
@@ -535,7 +554,6 @@
 
                 // 處理不同狀態
                 if (data.status === 'ok') {
-                    // 用戶已存在，保存 sessionToken 並跳轉
                     localStorage.setItem('sessionToken', data.sessionToken);
                     SESSION_TOKEN = data.sessionToken;
 
@@ -570,6 +588,7 @@
                 return false;
             }
         }
+        
         // ---------- 後端驗證函數 ----------
         async function verifyTokenAtServer(idToken, sessionToken) {
             try {
@@ -636,12 +655,6 @@
                 if (submitBtn) {
                     submitBtn.textContent = '完成註冊';
                 }
-                
-                // 修改表單標題或添加說明
-                const formTitle = document.querySelector('.form-container h3');
-                if (formTitle) {
-                    formTitle.textContent = '註冊資料填寫';
-                }
             } else {
                 showStatus('驗證成功，請填寫表單', 'success');
                 
@@ -687,7 +700,9 @@
                     name: formData.name,
                     email: formData.email,
                     phone: formData.phone,
-                    message: formData.message,
+                    job: formData.job,      // 新增職稱
+                    unit: formData.unit,    // 新增單位
+                    script: formData.script, // 新增申請備註
                     displayName: formData.displayName,
                     
                     // 控制參數
@@ -754,7 +769,6 @@
             }
         }
 
-
         // ---------- Session 管理 ----------
         function clearSession() {
             try {
@@ -791,7 +805,9 @@
                     name: document.getElementById('name').value,
                     email: document.getElementById('email').value,
                     phone: document.getElementById('phone').value,
-                    message: document.getElementById('message').value
+                    job: document.getElementById('job').value,     // 新增職稱
+                    unit: document.getElementById('unit').value,   // 新增單位
+                    script: document.getElementById('script').value // 新增申請備註
                 };
 
                 // 判斷目前是不是註冊模式（由 renderUserInterface 設定 PROFILE.needsSignup）
@@ -830,7 +846,6 @@
                 }
             });
         }
-
 
         // ---------- 初始化 ----------
         document.addEventListener('DOMContentLoaded', function() {
