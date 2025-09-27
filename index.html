@@ -321,12 +321,22 @@
         }
 
         function addDebugInfo(info) {
-            if (!CONFIG.DEBUG) return;
-            const debugEl = document.getElementById('debug-content');
+            if (!CONFIG.DEBUG) return; // debug 關閉就直接跳過
+        
+            // 檢查 debug 容器是否存在，沒有就創建
+            let debugEl = document.getElementById('debug-content');
+            if (!debugEl) {
+                debugEl = document.createElement('div');
+                debugEl.id = 'debug-content';
+                debugEl.style.cssText = 'height:150px; overflow:auto; background:#f0f0f0; padding:5px; font-size:12px;';
+                document.body.appendChild(debugEl); // 或插入到你想放的位置
+            }
+        
             const time = new Date().toLocaleTimeString();
             debugEl.innerHTML += `<div>[${time}] ${info}</div>`;
             debugEl.scrollTop = debugEl.scrollHeight;
         }
+
 
         function toggleLoader(buttonId, show) {
             const loader = document.getElementById(buttonId + '-loader');
