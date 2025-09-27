@@ -396,54 +396,6 @@
         let ID_TOKEN = null;
         let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;
         let PROFILE = null;
-        let LIFF_INITIALIZED = false;
-        let IS_EXTERNAL_BROWSER = false;
-
-        // ---------- Session管理函數 ----------
-        function clearSession() {
-            try {
-                // 清掉 LIFF SDK 內部 token
-                if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
-                    liff.logout();
-                    addDebugInfo('已呼叫 liff.logout() 清除 SDK token');
-                }
-                
-                // 清掉所有 localStorage
-                localStorage.removeItem('sessionToken');
-                localStorage.removeItem('loginRedirect');
-                localStorage.removeItem('liffState'); // LIFF 的狀態快取
-                
-                // 清掉 sessionStorage（LIFF 可能使用）
-                sessionStorage.clear();
-                
-                // 清掉全局變數
-                SESSION_TOKEN = null;
-                ID_TOKEN = null;
-                PROFILE = null;
-                
-                // 強制重新導向，清除瀏覽器快取
-                addDebugInfo('已清除所有 Session 資料，準備強制重新登入');
-                showStatus('已清除登入狀態，請重新登入', 'info');
-                
-                // 顯示登入選項
-                showLoginOptions();
-                
-                // 強制刷新頁面以清除記憶體中的快取
-                setTimeout(() => {
-                    window.location.reload(true); // true 參數強制從伺服器加載
-                }, 1000);
-                
-            } catch (err) {
-                console.error('清除 Session 失敗:', err);
-                addDebugInfo('清除 Session 失敗: ' + err.message);
-            }
-        }
-
-        function saveSession(token) {
-            localStorage.setItem('sessionToken', token);
-            SESSION_TOKEN = token;
-            addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
-        }
 
         // ---------- 工具函數 ----------
         function showStatus(message, type = 'info') {
@@ -474,137 +426,119 @@
             }
         }
 
-        function isTokenExpired(token) {
-            if (!token) return true;
+        // ---------- 主要應用流程（參考你的第二個網頁） ----------
+        async function startApp() {
             try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                return (Date.now() / 1000) > payload.exp;
-            } catch (e) {
-                return true;
-            }
-        }
-
-        // --------- 幫助函數 ---------
-        function getUrlParam(param) {
-            return new URLSearchParams(window.location.search).get(param);
-        }
-
-        function clearRedirectState() {
-            if (window.history.replaceState) {
-                const cleanUrl = window.location.origin + window.location.pathname;
-                window.history.replaceState({}, document.title, cleanUrl);
-            }
-        }
-
-        // 簡化的獲取 ID Token 函數
-        async function getCurrentIdToken() {
-            try {
-                if (typeof liff === 'undefined' || !liff.isLoggedIn()) {
-                    return null;
-                }
-
-                const token = liff.getIDToken ? liff.getIDToken() : null;
-                if (token && !isTokenExpired(token)) {
-                    addDebugInfo('取得有效 ID Token，長度=' + token.length);
-                    return token;
-                }
-
-                addDebugInfo('ID Token 無效或已過期');
-                return null;
-            } catch (err) {
-                addDebugInfo('取得 ID Token 錯誤: ' + err.message);
-                return null;
-            }
-        }
-
-        // ---------- 初始化應用（修復版本） ----------
-        async function initializeApp() {
-            showStatus('正在初始化應用程式...');
-            addDebugInfo('開始初始化應用');
-
-            try {
-                if (typeof liff === 'undefined') {
-                    showStatus('LIFF SDK 加載失敗，請刷新頁面', 'error');
-                    showLoginOptions();
-                    return;
-                }
-
+                showStatus('應用初始化中...');
+                
                 // 初始化 LIFF
-                addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
-                LIFF_INITIALIZED = true;
                 addDebugInfo('LIFF 初始化成功');
 
-                const isInLINE = liff.isInClient();
-                IS_EXTERNAL_BROWSER = !isInLINE;
-                addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
-
-                // 檢查是否為登入重定向返回
-                const redirected = getUrlParam('loginRedirect') === 'true';
-                if (redirected) {
-                    clearRedirectState();
-                    localStorage.removeItem('loginRedirect');
-                    addDebugInfo('檢測到登入重定向返回，強制清除快取');
+                // 先檢查本機 sessionToken
+                if (SESSION_TOKEN) {
+                    addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
+                    const result = await verifyTokenAtServer(null, SESSION_TOKEN);
                     
-                    // 強制清除 LIFF 可能快取的狀態
-                    if (liff.isLoggedIn()) {
-                        addDebugInfo('重定向後檢測到已登入，準備強制刷新 Token');
-                        
-                        // 強制登出再登入，確保拿到新 Token
-                        liff.logout();
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        
-                        // 重新登入獲取新 Token
-                        const randomParam = 't=' + Date.now() + Math.random();
-                        const redirectUri = window.location.origin + window.location.pathname + '?loginRedirect=true&' + randomParam;
-                        localStorage.setItem('loginRedirect', 'true');
-                        liff.login({ redirectUri });
-                        return;
+                    if (result && result.status === 'ok') {
+                        addDebugInfo('sessionToken 驗證成功');
+                        renderUserInterface({
+                            displayName: result.displayName,
+                            userId: result.userId
+                        });
+                        return; // 驗證成功就結束
+                    } else {
+                        // 驗證失敗，刪除無效 token
+                        addDebugInfo('sessionToken 無效或過期，清除本機資料');
+                        localStorage.removeItem('sessionToken');
+                        SESSION_TOKEN = null;
                     }
                 }
 
-                // 正常登入流程
-                if (liff.isLoggedIn()) {
-                    addDebugInfo('LIFF 狀態: 已登入');
-                    
-                    // 獲取當前 ID Token
-                    ID_TOKEN = await getCurrentIdToken();
-                    
-                    if (ID_TOKEN) {
-                        addDebugInfo('使用當前 ID Token 進行驗證，開頭: ' + ID_TOKEN.substring(0, 20));
-                        await verifyIdToken(ID_TOKEN);
-                    } else {
-                        addDebugInfo('ID Token 無效，需要重新登入');
-                        showLoginOptions();
-                    }
-                } else {
-                    addDebugInfo('LIFF 狀態: 未登入');
-                    
-                    // 檢查是否有有效的 session token
-                    if (SESSION_TOKEN && !isTokenExpired(SESSION_TOKEN)) {
-                        addDebugInfo('發現有效 Session Token，嘗試恢復會話');
-                        await verifySessionToken(SESSION_TOKEN);
-                    } else {
-                        addDebugInfo('無有效登入狀態，顯示登入選項');
-                        showLoginOptions();
-                    }
-                }
-            } catch (error) {
-                console.error('初始化錯誤:', error);
-                addDebugInfo('初始化錯誤: ' + error.message);
-                showStatus('初始化失敗: ' + error.message, 'error');
+                // 沒有有效 sessionToken 時，走 LIFF 流程
+                await startLiff();
+
+            } catch (e) {
+                addDebugInfo('startApp 發生錯誤: ' + e.message);
+                showStatus('系統錯誤，請稍後重試', 'error');
                 showLoginOptions();
             }
         }
-        // ---------- Token 驗證 ----------
-        async function verifyToken(idToken, sessionToken) {
+
+        async function startLiff() {
+            addDebugInfo('開始 LIFF 登入流程');
+
+            if (!liff.isLoggedIn()) {
+                addDebugInfo('用戶未登入，顯示登入選項');
+                showLoginOptions();
+                return;
+            }
+
+            // 取得 idToken
+            ID_TOKEN = liff.getIDToken();
+            addDebugInfo('取得 idToken，長度: ' + (ID_TOKEN ? ID_TOKEN.length : 0));
+
+            if (!ID_TOKEN) {
+                addDebugInfo('無法取得 idToken，強制重新登入');
+                liff.logout();
+                liff.login();
+                return;
+            }
+
+            showStatus('驗證中，請稍後...', 'info');
+
+            const verifyResult = await verifyTokenAtServer(ID_TOKEN, null);
+
+            if (!verifyResult || verifyResult.status === 'error') {
+                addDebugInfo('idToken 驗證失敗，強制重新登入');
+                showStatus('驗證失敗，請重新登入', 'error');
+                liff.logout();
+                liff.login();
+                return;
+            }
+
+            if (verifyResult.status === 'ok') {
+                addDebugInfo('idToken 驗證成功');
+                // 保存新的 sessionToken
+                if (verifyResult.sessionToken) {
+                    localStorage.setItem('sessionToken', verifyResult.sessionToken);
+                    SESSION_TOKEN = verifyResult.sessionToken;
+                }
+                renderUserInterface({
+                    displayName: verifyResult.displayName,
+                    userId: verifyResult.userId
+                });
+                return;
+            }
+
+            if (verifyResult.status === 'needsignup') {
+                addDebugInfo('需要註冊');
+                // 保存 sessionToken 以備後用
+                if (verifyResult.sessionToken) {
+                    localStorage.setItem('sessionToken', verifyResult.sessionToken);
+                    SESSION_TOKEN = verifyResult.sessionToken;
+                }
+                renderUserInterface({
+                    displayName: verifyResult.displayName || '新用戶',
+                    userId: verifyResult.userId,
+                    needsSignup: true
+                });
+                return;
+            }
+        }
+
+        // ---------- 後端驗證函數 ----------
+        async function verifyTokenAtServer(idToken, sessionToken) {
             try {
-                addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0, 20) + '...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0, 20) + '...' : null}`);
+                addDebugInfo(`發送驗證請求: idToken=${idToken ? 'YES' : 'NO'}, sessionToken=${sessionToken ? 'YES' : 'NO'}`);
 
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idToken, sessionToken })
+                    body: JSON.stringify({ 
+                        idToken: idToken || null, 
+                        sessionToken: sessionToken || null 
+                    })
                 });
 
                 if (!response.ok) {
@@ -613,6 +547,13 @@
 
                 const data = await response.json();
                 addDebugInfo('伺服器回應: ' + JSON.stringify(data));
+                
+                // 如果後端回傳新的 sessionToken 就保存
+                if (data.sessionToken) {
+                    localStorage.setItem('sessionToken', data.sessionToken);
+                    SESSION_TOKEN = data.sessionToken;
+                }
+                
                 return data;
             } catch (error) {
                 addDebugInfo('驗證請求失敗: ' + error.message);
@@ -620,75 +561,7 @@
             }
         }
 
-        async function verifyIdToken(idToken) {
-            const result = await verifyToken(idToken, null);
-
-            if (!result) {
-                showStatus('伺服器無回應，請稍後重試', 'error');
-                showLoginOptions();
-                return;
-            }
-
-            switch (result.status) {
-                case 'ok':
-                    addDebugInfo('ID Token 驗證成功');
-                    saveSession(result.sessionToken);
-                    renderUserInterface({
-                        displayName: result.displayName,
-                        userId: result.userId
-                    });
-                    break;
-                case 'needsignup':
-                    addDebugInfo('需要註冊');
-                    showStatus('請填寫註冊資訊', 'warning');
-                    renderUserInterface({
-                        displayName: result.displayName || '新用戶',
-                        userId: result.userId,
-                        needsSignup: true
-                    });
-                    break;
-                case 'error':
-                    addDebugInfo('伺服器錯誤: ' + result.message);
-                    showStatus('驗證失敗: ' + (result.message || '未知錯誤'), 'error');
-                    showLoginOptions();
-                    break;
-                default:
-                    addDebugInfo('未知回應狀態: ' + result.status);
-                    showStatus('驗證失敗，請重新登入', 'error');
-                    showLoginOptions();
-            }
-        }
-
-        async function verifySessionToken(sessionToken) {
-            const result = await verifyToken(null, sessionToken);
-
-            if (!result) {
-                showStatus('伺服器無回應，請稍後重試', 'error');
-                showLoginOptions();
-                return;
-            }
-
-            switch (result.status) {
-                case 'ok':
-                    addDebugInfo('Session Token 驗證成功');
-                    renderUserInterface({
-                        displayName: result.displayName,
-                        userId: result.userId
-                    });
-                    break;
-                case 'needsignup':
-                case 'error':
-                default:
-                    addDebugInfo('Session Token 驗證失敗: ' + result.status);
-                    // Session 無效，清除並顯示登入選項
-                    localStorage.removeItem('sessionToken');
-                    SESSION_TOKEN = null;
-                    showLoginOptions();
-                    break;
-            }
-        }
-
-        // ---------- 用戶界面控制 ----------
+        // ---------- UI 控制函數 ----------
         function showLoginOptions() {
             showStatus('請登入 LINE 帳戶');
             document.getElementById('login-section').style.display = 'block';
@@ -719,7 +592,6 @@
 
         // ---------- 表單處理 ----------
         async function submitCheckinForm(formData) {
-            const submitBtn = document.getElementById('submit-btn');
             toggleLoader('submit', true);
             showStatus('正在提交表單...');
 
@@ -754,6 +626,30 @@
             }
         }
 
+        // ---------- Session 管理 ----------
+        function clearSession() {
+            try {
+                if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
+                    liff.logout();
+                }
+                
+                localStorage.removeItem('sessionToken');
+                sessionStorage.clear();
+                
+                SESSION_TOKEN = null;
+                ID_TOKEN = null;
+                PROFILE = null;
+                
+                addDebugInfo('已清除所有登入資料');
+                showStatus('已清除登入狀態，請重新登入', 'info');
+                showLoginOptions();
+                
+            } catch (err) {
+                console.error('清除 Session 失敗:', err);
+                addDebugInfo('清除 Session 失敗: ' + err.message);
+            }
+        }
+
         // ---------- 事件監聽器設置 ----------
         function setupEventListeners() {
             // 表單提交
@@ -772,49 +668,22 @@
             });
 
             // 登入按鈕
-            document.getElementById('manual-login-btn').addEventListener('click', async function() {
+            document.getElementById('manual-login-btn').addEventListener('click', function() {
                 addDebugInfo('手動登入按鈕點擊');
                 toggleLoader('login', true);
-                
-                try {
-                    if (!LIFF_INITIALIZED) {
-                        addDebugInfo('LIFF 尚未初始化，正在初始化...');
-                        await liff.init({ liffId: CONFIG.LIFF_ID });
-                        LIFF_INITIALIZED = true;
-                    }
-                    
-                    // 清除所有可能的快取
-                    localStorage.removeItem('liffState');
-                    sessionStorage.clear();
-                    
-                    // 添加隨機參數避免快取
-                    const randomParam = 't=' + Date.now() + Math.random();
-                    const redirectUri = window.location.origin + window.location.pathname + '?loginRedirect=true&' + randomParam;
-                    
-                    // 設置重定向標記
-                    localStorage.setItem('loginRedirect', 'true');
-                    
-                    addDebugInfo('重定向 URI: ' + redirectUri);
-                    liff.login({ redirectUri });
-                    
-                } catch (error) {
-                    addDebugInfo('登入錯誤: ' + error.message);
-                    showStatus('登入失敗: ' + error.message, 'error');
-                    toggleLoader('login', false);
-                }
+                liff.login();
             });
 
             // 清除Session按鈕
             document.getElementById('clear-session-btn').addEventListener('click', clearSession);
+            
             // 強制刷新頁面按鈕
             document.getElementById('force-refresh-btn').addEventListener('click', function() {
-                addDebugInfo('強制刷新頁面以清除快取');
-                // 清除所有儲存
                 localStorage.clear();
                 sessionStorage.clear();
-                // 強制從伺服器重新加載
                 window.location.reload(true);
             });
+            
             // 除錯信息切換
             document.getElementById('toggle-debug').addEventListener('click', function () {
                 const debugInfo = document.getElementById('debug-info');
@@ -829,8 +698,8 @@
             });
         }
 
-        // ---------- 初始化應用 ----------
-        document.addEventListener('DOMContentLoaded', async () => {
+        // ---------- 初始化 ----------
+        document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
 
             if (typeof liff === 'undefined') {
@@ -839,13 +708,8 @@
                 return;
             }
 
-            try {
-                await initializeApp();
-            } catch (err) {
-                showStatus('應用初始化失敗', 'error');
-                addDebugInfo('應用初始化失敗: ' + err.message);
-                showLoginOptions();
-            }
+            // 延遲啟動，確保 LIFF SDK 完全載入
+            setTimeout(() => startApp(), 800);
         });
     </script>
 </body>
