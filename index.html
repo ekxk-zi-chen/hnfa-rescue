@@ -533,29 +533,24 @@
             }
 
             if (verifyResult.status === 'ok') {
-                addDebugInfo('idToken 驗證成功');
+                addDebugInfo('idToken 驗證成功，後端傳ok');
                 // 保存新的 sessionToken
-                if (verifyResult.sessionToken) {
-                    localStorage.setItem('sessionToken', verifyResult.sessionToken);
-                    SESSION_TOKEN = verifyResult.sessionToken;
-                }
-                renderUserInterface({
-                    displayName: verifyResult.displayName,
-                    userId: verifyResult.userId
-                });
+                localStorage.setItem('sessionToken', verifyResult.sessionToken);
+                SESSION_TOKEN = verifyResult.sessionToken;
+
+                // 直接跳轉到 test.html
+                window.location.href = 'test.html';
                 return true;
             }
 
             if (verifyResult.status === 'needsignup') {
                 addDebugInfo('需要註冊');
-                // 保存 sessionToken 以備後用
-                if (verifyResult.sessionToken) {
-                    localStorage.setItem('sessionToken', verifyResult.sessionToken);
-                    SESSION_TOKEN = verifyResult.sessionToken;
-                }
+                // 儲存 sessionToken
+                localStorage.setItem('sessionToken', verifyResult.sessionToken);
+                SESSION_TOKEN = verifyResult.sessionToken;
+
                 renderUserInterface({
                     displayName: verifyResult.displayName || '新用戶',
-                    userId: verifyResult.userId,
                     needsSignup: true
                 });
                 return true;
