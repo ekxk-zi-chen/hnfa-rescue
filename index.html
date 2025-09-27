@@ -441,7 +441,35 @@
             }
         }
 
-        // ---------- 主要應用流程：進來就檢查 idToken ----------
+        // ---------- 強制取得新的 idToken ----------
+        async function forceGetNewIdToken() {
+            try {
+                addDebugInfo('準備強制取得新的 idToken...');
+                
+                // 先完全登出清除所有快取
+                if (liff.isLoggedIn()) {
+                    addDebugInfo('執行 liff.logout() 清除舊快取');
+                    liff.logout();
+                }
+                
+                // 清除瀏覽器相關快取
+                localStorage.removeItem('liffState');
+                sessionStorage.clear();
+                
+                // 等待一下確保登出完成
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // 重新登入取得新 token
+                addDebugInfo('重新登入以取得新的 idToken');
+                liff.login();
+                
+            } catch (err) {
+                addDebugInfo('強制取得新 idToken 失敗: ' + err.message);
+                showLoginOptions();
+            }
+        }
+
+        // ---------- 主要應用流程：強制檢查並取得新 idToken ----------
         async function startApp() {
             try {
                 showStatus('應用初始化中...');
@@ -450,48 +478,58 @@
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 addDebugInfo('LIFF 初始化成功');
 
-                // 關鍵：一進來就檢查當前 idToken 是否過期
+                // 檢查登入狀態
                 if (liff.isLoggedIn()) {
                     ID_TOKEN = liff.getIDToken();
-                    addDebugInfo('取得當前 idToken，長度: ' + (ID_TOKEN ? ID_TOKEN.length : 0));
+                    const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 30) + '...' : 'null';
+                    addDebugInfo(`取得 idToken: ${tokenPrefix}, 長度: ${ID_TOKEN ? ID_TOKEN.length : 0}`);
                     
-                    if (ID_TOKEN && isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('❌ idToken 已過期，強制登出重新登入');
-                        liff.logout();
-                        showStatus('登入已過期，請重新登入', 'warning');
-                        showLoginOptions();
+                    if (!ID_TOKEN) {
+                        addDebugInfo('無法取得 idToken，強制重新登入');
+                        await forceGetNewIdToken();
                         return;
                     }
                     
-                    if (ID_TOKEN) {
-                        addDebugInfo('✅ idToken 有效，進行後端驗證');
-                        await verifyWithBackend();
+                    if (isTokenExpired(ID_TOKEN)) {
+                        addDebugInfo('❌ idToken 已過期，強制重新登入取得新 token');
+                        await forceGetNewIdToken();
                         return;
                     }
-                }
+                    
+                    // 即使看起來有效，也檢查是否為舊 token（檢查後端驗證失敗）
+                    addDebugInfo('idToken 看起來有效，嘗試後端驗證...');
+                    const backendResult = await verifyWithBackend();
+                    
+                    // 如果後端說 token 無效，強制取得新的
+                    if (!backendResult) {
+                        addDebugInfo('後端驗證失敗，可能是舊 token，強制重新登入');
+                        await forceGetNewIdToken();
+                        return;
+                    }
+                } else {
+                    // 沒有登入狀態，先檢查是否有 sessionToken
+                    if (SESSION_TOKEN) {
+                        addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
+                        const result = await verifyTokenAtServer(null, SESSION_TOKEN);
+                        
+                        if (result && result.status === 'ok') {
+                            addDebugInfo('sessionToken 驗證成功');
+                            renderUserInterface({
+                                displayName: result.displayName,
+                                userId: result.userId
+                            });
+                            return;
+                        } else {
+                            addDebugInfo('sessionToken 無效，清除本機資料');
+                            localStorage.removeItem('sessionToken');
+                            SESSION_TOKEN = null;
+                        }
+                    }
 
-                // 沒有登入狀態，先檢查是否有 sessionToken
-                if (SESSION_TOKEN) {
-                    addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
-                    const result = await verifyTokenAtServer(null, SESSION_TOKEN);
-                    
-                    if (result && result.status === 'ok') {
-                        addDebugInfo('sessionToken 驗證成功');
-                        renderUserInterface({
-                            displayName: result.displayName,
-                            userId: result.userId
-                        });
-                        return;
-                    } else {
-                        addDebugInfo('sessionToken 無效，清除本機資料');
-                        localStorage.removeItem('sessionToken');
-                        SESSION_TOKEN = null;
-                    }
+                    // 都沒有有效登入，顯示登入選項
+                    addDebugInfo('無有效登入狀態，顯示登入選項');
+                    showLoginOptions();
                 }
-
-                // 都沒有有效登入，顯示登入選項
-                addDebugInfo('無有效登入狀態，顯示登入選項');
-                showLoginOptions();
 
             } catch (e) {
                 addDebugInfo('startApp 發生錯誤: ' + e.message);
@@ -503,14 +541,15 @@
         async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
             
+            const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 30) + '...' : 'null';
+            addDebugInfo(`後端驗證使用的 idToken 前綴: ${tokenPrefix}`);
+            
             const verifyResult = await verifyTokenAtServer(ID_TOKEN, null);
 
             if (!verifyResult || verifyResult.status === 'error') {
-                addDebugInfo('idToken 後端驗證失敗，強制重新登入');
-                showStatus('驗證失敗，請重新登入', 'error');
-                liff.logout();
-                showLoginOptions();
-                return;
+                addDebugInfo('idToken 後端驗證失敗，可能是舊 token');
+                showStatus('驗證失敗，需要重新登入', 'error');
+                return false; // 返回失敗狀態
             }
 
             if (verifyResult.status === 'ok') {
@@ -524,7 +563,7 @@
                     displayName: verifyResult.displayName,
                     userId: verifyResult.userId
                 });
-                return;
+                return true; // 返回成功狀態
             }
 
             if (verifyResult.status === 'needsignup') {
@@ -539,14 +578,18 @@
                     userId: verifyResult.userId,
                     needsSignup: true
                 });
-                return;
+                return true; // 返回成功狀態
             }
+            
+            return false; // 其他情況視為失敗
         }
 
         // ---------- 後端驗證函數 ----------
         async function verifyTokenAtServer(idToken, sessionToken) {
             try {
-                addDebugInfo(`發送驗證請求: idToken=${idToken ? 'YES' : 'NO'}, sessionToken=${sessionToken ? 'YES' : 'NO'}`);
+                const tokenInfo = idToken ? `idToken前綴=${idToken.substring(0, 30)}...` : 'idToken=null';
+                const sessionInfo = sessionToken ? `sessionToken前綴=${sessionToken.substring(0, 20)}...` : 'sessionToken=null';
+                addDebugInfo(`發送驗證請求: ${tokenInfo}, ${sessionInfo}`);
 
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
@@ -556,6 +599,8 @@
                         sessionToken: sessionToken || null 
                     })
                 });
+
+                addDebugInfo(`伺服器回應狀態: ${response.status}`);
 
                 if (!response.ok) {
                     throw new Error(`伺服器錯誤: ${response.status}`);
@@ -568,6 +613,7 @@
                 if (data.sessionToken) {
                     localStorage.setItem('sessionToken', data.sessionToken);
                     SESSION_TOKEN = data.sessionToken;
+                    addDebugInfo(`保存新的 sessionToken: ${data.sessionToken.substring(0, 20)}...`);
                 }
                 
                 return data;
