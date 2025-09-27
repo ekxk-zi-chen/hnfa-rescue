@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>花蓮特搜網頁 - 正式版</title>
     <style>
+        /* 保持原有的CSS樣式不變 */
         :root {
             --primary: #00C300;
             --primary-dark: #009900;
@@ -17,13 +19,13 @@
             --gray: #9e9e9e;
             --gray-dark: #616161;
         }
-        
+
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
-        
+
         body {
             font-family: 'Helvetica Neue', Arial, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
             line-height: 1.6;
@@ -35,7 +37,7 @@
             justify-content: center;
             align-items: center;
         }
-        
+
         .container {
             width: 100%;
             max-width: 500px;
@@ -44,7 +46,7 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             overflow: hidden;
         }
-        
+
         .header {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
@@ -52,21 +54,21 @@
             text-align: center;
             position: relative;
         }
-        
+
         .header h1 {
             font-size: 24px;
             margin-bottom: 5px;
         }
-        
+
         .header p {
             font-size: 14px;
             opacity: 0.9;
         }
-        
+
         .content {
             padding: 30px 25px;
         }
-        
+
         .status-box {
             padding: 12px 15px;
             border-radius: 8px;
@@ -75,36 +77,36 @@
             display: flex;
             align-items: center;
         }
-        
+
         .status-box.info {
             background-color: #e3f2fd;
             color: #0b5394;
             border-left: 4px solid #2196f3;
         }
-        
+
         .status-box.error {
             background-color: #ffebee;
             color: #c62828;
             border-left: 4px solid var(--error);
         }
-        
+
         .status-box.success {
             background-color: #e8f5e9;
             color: #2e7d32;
             border-left: 4px solid var(--success);
         }
-        
+
         .status-box.warning {
             background-color: #fff8e1;
             color: #ff6f00;
             border-left: 4px solid var(--warning);
         }
-        
+
         .status-icon {
             margin-right: 10px;
             font-size: 18px;
         }
-        
+
         .user-info {
             background-color: #f1f8e9;
             padding: 15px;
@@ -112,28 +114,29 @@
             margin-bottom: 20px;
             border-left: 4px solid #8bc34a;
         }
-        
+
         .user-info h3 {
             margin-bottom: 10px;
             color: #33691e;
         }
-        
+
         .form-container {
             display: none;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
+
         label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
             color: #444;
         }
-        
-        input, textarea {
+
+        input,
+        textarea {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #ddd;
@@ -141,12 +144,13 @@
             font-size: 16px;
             transition: border-color 0.3s;
         }
-        
-        input:focus, textarea:focus {
+
+        input:focus,
+        textarea:focus {
             outline: none;
             border-color: var(--primary);
         }
-        
+
         button {
             padding: 14px 20px;
             border: none;
@@ -157,37 +161,37 @@
             width: 100%;
             transition: all 0.3s;
         }
-        
+
         .submit-btn {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
             margin-top: 10px;
         }
-        
+
         .submit-btn:hover {
             box-shadow: 0 4px 12px rgba(0, 195, 0, 0.3);
         }
-        
+
         .submit-btn:disabled {
             background: #cccccc;
             cursor: not-allowed;
         }
-        
+
         .login-btn {
             background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
             color: white;
             margin-bottom: 10px;
         }
-        
+
         .login-btn:hover {
             box-shadow: 0 4px 12px rgba(0, 132, 255, 0.3);
         }
-        
+
         .debug-toggle {
             text-align: center;
             margin-top: 20px;
         }
-        
+
         .debug-toggle button {
             width: auto;
             padding: 8px 15px;
@@ -195,7 +199,7 @@
             background: #f1f1f1;
             color: #666;
         }
-        
+
         .debug-info {
             background-color: #f9f9f9;
             padding: 15px;
@@ -207,7 +211,7 @@
             overflow-y: auto;
             display: none;
         }
-        
+
         .instructions {
             background-color: #fff8e1;
             padding: 15px;
@@ -215,21 +219,21 @@
             margin-bottom: 20px;
             border-left: 4px solid var(--warning);
         }
-        
+
         .instructions h3 {
             color: #ff6f00;
             margin-bottom: 10px;
         }
-        
+
         .instructions ul {
             padding-left: 20px;
             margin-bottom: 10px;
         }
-        
+
         .instructions li {
             margin-bottom: 5px;
         }
-        
+
         .footer {
             text-align: center;
             padding: 15px;
@@ -237,7 +241,7 @@
             font-size: 12px;
             border-top: 1px solid #eee;
         }
-        
+
         .loader {
             display: inline-block;
             width: 20px;
@@ -248,12 +252,17 @@
             animation: spin 1s linear infinite;
             margin-right: 10px;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
-        
+
         .problem-solution {
             background-color: #e8f5e9;
             padding: 15px;
@@ -261,18 +270,18 @@
             margin-top: 20px;
             border-left: 4px solid var(--success);
         }
-        
+
         .problem-solution h3 {
             color: var(--success);
             margin-bottom: 10px;
         }
-        
+
         .session-controls {
             margin-top: 15px;
             padding-top: 15px;
             border-top: 1px dashed #ccc;
         }
-        
+
         .session-controls button {
             width: auto;
             padding: 8px 12px;
@@ -281,7 +290,7 @@
             background: #f1f1f1;
             color: #666;
         }
-        
+
         .autofill-hint {
             font-size: 12px;
             color: var(--gray);
@@ -289,13 +298,13 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>花蓮特搜點麵線系統</h1>
             <p>快速登記與管理系統</p>
         </div>
-        
         <div class="content">
             <div id="instructions" class="instructions">
                 <h3>使用說明</h3>
@@ -305,12 +314,10 @@
                     <li>初次使用請輸入真實姓名完成註冊</li>
                 </ul>
             </div>
-            
             <div id="status" class="status-box info">
                 <span class="status-icon">⏳</span>
                 <span id="status-text">應用初始化中...</span>
             </div>
-            
             <div id="user-info" class="user-info" style="display: none;">
                 <h3>用戶資訊</h3>
                 <p>LINE名稱：<span id="display-name"></span></p>
@@ -319,14 +326,12 @@
                     <button id="clear-session-btn">清除登入狀態</button>
                 </div>
             </div>
-            
             <div id="login-section" style="display: none;">
                 <button class="login-btn" id="manual-login-btn">
                     <span class="loader" id="login-loader" style="display: none;"></span>
                     <span id="login-text">登入 LINE 帳戶</span>
                 </button>
             </div>
-            
             <div id="checkin-form" class="form-container">
                 <form id="checkinForm">
                     <input type="hidden" id="lineUserId" name="lineUserId">
@@ -355,7 +360,6 @@
                     </button>
                 </form>
             </div>
-            
             <div class="problem-solution">
                 <h3>表單自動填充說明</h3>
                 <p>我們已優化表單以支持瀏覽器自動填充功能：</p>
@@ -366,28 +370,24 @@
                 </ol>
                 <p>這將幫助瀏覽器正確識別和自動填充表單字段。</p>
             </div>
-            
             <div class="debug-toggle">
                 <button id="toggle-debug">顯示除錯資訊</button>
             </div>
-            
             <div id="debug-info" class="debug-info">
                 <div id="debug-content"></div>
             </div>
         </div>
-        
         <div class="footer">
             <p>花蓮特搜隊 &copy; 2023 | 技術支援</p>
         </div>
     </div>
-
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
         // 配置常數
         const CONFIG = {
             LIFF_ID: "2007902018-KwZPL9kE",
             API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
-            DEBUG: true  // 生產環境關閉除錯模式
+            DEBUG: true
         };
 
         // 全局變數
@@ -402,20 +402,21 @@
             try {
                 // 清掉 LIFF SDK 內部 token
                 if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
-                    liff.logout(); // LIFF SDK 會清掉內部 token / session
+                    liff.logout();
                     addDebugInfo('已呼叫 liff.logout() 清除 SDK token');
                 }
 
-                // 清掉 localStorage 舊的 session
+                // 清掉 localStorage
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('loginRedirect');
+                localStorage.removeItem('lastLoginTime');
 
                 // 清掉全局變數
                 SESSION_TOKEN = null;
                 ID_TOKEN = null;
                 PROFILE = null;
 
-                addDebugInfo('已清除本地 Session、全局變數、LIFF token');
+                addDebugInfo('已清除所有 Session 資料');
                 showStatus('已清除登入狀態，請重新登入', 'info');
 
                 // 顯示登入選項
@@ -426,24 +427,10 @@
             }
         }
 
-
         function saveSession(token) {
             localStorage.setItem('sessionToken', token);
             SESSION_TOKEN = token;
             addDebugInfo('已保存SessionToken: ' + token.substring(0, 20) + '...');
-        }
-
-        function validateSessionFormat(token) {
-            if (!token || typeof token !== 'string') return false;
-            try {
-                const parts = token.split('.');
-                if (parts.length !== 3) return false;
-                const payload = JSON.parse(atob(parts[1]));
-                if (!payload.exp) return false;
-                return true;
-            } catch (e) {
-                return false;
-            }
         }
 
         // ---------- 工具函數 ----------
@@ -452,13 +439,8 @@
             const statusTextEl = document.getElementById('status-text');
             statusTextEl.textContent = message;
             statusEl.className = 'status-box ' + type;
-            
-            const iconMap = {
-                info: '⏳',
-                error: '❌',
-                success: '✅',
-                warning: '⚠️'
-            };
+
+            const iconMap = { info: '⏳', error: '❌', success: '✅', warning: '⚠️' };
             statusEl.querySelector('.status-icon').textContent = iconMap[type] || '⏳';
             statusEl.style.display = 'flex';
         }
@@ -489,6 +471,7 @@
                 return true;
             }
         }
+
         // --------- 幫助函數 ---------
         function getUrlParam(param) {
             return new URLSearchParams(window.location.search).get(param);
@@ -501,139 +484,83 @@
             }
         }
 
-        // 強制取得最新的 ID Token
-        async function getFreshIdToken() {
+        // 簡化的獲取 ID Token 函數
+        async function getCurrentIdToken() {
             try {
-                if (typeof liff === 'undefined') return null;
+                if (typeof liff === 'undefined' || !liff.isLoggedIn()) {
+                    return null;
+                }
 
-                // 如果還登入，拿 token
                 const token = liff.getIDToken ? liff.getIDToken() : null;
-
                 if (token && !isTokenExpired(token)) {
-                    addDebugInfo('getFreshIdToken: token 有效, 長度=' + token.length);
+                    addDebugInfo('取得有效 ID Token，長度=' + token.length);
                     return token;
                 }
 
-                addDebugInfo('getFreshIdToken: token 無效或不存在, 回傳 null');
-                return null; // 不自動登入，強制手動登入
-            } catch (err) {
-                addDebugInfo('getFreshIdToken 錯誤: ' + err.message);
+                addDebugInfo('ID Token 無效或已過期');
                 return null;
-            }
-        }
-        // ---------- 取得最新有效 ID Token ----------
-        async function getLatestIdToken() {
-            try {
-                if (typeof liff === 'undefined') return null;
-
-                // 先拿快取 token
-                let token = liff.getIDToken ? liff.getIDToken() : null;
-
-                // 如果 token 存在且沒過期，直接回傳
-                if (token && !isTokenExpired(token)) {
-                    addDebugInfo('getLatestIdToken: token 有效, 長度=' + token.length);
-                    return token;
-                }
-
-                // token 不存在或過期 → 強制重新登入
-                addDebugInfo('getLatestIdToken: token 無效或已過期, 強制手動登入');
-
-                return new Promise((resolve, reject) => {
-                    // 設置一個監聽器，等登入完成再拿 token
-                    const checkLogin = async () => {
-                        if (liff.isLoggedIn()) {
-                            const newToken = liff.getIDToken ? liff.getIDToken() : null;
-                            if (newToken && !isTokenExpired(newToken)) {
-                                addDebugInfo('getLatestIdToken: 取得新的 token, 長度=' + newToken.length);
-                                resolve(newToken);
-                                return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    // 每 500ms 檢查一次 token
-                    const interval = setInterval(async () => {
-                        if (await checkLogin()) {
-                            clearInterval(interval);
-                        }
-                    }, 500);
-
-                    // 強制呼叫 LIFF 登入（使用 redirectUri）
-                    liff.login({
-                        redirectUri: window.location.origin + window.location.pathname
-                    });
-                });
-
             } catch (err) {
-                addDebugInfo('getLatestIdToken 錯誤: ' + err.message);
+                addDebugInfo('取得 ID Token 錯誤: ' + err.message);
                 return null;
             }
         }
 
-        // ---------- 初始化應用（保證拿到最新 idToken） ----------
+        // ---------- 初始化應用（修復版本） ----------
         async function initializeApp() {
             showStatus('正在初始化應用程式...');
             addDebugInfo('開始初始化應用');
-        
+
             try {
                 if (typeof liff === 'undefined') {
                     showStatus('LIFF SDK 加載失敗，請刷新頁面', 'error');
                     showLoginOptions();
                     return;
                 }
-        
+
                 // 初始化 LIFF
                 addDebugInfo('正在初始化 LIFF...');
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 LIFF_INITIALIZED = true;
                 addDebugInfo('LIFF 初始化成功');
-        
+
                 const isInLINE = liff.isInClient();
                 IS_EXTERNAL_BROWSER = !isInLINE;
                 addDebugInfo('運行環境: ' + (isInLINE ? 'LINE 內部' : '外部瀏覽器'));
-        
-                // 判斷是否登入重定向回來
+
+                // 檢查是否為登入重定向返回
                 const redirected = getUrlParam('loginRedirect') === 'true';
                 if (redirected) {
                     clearRedirectState();
-                    addDebugInfo('檢測到登入重定向回傳，準備拿新 token');
+                    localStorage.removeItem('loginRedirect');
+                    addDebugInfo('檢測到登入重定向返回');
                 }
-        
-                // ---------- 強制拿最新 idToken ----------
-                let freshIdToken = null;
+
+                // 檢查是否已登入
                 if (liff.isLoggedIn()) {
-                    if (!redirected) {
-                        // 有登入但沒有重定向，先登出清掉快取
-                        liff.logout();
-                        addDebugInfo('強制登出 LIFF 清掉舊 token');
-                        await new Promise(r => setTimeout(r, 200)); // 等待清空
+                    addDebugInfo('LIFF 狀態: 已登入');
+
+                    // 獲取當前 ID Token
+                    ID_TOKEN = await getCurrentIdToken();
+
+                    if (ID_TOKEN) {
+                        addDebugInfo('使用當前 ID Token 進行驗證');
+                        await verifyIdToken(ID_TOKEN);
+                    } else {
+                        addDebugInfo('ID Token 無效，需要重新登入');
+                        showLoginOptions();
+                    }
+                } else {
+                    addDebugInfo('LIFF 狀態: 未登入');
+
+                    // 檢查是否有有效的 session token
+                    if (SESSION_TOKEN && !isTokenExpired(SESSION_TOKEN)) {
+                        addDebugInfo('發現有效 Session Token，嘗試恢復會話');
+                        await verifySessionToken(SESSION_TOKEN);
+                    } else {
+                        addDebugInfo('無有效登入狀態，顯示登入選項');
+                        showLoginOptions();
                     }
                 }
-        
-                if (!liff.isLoggedIn()) {
-                    // 先設定重定向標記，跳轉 LIFF login
-                    localStorage.setItem('loginRedirect', 'true');
-                    liff.login({ redirectUri: window.location.origin + window.location.pathname });
-                    return; // 會重導頁面，之後再拿 token
-                }
-        
-                // 登入成功且重定向回來，拿最新 token
-                freshIdToken = liff.getIDToken();
-                if (!freshIdToken || isTokenExpired(freshIdToken)) {
-                    addDebugInfo('token 無效或過期，請重新登入');
-                    liff.logout();
-                    localStorage.setItem('loginRedirect', 'true');
-                    liff.login({ redirectUri: window.location.origin + window.location.pathname });
-                    return;
-                }
-        
-                ID_TOKEN = freshIdToken;
-                addDebugInfo('拿到最新 idToken，長度=' + ID_TOKEN.length);
-        
-                // ---------- 驗證 token ----------
-                await verifyIdToken(ID_TOKEN);
-        
             } catch (error) {
                 console.error('初始化錯誤:', error);
                 addDebugInfo('初始化錯誤: ' + error.message);
@@ -642,25 +569,21 @@
             }
         }
 
-
-
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
             try {
-                addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0,20)+'...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0,20)+'...' : null}`);
-                
+                addDebugInfo(`發送驗證請求: idToken=${idToken ? idToken.substring(0, 20) + '...' : null}, sessionToken=${sessionToken ? sessionToken.substring(0, 20) + '...' : null}`);
+
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idToken, sessionToken })
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`伺服器錯誤: ${response.status}`);
                 }
-                
+
                 const data = await response.json();
                 addDebugInfo('伺服器回應: ' + JSON.stringify(data));
                 return data;
@@ -672,13 +595,13 @@
 
         async function verifyIdToken(idToken) {
             const result = await verifyToken(idToken, null);
-            
+
             if (!result) {
                 showStatus('伺服器無回應，請稍後重試', 'error');
                 showLoginOptions();
                 return;
             }
-            
+
             switch (result.status) {
                 case 'ok':
                     addDebugInfo('ID Token 驗證成功');
@@ -688,7 +611,6 @@
                         userId: result.userId
                     });
                     break;
-                    
                 case 'needsignup':
                     addDebugInfo('需要註冊');
                     showStatus('請填寫註冊資訊', 'warning');
@@ -698,17 +620,44 @@
                         needsSignup: true
                     });
                     break;
-                    
                 case 'error':
                     addDebugInfo('伺服器錯誤: ' + result.message);
                     showStatus('驗證失敗: ' + (result.message || '未知錯誤'), 'error');
                     showLoginOptions();
                     break;
-                    
                 default:
                     addDebugInfo('未知回應狀態: ' + result.status);
                     showStatus('驗證失敗，請重新登入', 'error');
                     showLoginOptions();
+            }
+        }
+
+        async function verifySessionToken(sessionToken) {
+            const result = await verifyToken(null, sessionToken);
+
+            if (!result) {
+                showStatus('伺服器無回應，請稍後重試', 'error');
+                showLoginOptions();
+                return;
+            }
+
+            switch (result.status) {
+                case 'ok':
+                    addDebugInfo('Session Token 驗證成功');
+                    renderUserInterface({
+                        displayName: result.displayName,
+                        userId: result.userId
+                    });
+                    break;
+                case 'needsignup':
+                case 'error':
+                default:
+                    addDebugInfo('Session Token 驗證失敗: ' + result.status);
+                    // Session 無效，清除並顯示登入選項
+                    localStorage.removeItem('sessionToken');
+                    SESSION_TOKEN = null;
+                    showLoginOptions();
+                    break;
             }
         }
 
@@ -725,12 +674,12 @@
             document.getElementById('display-name').textContent = profile.displayName || '用戶';
             document.getElementById('user-id').textContent = profile.userId || '';
             document.getElementById('lineUserId').value = profile.userId || '';
-            
+
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('checkin-form').style.display = 'block';
             document.getElementById('instructions').style.display = 'none';
-            
+
             if (profile.needsSignup) {
                 showStatus('請先填寫個人資料完成註冊', 'warning');
             } else {
@@ -746,22 +695,17 @@
             const submitBtn = document.getElementById('submit-btn');
             toggleLoader('submit', true);
             showStatus('正在提交表單...');
-            
+
             try {
-                const payload = Object.assign({}, formData, {
-                    sessionToken: SESSION_TOKEN
-                });
-                
+                const payload = Object.assign({}, formData, { sessionToken: SESSION_TOKEN });
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.status === 'ok') {
                     showStatus('表單提交成功！', 'success');
                     document.getElementById('checkinForm').reset();
@@ -786,7 +730,7 @@
         // ---------- 事件監聽器設置 ----------
         function setupEventListeners() {
             // 表單提交
-            document.getElementById('checkinForm').addEventListener('submit', function(e) {
+            document.getElementById('checkinForm').addEventListener('submit', function (e) {
                 e.preventDefault();
                 const formData = {
                     timestamp: new Date().toLocaleString('zh-TW'),
@@ -799,23 +743,23 @@
                 };
                 submitCheckinForm(formData);
             });
-            
+
             // 登入按鈕
-            document.getElementById('manual-login-btn').addEventListener('click', async function() {
+            document.getElementById('manual-login-btn').addEventListener('click', async function () {
                 addDebugInfo('手動登入按鈕點擊');
                 toggleLoader('login', true);
-                
+
                 try {
                     if (!LIFF_INITIALIZED) {
                         addDebugInfo('LIFF 尚未初始化，正在初始化...');
                         await liff.init({ liffId: CONFIG.LIFF_ID });
                         LIFF_INITIALIZED = true;
                     }
-                    
-                    // 設置重定向標記，以便返回時識別
+
+                    // 設置重定向標記
                     localStorage.setItem('loginRedirect', 'true');
                     liff.login({
-                        redirectUri: window.location.origin + window.location.pathname
+                        redirectUri: window.location.origin + window.location.pathname + '?loginRedirect=true'
                     });
                 } catch (error) {
                     addDebugInfo('登入錯誤: ' + error.message);
@@ -823,15 +767,14 @@
                     toggleLoader('login', false);
                 }
             });
-            
+
             // 清除Session按鈕
             document.getElementById('clear-session-btn').addEventListener('click', clearSession);
-            
+
             // 除錯信息切換
-            document.getElementById('toggle-debug').addEventListener('click', function() {
+            document.getElementById('toggle-debug').addEventListener('click', function () {
                 const debugInfo = document.getElementById('debug-info');
                 const toggleBtn = document.getElementById('toggle-debug');
-                
                 if (debugInfo.style.display === 'block') {
                     debugInfo.style.display = 'none';
                     toggleBtn.textContent = '顯示除錯資訊';
@@ -845,13 +788,13 @@
         // ---------- 初始化應用 ----------
         document.addEventListener('DOMContentLoaded', async () => {
             setupEventListeners();
-            
+
             if (typeof liff === 'undefined') {
                 showStatus('LIFF SDK 加載失敗，請刷新頁面', 'error');
                 showLoginOptions();
                 return;
             }
-            
+
             try {
                 await initializeApp();
             } catch (err) {
@@ -862,5 +805,5 @@
         });
     </script>
 </body>
-</html>
 
+</html>
