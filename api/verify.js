@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     // ---------- 情況2：註冊流程 (signup === true) ----------
     if (signup === true) {
       console.log('[註冊] 開始處理註冊流程');
-      const { name, email, phone, displayName, message } = body;
+      const { name, email, phone, job, unit, script, displayName } = body;
 
       // 註冊必須要有 idToken 來綁定 LINE 用戶
       if (!idToken) {
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
         });
       }
 
-      // 創建新用戶 - 使用您的資料表欄位
+      // 創建新用戶 - 使用您的完整資料表欄位
       console.log('[註冊] 創建新用戶');
       
       const insertPayload = {
@@ -160,13 +160,12 @@ export default async function handler(req, res) {
         display_name: resolvedDisplayName,
         電子信箱: email || null,
         電話: phone || null,
-        職稱: null, // 可以之後讓用戶填寫
+        職稱: job || null,
+        單位: unit || null,
         管理員: "一般用戶", 
+        申請備註: script || null,
         創建時間: new Date().toISOString()
       };
-
-      // 如果有補充訊息，您可能需要新增一個欄位來儲存（例如 "備註"）
-      // if (message) insertPayload.備註 = message;
 
       console.log('[註冊] 準備插入資料:', insertPayload);
 
