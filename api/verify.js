@@ -48,40 +48,110 @@ export default async function handler(req, res) {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    const { idToken, signup } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // 解析請求
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { idToken, sessionToken, signup } = body;
 
-    let userId = null;
-    let displayName = null;
-    let userData = null;
+    // ---------- 如果是註冊提交 (signup === true) ----------
+    if (signup) {
+      // 前端應該送來表單欄位 (name,email,phone,displayName, etc.)
+      const { name, email, phone, displayName, lineUserId, message } = body;
 
-    if (!signup) {
-      // 非註冊模式 → 必須有 idToken
-      if (!idToken) return res.status(400).json({ status: "error", message: "缺少 idToken" });
+      // 取得 userId（優先用 idToken，若沒有嘗試用 sessionToken）
+      let userId = null;
+      let resolvedDisplayName = displayName || name || null;
 
-      // 驗證 LINE idToken
-      const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
-      userId = profile.sub;
-      displayName = profile.name || "用戶";
+      if (idToken) {
+        const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
+        userId = profile.sub;
+        resolvedDisplayName = resolvedDisplayName || profile.name || null;
+      } else if (sessionToken) {
+        try {
+          const decoded = jwt.verify(sessionToken, JWT_SECRET);
+          userId = decoded.userId;
+          resolvedDisplayName = resolvedDisplayName || decoded.displayName || null;
+        } catch (e) {
+          // 無效 sessionToken
+          return res.status(401).json({ status: "error", message: "Invalid sessionToken" });
+        }
+      } else {
+        // 若沒有任何 token，拒絕（你也可以改成允許匿名註冊）
+        return res.status(400).json({ status: "error", message: "缺少 idToken 或 sessionToken（signup）" });
+      }
 
-      // 查詢 Supabase
-      const { data, error } = await supabase
+      // 檢查是否已存在 (避免重複建立)
+      const { data: existing, error: selErr } = await supabase
         .from("users")
         .select("*")
         .eq("user_id", userId)
         .single();
 
-      if (error && error.code !== "PGRST116") {
-        console.error("[handler] Supabase 查詢錯誤", error.message);
+      if (selErr && selErr.code !== "PGRST116") {
+        console.error("[handler] Supabase 查詢錯誤", selErr.message);
         return res.status(500).json({ status: "error", message: "Database query error" });
       }
 
-      userData = data;
+      if (existing) {
+        // 已存在 → 直接回傳 ok 並產生 sessionToken
+        const token = createSessionToken(userId, { displayName: existing.display_name || resolvedDisplayName });
+        return res.status(200).json({
+          status: "ok",
+          displayName: existing.display_name || resolvedDisplayName,
+          sessionToken: token
+        });
+      }
+
+      // 插入新使用者（依照你的 users 欄位調整）
+      const insertPayload = {
+        user_id: userId,
+        display_name: resolvedDisplayName || null,
+        name: name || null,
+        email: email || null,
+        phone: phone || null,
+        role: "user", // 預設角色，必要時調整
+        created_at: new Date().toISOString()
+      };
+
+      const { data: inserted, error: insErr } = await supabase
+        .from("users")
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (insErr) {
+        console.error("[handler] Supabase 插入錯誤", insErr.message);
+        return res.status(500).json({ status: "error", message: "Failed to create user", error: insErr.message });
+      }
+
+      // 建立 sessionToken 並回傳
+      const newToken = createSessionToken(userId, { displayName: inserted.display_name || resolvedDisplayName });
+      return res.status(200).json({
+        status: "ok",
+        displayName: inserted.display_name || resolvedDisplayName,
+        sessionToken: newToken
+      });
     }
 
-    // 判斷是否需要註冊
-    const needsSignup = signup || !userData;
+    // ---------- 非註冊流程：驗證 idToken 並檢查使用者是否存在 ----------
+    // 非 signup 時，必須傳 idToken（或你可以擴充同時支援 sessionToken）
+    if (!idToken) return res.status(400).json({ status: "error", message: "缺少 idToken" });
 
-    // 生成 sessionToken（如果 userId 可用）
+    const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
+    const userId = profile.sub;
+    const displayName = profile.name || "用戶";
+
+    const { data: userData, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    if (error && error.code !== "PGRST116") {
+      console.error("[handler] Supabase 查詢錯誤", error.message);
+      return res.status(500).json({ status: "error", message: "Database query error" });
+    }
+
+    const needsSignup = !userData;
     const newSessionToken = userId ? createSessionToken(userId, { displayName }) : null;
 
     res.status(200).json({
