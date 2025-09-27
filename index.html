@@ -441,35 +441,7 @@
             }
         }
 
-        // ---------- 強制取得新的 idToken ----------
-        async function forceGetNewIdToken() {
-            try {
-                addDebugInfo('準備強制取得新的 idToken...');
-                
-                // 先完全登出清除所有快取
-                if (liff.isLoggedIn()) {
-                    addDebugInfo('執行 liff.logout() 清除舊快取');
-                    liff.logout();
-                }
-                
-                // 清除瀏覽器相關快取
-                localStorage.removeItem('liffState');
-                sessionStorage.clear();
-                
-                // 等待一下確保登出完成
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // 重新登入取得新 token
-                addDebugInfo('重新登入以取得新的 idToken');
-                liff.login();
-                
-            } catch (err) {
-                addDebugInfo('強制取得新 idToken 失敗: ' + err.message);
-                showLoginOptions();
-            }
-        }
-
-        // ---------- 主要應用流程：強制檢查並取得新 idToken ----------
+        // ---------- 主要應用流程：完全不信任快取的 idToken ----------
         async function startApp() {
             try {
                 showStatus('應用初始化中...');
@@ -478,62 +450,88 @@
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 addDebugInfo('LIFF 初始化成功');
 
-                // 檢查登入狀態
-                if (liff.isLoggedIn()) {
+                // 檢查是否為登入回調（有新的 idToken）
+                const urlParams = new URLSearchParams(window.location.search);
+                const isLoginCallback = urlParams.has('liff.state') || urlParams.has('code');
+                
+                if (isLoginCallback) {
+                    addDebugInfo('檢測到登入回調，應該有新的 idToken');
+                    // 清理 URL 參數
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+
+                // 如果已登入但不是登入回調，表示可能是舊 token，直接重新登入
+                if (liff.isLoggedIn() && !isLoginCallback) {
+                    addDebugInfo('檢測到舊的登入狀態，強制重新登入以取得新 token');
+                    await forceLogin();
+                    return;
+                }
+
+                // 如果是登入回調，嘗試取得新 token
+                if (liff.isLoggedIn() && isLoginCallback) {
                     ID_TOKEN = liff.getIDToken();
                     const tokenPrefix = ID_TOKEN ? ID_TOKEN.substring(0, 30) + '...' : 'null';
-                    addDebugInfo(`取得 idToken: ${tokenPrefix}, 長度: ${ID_TOKEN ? ID_TOKEN.length : 0}`);
+                    addDebugInfo(`登入回調取得新 idToken: ${tokenPrefix}, 長度: ${ID_TOKEN ? ID_TOKEN.length : 0}`);
                     
-                    if (!ID_TOKEN) {
-                        addDebugInfo('無法取得 idToken，強制重新登入');
-                        await forceGetNewIdToken();
+                    if (ID_TOKEN) {
+                        await verifyWithBackend();
                         return;
                     }
-                    
-                    if (isTokenExpired(ID_TOKEN)) {
-                        addDebugInfo('❌ idToken 已過期，強制重新登入取得新 token');
-                        await forceGetNewIdToken();
-                        return;
-                    }
-                    
-                    // 即使看起來有效，也檢查是否為舊 token（檢查後端驗證失敗）
-                    addDebugInfo('idToken 看起來有效，嘗試後端驗證...');
-                    const backendResult = await verifyWithBackend();
-                    
-                    // 如果後端說 token 無效，強制取得新的
-                    if (!backendResult) {
-                        addDebugInfo('後端驗證失敗，可能是舊 token，強制重新登入');
-                        await forceGetNewIdToken();
-                        return;
-                    }
-                } else {
-                    // 沒有登入狀態，先檢查是否有 sessionToken
-                    if (SESSION_TOKEN) {
-                        addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
-                        const result = await verifyTokenAtServer(null, SESSION_TOKEN);
-                        
-                        if (result && result.status === 'ok') {
-                            addDebugInfo('sessionToken 驗證成功');
-                            renderUserInterface({
-                                displayName: result.displayName,
-                                userId: result.userId
-                            });
-                            return;
-                        } else {
-                            addDebugInfo('sessionToken 無效，清除本機資料');
-                            localStorage.removeItem('sessionToken');
-                            SESSION_TOKEN = null;
-                        }
-                    }
-
-                    // 都沒有有效登入，顯示登入選項
-                    addDebugInfo('無有效登入狀態，顯示登入選項');
-                    showLoginOptions();
                 }
+
+                // 沒有登入狀態，先檢查 sessionToken
+                if (SESSION_TOKEN) {
+                    addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
+                    const result = await verifyTokenAtServer(null, SESSION_TOKEN);
+                    
+                    if (result && result.status === 'ok') {
+                        addDebugInfo('sessionToken 驗證成功');
+                        renderUserInterface({
+                            displayName: result.displayName,
+                            userId: result.userId
+                        });
+                        return;
+                    } else {
+                        addDebugInfo('sessionToken 無效，清除本機資料');
+                        localStorage.removeItem('sessionToken');
+                        SESSION_TOKEN = null;
+                    }
+                }
+
+                // 都沒有有效狀態，顯示登入選項
+                addDebugInfo('無有效登入狀態，顯示登入選項');
+                showLoginOptions();
 
             } catch (e) {
                 addDebugInfo('startApp 發生錯誤: ' + e.message);
                 showStatus('系統錯誤，請稍後重試', 'error');
+                showLoginOptions();
+            }
+        }
+
+        // ---------- 強制重新登入 ----------
+        async function forceLogin() {
+            try {
+                addDebugInfo('開始強制重新登入流程...');
+                
+                // 完全清除登入狀態
+                if (liff.isLoggedIn()) {
+                    addDebugInfo('執行 liff.logout() 清除舊登入狀態');
+                    liff.logout();
+                }
+                
+                // 清除所有可能的快取
+                localStorage.removeItem('liffState');
+                sessionStorage.clear();
+                
+                // 等待確保清除完成
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                addDebugInfo('強制重新登入...');
+                liff.login();
+                
+            } catch (err) {
+                addDebugInfo('強制登入失敗: ' + err.message);
                 showLoginOptions();
             }
         }
@@ -730,10 +728,30 @@
             });
 
             // 登入按鈕
-            document.getElementById('manual-login-btn').addEventListener('click', function() {
+            document.getElementById('manual-login-btn').addEventListener('click', async function() {
                 addDebugInfo('手動登入按鈕點擊');
                 toggleLoader('login', true);
-                liff.login();
+                
+                try {
+                    // 強制清除所有登入狀態，確保拿到新 token
+                    if (liff.isLoggedIn()) {
+                        addDebugInfo('清除現有登入狀態');
+                        liff.logout();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                    
+                    // 清除快取
+                    localStorage.removeItem('liffState');
+                    sessionStorage.clear();
+                    
+                    addDebugInfo('執行強制重新登入');
+                    liff.login();
+                    
+                } catch (error) {
+                    addDebugInfo('登入錯誤: ' + error.message);
+                    showStatus('登入失敗: ' + error.message, 'error');
+                    toggleLoader('login', false);
+                }
             });
 
             // 清除Session按鈕
