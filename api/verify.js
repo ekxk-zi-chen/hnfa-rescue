@@ -6,10 +6,21 @@ import fetch from "node-fetch"; // node 需要 fetch
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
   console.log("[verifyIdToken] 開始驗證 idToken", { idToken: idToken?.substring(0, 20) + '...', clientId });
-  const url = `https://api.line.me/oauth2/v2.1/verify?id_token=${idToken}&client_id=${clientId}`;
-  const res = await fetch(url);
+  
+  const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `id_token=${encodeURIComponent(idToken)}&client_id=${clientId}`
+  });
+  
   console.log("[verifyIdToken] LINE verify 回應狀態", res.status);
-  if (!res.ok) throw new Error("idToken 驗證失敗");
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.log("[verifyIdToken] LINE verify 錯誤", errorText);
+    throw new Error("idToken 驗證失敗");
+  }
   const data = await res.json();
   console.log("[verifyIdToken] LINE verify 回傳內容", data);
   if (!data.sub) throw new Error("idToken 驗證失敗");
