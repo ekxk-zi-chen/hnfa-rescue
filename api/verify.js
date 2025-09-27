@@ -22,10 +22,11 @@ async function verifyIdToken(idToken, clientId) {
 }
 
 // ------------------- 建立自己的 sessionToken（JWT） -------------------
-function createSessionToken(userId) {
+function createSessionToken(userId, payload = {}) {
   const secret = process.env.JWT_SECRET;
-  return jwt.sign({ userId }, secret, { expiresIn: "1h" });
+  return jwt.sign({ userId, ...payload }, secret, { expiresIn: "1h" });
 }
+
 
 // ------------------- 主 handler -------------------
 export default async function handler(req, res) {
@@ -71,9 +72,12 @@ export default async function handler(req, res) {
     
     let needsSignup = false;
     if (!userData) {
-      // 使用者不存在 → 需要註冊
       needsSignup = true;
+    } else {
+      // 確保 user_id 對應正確
+      console.log("找到 userData:", userData.user_id);
     }
+
     
     // 建立 sessionToken，payload 可以只放 displayName
     const newSessionToken = createSessionToken(userId, { displayName: profile.name || null });
