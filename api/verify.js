@@ -61,38 +61,54 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const { idToken, sessionToken, signup } = body;
 
+    console.log(`[${new Date().toISOString()}] 收到請求:`, {
+      hasIdToken: !!idToken,
+      hasSessionToken: !!sessionToken,
+      isSignup: signup,
+      bodyKeys: Object.keys(body)
+    });
+
     // ---------- 情況1：純 sessionToken 驗證（快速登入檢查） ----------
     if (!idToken && sessionToken && !signup) {
+      console.log('[sessionToken驗證] 開始驗證純 sessionToken');
       const decoded = verifySessionToken(sessionToken, JWT_SECRET);
       if (!decoded || !decoded.userId) {
+        console.log('[sessionToken驗證] sessionToken 無效');
         return res.status(401).json({ status: "error", message: "Invalid sessionToken" });
       }
 
-      // 檢查用戶是否還存在
+      // 檢查用戶是否還存在 - 先嘗試查詢所有可能的欄位
       const { data: userData, error } = await supabase
         .from("users")
         .select("*")
         .eq("user_id", decoded.userId)
         .single();
 
+      console.log('[sessionToken驗證] 資料庫查詢結果:', { userData, error });
+
       if (error && error.code !== "PGRST116") {
-        console.error("[handler] Supabase 查詢錯誤", error);
+        console.error("[sessionToken驗證] Supabase 查詢錯誤", error);
         return res.status(500).json({ status: "error", message: "Database query error" });
       }
 
       if (!userData) {
+        console.log('[sessionToken驗證] 用戶不存在');
         return res.status(404).json({ status: "error", message: "User not found" });
       }
 
+      // 使用實際存在的欄位名稱
+      const displayName = userData.display_name || userData.姓名 || userData.name || decoded.displayName || "用戶";
+      
       return res.status(200).json({
         status: "ok",
-        displayName: userData.display_name || decoded.displayName || "用戶",
+        displayName: displayName,
         userId: decoded.userId
       });
     }
 
     // ---------- 情況2：註冊流程 (signup === true) ----------
     if (signup === true) {
+      console.log('[註冊] 開始處理註冊流程');
       const { name, email, phone, displayName, message } = body;
 
       // 註冊必須要有 idToken 來綁定 LINE 用戶
@@ -108,6 +124,8 @@ export default async function handler(req, res) {
       const userId = profile.sub;
       const resolvedDisplayName = displayName || name || profile.name || "用戶";
 
+      console.log('[註冊] LINE 用戶資訊:', { userId, resolvedDisplayName });
+
       // 檢查是否已存在
       const { data: existing, error: selErr } = await supabase
         .from("users")
@@ -116,36 +134,59 @@ export default async function handler(req, res) {
         .single();
 
       if (selErr && selErr.code !== "PGRST116") {
-        console.error("[handler] Supabase 查詢錯誤", selErr);
+        console.error("[註冊] Supabase 查詢錯誤", selErr);
         return res.status(500).json({ status: "error", message: "Database query error" });
       }
 
       if (existing) {
         // 已經註冊過了，直接返回成功
-        const token = createSessionToken(userId, { displayName: existing.display_name || resolvedDisplayName });
+        console.log('[註冊] 用戶已存在，直接登入');
+        const displayName = existing.display_name || existing.姓名 || existing.name || resolvedDisplayName;
+        const token = createSessionToken(userId, { displayName });
         return res.status(200).json({
           status: "ok",
-          displayName: existing.display_name || resolvedDisplayName,
+          displayName: displayName,
           sessionToken: token,
           message: "用戶已存在，登入成功"
         });
       }
 
-      // 創建新用戶
+      // 創建新用戶 - 根據實際資料表結構調整欄位名稱
+      console.log('[註冊] 創建新用戶');
+      
+      // 基本欄位（根據您的資料表結構調整）
       const insertPayload = {
         user_id: userId,
-        display_name: resolvedDisplayName,
-        姓名: name || null,
+        姓名: name || resolvedDisplayName,
         電子信箱: email || null,
         電話: phone || null,
         管理員: "一般用戶",
         創建時間: new Date().toISOString(),
       };
 
-      // 如果有補充說明，也可以加入（需要確認資料表有此欄位）
+      // 如果資料表有 display_name 欄位就加入，沒有就跳過
+      // 您需要確認實際的資料表欄位名稱
+      try {
+        // 先嘗試查詢資料表結構
+        const { data: tableInfo, error: tableError } = await supabase
+          .from("users")
+          .select("*")
+          .limit(1);
+        
+        if (!tableError && tableInfo) {
+          console.log('[註冊] 資料表結構確認成功');
+          // 如果有 display_name 欄位就加入
+          // 這裡您可能需要根據實際情況調整
+        }
+      } catch (e) {
+        console.log('[註冊] 無法確認資料表結構，使用預設欄位');
+      }
+
       if (message) {
         insertPayload.備註 = message;
       }
+
+      console.log('[註冊] 準備插入資料:', insertPayload);
 
       const { data: inserted, error: insErr } = await supabase
         .from("users")
@@ -154,19 +195,24 @@ export default async function handler(req, res) {
         .single();
 
       if (insErr) {
-        console.error("[handler] Supabase 插入錯誤", insErr);
+        console.error("[註冊] Supabase 插入錯誤", insErr);
         return res.status(500).json({ 
           status: "error", 
           message: "Failed to create user", 
-          error: insErr.message || insErr 
+          error: insErr.message || insErr.code || String(insErr),
+          details: insErr.details || null,
+          hint: insErr.hint || null
         });
       }
 
+      console.log('[註冊] 用戶創建成功:', inserted);
+
       // 註冊成功，建立 sessionToken
-      const newToken = createSessionToken(userId, { displayName: inserted.display_name || resolvedDisplayName });
+      const finalDisplayName = inserted.姓名 || resolvedDisplayName;
+      const newToken = createSessionToken(userId, { displayName: finalDisplayName });
       return res.status(200).json({
         status: "ok",
-        displayName: inserted.display_name || resolvedDisplayName,
+        displayName: finalDisplayName,
         sessionToken: newToken,
         message: "註冊成功"
       });
@@ -177,10 +223,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ status: "error", message: "缺少 idToken" });
     }
 
+    console.log('[驗證] 開始一般驗證流程');
+
     // 驗證 idToken
     const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
     const userId = profile.sub;
     const displayName = profile.name || "用戶";
+
+    console.log('[驗證] LINE 用戶資訊:', { userId, displayName });
 
     // 檢查用戶是否存在
     const { data: userData, error } = await supabase
@@ -190,12 +240,13 @@ export default async function handler(req, res) {
       .single();
 
     if (error && error.code !== "PGRST116") {
-      console.error("[handler] Supabase 查詢錯誤", error);
+      console.error("[驗證] Supabase 查詢錯誤", error);
       return res.status(500).json({ status: "error", message: "Database query error" });
     }
 
     // 用戶不存在 → 需要註冊
     if (!userData) {
+      console.log('[驗證] 用戶不存在，需要註冊');
       // 建立一個臨時的 sessionToken（包含 LINE 資訊，供註冊使用）
       const tempSessionToken = createSessionToken(userId, { 
         displayName, 
@@ -210,13 +261,15 @@ export default async function handler(req, res) {
     }
 
     // 用戶存在 → 直接登入成功
+    console.log('[驗證] 用戶存在，登入成功');
+    const finalDisplayName = userData.display_name || userData.姓名 || userData.name || displayName;
     const sessionTokenForLogin = createSessionToken(userId, { 
-      displayName: userData.display_name || displayName 
+      displayName: finalDisplayName
     });
     
     return res.status(200).json({
       status: "ok",
-      displayName: userData.display_name || displayName,
+      displayName: finalDisplayName,
       sessionToken: sessionTokenForLogin
     });
 
@@ -224,7 +277,8 @@ export default async function handler(req, res) {
     console.error("[handler] 錯誤:", err);
     res.status(500).json({ 
       status: "error", 
-      message: err.message || "Internal server error" 
+      message: err.message || "Internal server error",
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 }
