@@ -564,6 +564,38 @@
             }
         }
 
+        // ---------- 直接呼叫 LINE API 驗證 idToken ----------
+        async function testIdTokenWithLineAPI(idToken) {
+            try {
+                addDebugInfo('開始直接呼叫 LINE API 驗證 idToken...');
+                
+                // LINE 官方的 idToken 驗證端點
+                const response = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `id_token=${encodeURIComponent(idToken)}&client_id=${CONFIG.LIFF_ID}`
+                });
+                
+                addDebugInfo(`LINE API 回應狀態: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addDebugInfo('LINE API 驗證成功: ' + JSON.stringify(data));
+                    return { success: true, data };
+                } else {
+                    const errorText = await response.text();
+                    addDebugInfo(`LINE API 驗證失敗: ${response.status} - ${errorText}`);
+                    return { success: false, status: response.status, error: errorText };
+                }
+                
+            } catch (error) {
+                addDebugInfo('LINE API 呼叫錯誤: ' + error.message);
+                return { success: false, error: error.message };
+            }
+        }
+
         async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
             
@@ -579,14 +611,25 @@
                 } catch (e) {
                     addDebugInfo('解碼 idToken 失敗: ' + e.message);
                 }
+                
+                // 先用 LINE 官方 API 驗證這個 token
+                addDebugInfo('=== 開始 LINE 官方 API 驗證測試 ===');
+                const lineApiResult = await testIdTokenWithLineAPI(ID_TOKEN);
+                if (lineApiResult.success) {
+                    addDebugInfo('✅ LINE 官方 API 驗證成功！idToken 是有效的');
+                } else {
+                    addDebugInfo('❌ LINE 官方 API 驗證失敗！idToken 有問題');
+                    addDebugInfo(`錯誤詳情: ${lineApiResult.error || lineApiResult.status}`);
+                }
+                addDebugInfo('=== LINE 官方 API 驗證測試結束 ===');
             }
             
             const verifyResult = await verifyTokenAtServer(ID_TOKEN, null);
 
             if (!verifyResult || verifyResult.status === 'error') {
-                addDebugInfo('idToken 後端驗證失敗，可能是後端設定問題');
-                showStatus('驗證失敗，可能是伺服器設定問題', 'error');
-                return false; // 返回失敗狀態
+                addDebugInfo('自己後端驗證失敗');
+                showStatus('後端驗證失敗', 'error');
+                return false;
             }
 
             if (verifyResult.status === 'ok') {
@@ -600,7 +643,7 @@
                     displayName: verifyResult.displayName,
                     userId: verifyResult.userId
                 });
-                return true; // 返回成功狀態
+                return true;
             }
 
             if (verifyResult.status === 'needsignup') {
@@ -615,10 +658,10 @@
                     userId: verifyResult.userId,
                     needsSignup: true
                 });
-                return true; // 返回成功狀態
+                return true;
             }
             
-            return false; // 其他情況視為失敗
+            return false;
         }
 
         // ---------- 後端驗證函數 ----------
