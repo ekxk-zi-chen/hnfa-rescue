@@ -26,6 +26,15 @@ function createSessionToken(userId, payload = {}) {
   return jwt.sign({ userId, ...payload }, secret, { expiresIn: "1h" });
 }
 
+// ------------------- 驗證 sessionToken -------------------
+function verifySessionToken(sessionToken, secret) {
+  try {
+    return jwt.verify(sessionToken, secret);
+  } catch (e) {
+    return null;
+  }
+}
+
 // ------------------- 主 handler -------------------
 export default async function handler(req, res) {
   // CORS
@@ -52,34 +61,54 @@ export default async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const { idToken, sessionToken, signup } = body;
 
-    // ---------- 如果是註冊提交 (signup === true) ----------
-    if (signup) {
-      // 前端應該送來表單欄位 (name,email,phone,displayName, etc.)
-      const { name, email, phone, displayName, lineUserId, message } = body;
-
-      // 取得 userId（優先用 idToken，若沒有嘗試用 sessionToken）
-      let userId = null;
-      let resolvedDisplayName = displayName || name || null;
-
-      if (idToken) {
-        const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
-        userId = profile.sub;
-        resolvedDisplayName = resolvedDisplayName || profile.name || null;
-      } else if (sessionToken) {
-        try {
-          const decoded = jwt.verify(sessionToken, JWT_SECRET);
-          userId = decoded.userId;
-          resolvedDisplayName = resolvedDisplayName || decoded.displayName || null;
-        } catch (e) {
-          // 無效 sessionToken
-          return res.status(401).json({ status: "error", message: "Invalid sessionToken" });
-        }
-      } else {
-        // 若沒有任何 token，拒絕（你也可以改成允許匿名註冊）
-        return res.status(400).json({ status: "error", message: "缺少 idToken 或 sessionToken（signup）" });
+    // ---------- 情況1：純 sessionToken 驗證（快速登入檢查） ----------
+    if (!idToken && sessionToken && !signup) {
+      const decoded = verifySessionToken(sessionToken, JWT_SECRET);
+      if (!decoded || !decoded.userId) {
+        return res.status(401).json({ status: "error", message: "Invalid sessionToken" });
       }
 
-      // 檢查是否已存在 (避免重複建立)
+      // 檢查用戶是否還存在
+      const { data: userData, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("user_id", decoded.userId)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("[handler] Supabase 查詢錯誤", error);
+        return res.status(500).json({ status: "error", message: "Database query error" });
+      }
+
+      if (!userData) {
+        return res.status(404).json({ status: "error", message: "User not found" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        displayName: userData.display_name || decoded.displayName || "用戶",
+        userId: decoded.userId
+      });
+    }
+
+    // ---------- 情況2：註冊流程 (signup === true) ----------
+    if (signup === true) {
+      const { name, email, phone, displayName, message } = body;
+
+      // 註冊必須要有 idToken 來綁定 LINE 用戶
+      if (!idToken) {
+        return res.status(400).json({ 
+          status: "error", 
+          message: "註冊需要 idToken" 
+        });
+      }
+
+      // 驗證 idToken 並取得 LINE 用戶資訊
+      const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
+      const userId = profile.sub;
+      const resolvedDisplayName = displayName || name || profile.name || "用戶";
+
+      // 檢查是否已存在
       const { data: existing, error: selErr } = await supabase
         .from("users")
         .select("*")
@@ -87,30 +116,36 @@ export default async function handler(req, res) {
         .single();
 
       if (selErr && selErr.code !== "PGRST116") {
-        console.error("[handler] Supabase 查詢錯誤", selErr.message);
+        console.error("[handler] Supabase 查詢錯誤", selErr);
         return res.status(500).json({ status: "error", message: "Database query error" });
       }
 
       if (existing) {
-        // 已存在 → 直接回傳 ok 並產生 sessionToken
+        // 已經註冊過了，直接返回成功
         const token = createSessionToken(userId, { displayName: existing.display_name || resolvedDisplayName });
         return res.status(200).json({
           status: "ok",
           displayName: existing.display_name || resolvedDisplayName,
-          sessionToken: token
+          sessionToken: token,
+          message: "用戶已存在，登入成功"
         });
       }
 
-      // 插入新使用者（依照你的 users 欄位調整）
+      // 創建新用戶
       const insertPayload = {
         user_id: userId,
-        display_name: resolvedDisplayName || null,
-        name: name || null,
-        email: email || null,
-        phone: phone || null,
-        role: "user", // 預設角色，必要時調整
-        created_at: new Date().toISOString()
+        display_name: resolvedDisplayName,
+        姓名: name || null,
+        電子信箱: email || null,
+        電話: phone || null,
+        管理員: "一般用戶",
+        創建時間: new Date().toISOString(),
       };
+
+      // 如果有補充說明，也可以加入（需要確認資料表有此欄位）
+      if (message) {
+        insertPayload.備註 = message;
+      }
 
       const { data: inserted, error: insErr } = await supabase
         .from("users")
@@ -119,27 +154,35 @@ export default async function handler(req, res) {
         .single();
 
       if (insErr) {
-        console.error("[handler] Supabase 插入錯誤", insErr.message);
-        return res.status(500).json({ status: "error", message: "Failed to create user", error: insErr.message });
+        console.error("[handler] Supabase 插入錯誤", insErr);
+        return res.status(500).json({ 
+          status: "error", 
+          message: "Failed to create user", 
+          error: insErr.message || insErr 
+        });
       }
 
-      // 建立 sessionToken 並回傳
+      // 註冊成功，建立 sessionToken
       const newToken = createSessionToken(userId, { displayName: inserted.display_name || resolvedDisplayName });
       return res.status(200).json({
         status: "ok",
         displayName: inserted.display_name || resolvedDisplayName,
-        sessionToken: newToken
+        sessionToken: newToken,
+        message: "註冊成功"
       });
     }
 
-    // ---------- 非註冊流程：驗證 idToken 並檢查使用者是否存在 ----------
-    // 非 signup 時，必須傳 idToken（或你可以擴充同時支援 sessionToken）
-    if (!idToken) return res.status(400).json({ status: "error", message: "缺少 idToken" });
+    // ---------- 情況3：一般驗證流程（檢查登入狀態） ----------
+    if (!idToken) {
+      return res.status(400).json({ status: "error", message: "缺少 idToken" });
+    }
 
+    // 驗證 idToken
     const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
     const userId = profile.sub;
     const displayName = profile.name || "用戶";
 
+    // 檢查用戶是否存在
     const { data: userData, error } = await supabase
       .from("users")
       .select("*")
@@ -147,21 +190,41 @@ export default async function handler(req, res) {
       .single();
 
     if (error && error.code !== "PGRST116") {
-      console.error("[handler] Supabase 查詢錯誤", error.message);
+      console.error("[handler] Supabase 查詢錯誤", error);
       return res.status(500).json({ status: "error", message: "Database query error" });
     }
 
-    const needsSignup = !userData;
-    const newSessionToken = userId ? createSessionToken(userId, { displayName }) : null;
+    // 用戶不存在 → 需要註冊
+    if (!userData) {
+      // 建立一個臨時的 sessionToken（包含 LINE 資訊，供註冊使用）
+      const tempSessionToken = createSessionToken(userId, { 
+        displayName, 
+        temporary: true 
+      });
+      
+      return res.status(200).json({
+        status: "needsignup",
+        displayName: displayName,
+        sessionToken: tempSessionToken
+      });
+    }
 
-    res.status(200).json({
-      status: needsSignup ? "needsignup" : "ok",
-      displayName: userData?.display_name || displayName,
-      sessionToken: newSessionToken
+    // 用戶存在 → 直接登入成功
+    const sessionTokenForLogin = createSessionToken(userId, { 
+      displayName: userData.display_name || displayName 
+    });
+    
+    return res.status(200).json({
+      status: "ok",
+      displayName: userData.display_name || displayName,
+      sessionToken: sessionTokenForLogin
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ status: "error", message: err.message });
+    console.error("[handler] 錯誤:", err);
+    res.status(500).json({ 
+      status: "error", 
+      message: err.message || "Internal server error" 
+    });
   }
 }
