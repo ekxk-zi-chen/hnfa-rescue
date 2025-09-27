@@ -509,12 +509,13 @@
                 showLoginOptions();
             }
         }
-        async function verifyWithBackend(signup = false) {
+        async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
 
-            const payload = signup 
-                ? { signup: true }  // 註冊模式
-                : { idToken: ID_TOKEN || null, sessionToken: SESSION_TOKEN || null };
+            const payload = {
+                idToken: ID_TOKEN || null,
+                sessionToken: SESSION_TOKEN || null
+            };
 
             addDebugInfo('發送驗證請求 payload: ' + JSON.stringify(payload));
 
@@ -534,15 +535,19 @@
 
                 // 處理不同狀態
                 if (data.status === 'ok') {
+                    // 用戶已存在，保存 sessionToken 並跳轉
                     localStorage.setItem('sessionToken', data.sessionToken);
                     SESSION_TOKEN = data.sessionToken;
 
-                    window.location.href = 'test.html';
+                    showStatus('驗證成功，即將進入系統...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'test.html';
+                    }, 1500);
                     return true;
                 }
 
                 if (data.status === 'needsignup') {
-                    // 儲存 sessionToken（若有）
+                    // 需要註冊，儲存臨時 sessionToken 並顯示註冊表單
                     if (data.sessionToken) {
                         localStorage.setItem('sessionToken', data.sessionToken);
                         SESSION_TOKEN = data.sessionToken;
@@ -555,6 +560,8 @@
                     return true;
                 }
 
+                // 其他錯誤狀況
+                showStatus('驗證失敗: ' + (data.message || '未知錯誤'), 'error');
                 return false;
 
             } catch (err) {
@@ -622,9 +629,28 @@
             document.getElementById('checkin-form').style.display = 'block';
 
             if (profile.needsSignup) {
-                showStatus('請先填寫個人資料完成註冊', 'warning');
+                showStatus('歡迎！請填寫個人資料完成註冊', 'warning');
+                
+                // 修改提交按鈕文字
+                const submitBtn = document.getElementById('submit-text');
+                if (submitBtn) {
+                    submitBtn.textContent = '完成註冊';
+                }
+                
+                // 修改表單標題或添加說明
+                const formTitle = document.querySelector('.form-container h3');
+                if (formTitle) {
+                    formTitle.textContent = '註冊資料填寫';
+                }
             } else {
                 showStatus('驗證成功，請填寫表單', 'success');
+                
+                // 恢復正常按鈕文字
+                const submitBtn = document.getElementById('submit-text');
+                if (submitBtn) {
+                    submitBtn.textContent = '送出表單';
+                }
+                
                 setTimeout(() => {
                     document.getElementById('status').style.display = 'none';
                 }, 3000);
@@ -637,22 +663,46 @@
             showStatus('正在提交表單...');
 
             try {
-                // 如果是註冊模式，必須要有 idToken（用來綁 LINE user）
+                // 註冊模式必須要有 idToken
                 if (isSignup && !ID_TOKEN) {
-                    showStatus('提交失敗：尚未取得 idToken，請重新登入', 'error');
-                    addDebugInfo('submit 被阻擋：isSignup && !ID_TOKEN');
-                    return;
+                    // 嘗試從 LIFF 重新獲取
+                    if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
+                        ID_TOKEN = liff.getIDToken();
+                        addDebugInfo('重新獲取 idToken: ' + (ID_TOKEN ? 'success' : 'failed'));
+                    }
+                    
+                    if (!ID_TOKEN) {
+                        showStatus('提交失敗：請重新登入以完成註冊', 'error');
+                        addDebugInfo('註冊失敗：缺少 idToken');
+                        setTimeout(() => {
+                            forceLogin();
+                        }, 2000);
+                        return;
+                    }
                 }
 
-                const payload = Object.assign({}, formData, {
+                // 建立提交資料
+                const payload = {
+                    // 表單資料
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    message: formData.message,
+                    displayName: formData.displayName,
+                    
+                    // 控制參數
                     signup: isSignup,
-                    // 若存在就帶 idToken（signup 時會用到）
-                    idToken: ID_TOKEN || null,
-                    // 若已登入、或後端回了 sessionToken，也帶 sessionToken
+                    
+                    // 認證資料
+                    idToken: isSignup ? ID_TOKEN : null, // 只有註冊時才需要 idToken
                     sessionToken: SESSION_TOKEN || null
-                });
+                };
 
-                addDebugInfo('送出註冊/表單 payload: ' + JSON.stringify(payload));
+                addDebugInfo('送出表單 payload: ' + JSON.stringify({
+                    ...payload,
+                    idToken: payload.idToken ? 'present' : 'null',
+                    sessionToken: payload.sessionToken ? 'present' : 'null'
+                }));
 
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
@@ -666,33 +716,41 @@
                 }
 
                 const data = await response.json();
+                addDebugInfo('表單提交回應: ' + JSON.stringify(data));
 
                 if (data.status === 'ok') {
-                    showStatus('表單提交成功！', 'success');
+                    showStatus(isSignup ? '註冊成功！' : '表單提交成功！', 'success');
                     document.getElementById('checkinForm').reset();
 
-                    // 如果後端回了 sessionToken（註冊成功或已存在 user），保存並進入系統
+                    // 保存新的 sessionToken
                     if (data.sessionToken) {
                         localStorage.setItem('sessionToken', data.sessionToken);
                         SESSION_TOKEN = data.sessionToken;
                     }
-                    // 例如跳轉到內頁
-                    window.location.href = 'test.html';
+
+                    // 跳轉到主系統
+                    setTimeout(() => {
+                        window.location.href = 'test.html';
+                    }, 1500);
+
                 } else if (data.status === 'needsignup') {
                     showStatus('請完成註冊表單', 'warning');
-                    // 確保 UI 保持在註冊狀態
-                    PROFILE = PROFILE || {};
-                    PROFILE.needsSignup = true;
-                    renderUserInterface({ displayName: data.displayName || '新用戶', needsSignup: true });
+                    renderUserInterface({ 
+                        displayName: data.displayName || '新用戶', 
+                        needsSignup: true 
+                    });
                 } else {
                     showStatus('提交失敗: ' + (data.message || '未知錯誤'), 'error');
                 }
+
             } catch (error) {
                 showStatus('提交失敗，請稍後再試', 'error');
                 addDebugInfo('提交錯誤: ' + error.message);
             } finally {
                 toggleLoader('submit', false);
-                setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 5000);
+                setTimeout(() => { 
+                    document.getElementById('status').style.display = 'none'; 
+                }, 5000);
             }
         }
 
