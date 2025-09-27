@@ -318,12 +318,14 @@
                 <span class="status-icon">⏳</span>
                 <span id="status-text">應用初始化中...</span>
             </div>
+
             <div id="user-info" class="user-info" style="display: none;">
                 <h3>用戶資訊</h3>
                 <p>LINE名稱：<span id="display-name"></span></p>
                 <p>用戶ID：<span id="user-id"></span></p>
                 <div class="session-controls">
                     <button id="clear-session-btn">清除登入狀態</button>
+                    <button id="force-refresh-btn">強制刷新頁面</button>
                 </div>
             </div>
             <div id="login-section" style="display: none;">
@@ -405,22 +407,32 @@
                     liff.logout();
                     addDebugInfo('已呼叫 liff.logout() 清除 SDK token');
                 }
-
-                // 清掉 localStorage
+                
+                // 清掉所有 localStorage
                 localStorage.removeItem('sessionToken');
                 localStorage.removeItem('loginRedirect');
-                localStorage.removeItem('lastLoginTime');
-
+                localStorage.removeItem('liffState'); // LIFF 的狀態快取
+                
+                // 清掉 sessionStorage（LIFF 可能使用）
+                sessionStorage.clear();
+                
                 // 清掉全局變數
                 SESSION_TOKEN = null;
                 ID_TOKEN = null;
                 PROFILE = null;
-
-                addDebugInfo('已清除所有 Session 資料');
+                
+                // 強制重新導向，清除瀏覽器快取
+                addDebugInfo('已清除所有 Session 資料，準備強制重新登入');
                 showStatus('已清除登入狀態，請重新登入', 'info');
-
+                
                 // 顯示登入選項
                 showLoginOptions();
+                
+                // 強制刷新頁面以清除記憶體中的快取
+                setTimeout(() => {
+                    window.location.reload(true); // true 參數強制從伺服器加載
+                }, 1000);
+                
             } catch (err) {
                 console.error('清除 Session 失敗:', err);
                 addDebugInfo('清除 Session 失敗: ' + err.message);
@@ -532,18 +544,34 @@
                 if (redirected) {
                     clearRedirectState();
                     localStorage.removeItem('loginRedirect');
-                    addDebugInfo('檢測到登入重定向返回');
+                    addDebugInfo('檢測到登入重定向返回，強制清除快取');
+                    
+                    // 強制清除 LIFF 可能快取的狀態
+                    if (liff.isLoggedIn()) {
+                        addDebugInfo('重定向後檢測到已登入，準備強制刷新 Token');
+                        
+                        // 強制登出再登入，確保拿到新 Token
+                        liff.logout();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        // 重新登入獲取新 Token
+                        const randomParam = 't=' + Date.now() + Math.random();
+                        const redirectUri = window.location.origin + window.location.pathname + '?loginRedirect=true&' + randomParam;
+                        localStorage.setItem('loginRedirect', 'true');
+                        liff.login({ redirectUri });
+                        return;
+                    }
                 }
 
-                // 檢查是否已登入
+                // 正常登入流程
                 if (liff.isLoggedIn()) {
                     addDebugInfo('LIFF 狀態: 已登入');
-
+                    
                     // 獲取當前 ID Token
                     ID_TOKEN = await getCurrentIdToken();
-
+                    
                     if (ID_TOKEN) {
-                        addDebugInfo('使用當前 ID Token 進行驗證');
+                        addDebugInfo('使用當前 ID Token 進行驗證，開頭: ' + ID_TOKEN.substring(0, 20));
                         await verifyIdToken(ID_TOKEN);
                     } else {
                         addDebugInfo('ID Token 無效，需要重新登入');
@@ -551,7 +579,7 @@
                     }
                 } else {
                     addDebugInfo('LIFF 狀態: 未登入');
-
+                    
                     // 檢查是否有有效的 session token
                     if (SESSION_TOKEN && !isTokenExpired(SESSION_TOKEN)) {
                         addDebugInfo('發現有效 Session Token，嘗試恢復會話');
@@ -568,7 +596,6 @@
                 showLoginOptions();
             }
         }
-
         // ---------- Token 驗證 ----------
         async function verifyToken(idToken, sessionToken) {
             try {
@@ -745,22 +772,31 @@
             });
 
             // 登入按鈕
-            document.getElementById('manual-login-btn').addEventListener('click', async function () {
+            document.getElementById('manual-login-btn').addEventListener('click', async function() {
                 addDebugInfo('手動登入按鈕點擊');
                 toggleLoader('login', true);
-
+                
                 try {
                     if (!LIFF_INITIALIZED) {
                         addDebugInfo('LIFF 尚未初始化，正在初始化...');
                         await liff.init({ liffId: CONFIG.LIFF_ID });
                         LIFF_INITIALIZED = true;
                     }
-
+                    
+                    // 清除所有可能的快取
+                    localStorage.removeItem('liffState');
+                    sessionStorage.clear();
+                    
+                    // 添加隨機參數避免快取
+                    const randomParam = 't=' + Date.now() + Math.random();
+                    const redirectUri = window.location.origin + window.location.pathname + '?loginRedirect=true&' + randomParam;
+                    
                     // 設置重定向標記
                     localStorage.setItem('loginRedirect', 'true');
-                    liff.login({
-                        redirectUri: window.location.origin + window.location.pathname + '?loginRedirect=true'
-                    });
+                    
+                    addDebugInfo('重定向 URI: ' + redirectUri);
+                    liff.login({ redirectUri });
+                    
                 } catch (error) {
                     addDebugInfo('登入錯誤: ' + error.message);
                     showStatus('登入失敗: ' + error.message, 'error');
@@ -770,7 +806,15 @@
 
             // 清除Session按鈕
             document.getElementById('clear-session-btn').addEventListener('click', clearSession);
-
+            // 強制刷新頁面按鈕
+            document.getElementById('force-refresh-btn').addEventListener('click', function() {
+                addDebugInfo('強制刷新頁面以清除快取');
+                // 清除所有儲存
+                localStorage.clear();
+                sessionStorage.clear();
+                // 強制從伺服器重新加載
+                window.location.reload(true);
+            });
             // 除錯信息切換
             document.getElementById('toggle-debug').addEventListener('click', function () {
                 const debugInfo = document.getElementById('debug-info');
