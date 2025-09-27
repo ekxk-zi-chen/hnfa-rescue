@@ -617,7 +617,6 @@
         function renderUserInterface(profile) {
             PROFILE = profile;
             document.getElementById('display-name').textContent = profile.displayName || '用戶';
-            document.getElementById('lineUserId').value = profile.userId || '';
 
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('login-section').style.display = 'none';
