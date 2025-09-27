@@ -436,54 +436,39 @@
         async function startApp() {
             try {
                 showStatus('應用初始化中...');
-                
+
                 // 初始化 LIFF
                 await liff.init({ liffId: CONFIG.LIFF_ID });
                 addDebugInfo('LIFF 初始化成功');
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const timestamp = urlParams.get('t');
-                
-                // 如果有時間戳，表示是登入回調
+
+                // 登入回調流程
                 if (timestamp) {
                     addDebugInfo('檢測到登入回調，等待 SDK 更新...');
-                    // 清理 URL
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    
-                    // 關鍵：等待足夠時間讓 LIFF SDK 完全更新 token
+
                     showStatus('登入成功，正在更新憑證...', 'info');
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // 減少等待時間
-                    
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+
                     if (liff.isLoggedIn()) {
-                        // 等待後才取 token
-                        addDebugInfo('等待完成，現在取得 idToken');
                         const newIdToken = liff.getIDToken();
-                        const tokenPrefix = newIdToken ? newIdToken.substring(0, 50) + '...' : 'null';
-                        addDebugInfo(`等待後取得 idToken: ${tokenPrefix}`);
-                        
+                        addDebugInfo(`登入回調取得 idToken: ${newIdToken ? newIdToken.substring(0,50)+'...' : 'null'}`);
                         if (newIdToken) {
-                            // 重要：更新全域變數
                             ID_TOKEN = newIdToken;
-                            addDebugInfo(`已更新全域 ID_TOKEN 變數: ${ID_TOKEN.substring(0, 30)}...`);
                             await verifyWithBackend();
                             return;
                         }
                     }
                 }
 
-                // 如果已登入但沒有時間戳，表示是舊登入
-                if (liff.isLoggedIn()) {
-                    addDebugInfo('檢測到舊登入狀態，強制重新登入');
-                    await forceLogin();
-                    return;
-                }
-
-                // 沒有登入狀態，檢查 sessionToken
+                // 1️⃣ 檢查本地 sessionToken
                 if (SESSION_TOKEN) {
-                    addDebugInfo('找到本機 sessionToken，嘗試後端驗證...');
+                    addDebugInfo('找到本地 sessionToken，嘗試後端驗證...');
                     const result = await verifyTokenAtServer(null, SESSION_TOKEN);
-                    
-                    if (result && result.status === 'ok') {
+
+                    if (result?.status === 'ok') {
                         addDebugInfo('sessionToken 驗證成功');
                         renderUserInterface({
                             displayName: result.displayName,
@@ -491,13 +476,31 @@
                         });
                         return;
                     } else {
-                        addDebugInfo('sessionToken 無效，清除本機資料');
+                        addDebugInfo('sessionToken 無效，清除本地資料');
                         localStorage.removeItem('sessionToken');
                         SESSION_TOKEN = null;
                     }
                 }
 
-                addDebugInfo('顯示登入選項');
+                // 2️⃣ 檢查 LIFF 登入狀態
+                if (liff.isLoggedIn()) {
+                    addDebugInfo('LIFF 已登入，檢查 idToken 是否過期');
+                    const currentIdToken = liff.getIDToken();
+
+                    if (!currentIdToken || isTokenExpired(currentIdToken)) {
+                        addDebugInfo('idToken 已過期或不存在，執行 forceLogin');
+                        await forceLogin();
+                        return;
+                    } else {
+                        addDebugInfo('idToken 有效，直接使用後端驗證');
+                        ID_TOKEN = currentIdToken;
+                        await verifyWithBackend();
+                        return;
+                    }
+                }
+
+                // 3️⃣ 沒有登入狀態，顯示登入選項
+                addDebugInfo('沒有登入狀態，顯示登入選項');
                 showLoginOptions();
 
             } catch (e) {
@@ -506,7 +509,6 @@
                 showLoginOptions();
             }
         }
-
         async function verifyWithBackend() {
             showStatus('驗證中，請稍後...', 'info');
             
