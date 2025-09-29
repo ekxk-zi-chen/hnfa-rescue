@@ -207,7 +207,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       const { error } = await supabase
         .from('users')
         .update({ 管理員: permission })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('更新用戶權限錯誤:', error);
@@ -234,7 +234,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       const { error } = await supabase
         .from('users')
         .delete()
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('刪除用戶錯誤:', error);
