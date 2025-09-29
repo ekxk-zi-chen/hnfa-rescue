@@ -671,97 +671,18 @@
     <script>
         // 配置常數
         const CONFIG = {
-            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
-            EVENTS_URL: "https://hnfa-rescue.vercel.app/api/events"
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify"
         };
 
         // 全域變數
         let currentUser = null;
         let equipmentData = [];
-        let eventSource = null;
-        let reconnectTimeout = null;
+
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function() {
             await initializeApp();
         });
-        // 開始事件監聽
-        function startEventListener() {
-            try {
-                eventSource = new EventSource(CONFIG.EVENTS_URL);
-                
-                eventSource.onopen = function() {
-                    console.log('SSE 連接已建立');
-                    showToast('即時更新已連接', 'success');
-                };
-                
-                eventSource.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        handleServerEvent(data);
-                    } catch (error) {
-                        console.error('解析伺服器事件失敗:', error);
-                    }
-                };
-                
-                eventSource.onerror = function(error) {
-                    console.error('SSE 連接錯誤:', error);
-                    showToast('即時更新連接中斷，嘗試重新連接...', 'error');
-                    
-                    // 重新連接
-                    if (eventSource) {
-                        eventSource.close();
-                    }
-                    
-                    reconnectTimeout = setTimeout(() => {
-                        startEventListener();
-                    }, 5000);
-                };
-                
-            } catch (error) {
-                console.error('建立 SSE 連接失敗:', error);
-            }
-        }
 
-        // 處理伺服器事件
-        function handleServerEvent(data) {
-            console.log('收到伺服器事件:', data);
-            
-            switch (data.type) {
-                case 'equipment_created':
-                    console.log('裝備新增:', data.equipment);
-                    // 重新載入裝備資料以確保資料一致
-                    loadEquipmentData();
-                    showToast('有新裝備新增', 'success');
-                    break;
-                    
-                case 'equipment_updated':
-                    console.log('裝備更新:', data.equipment);
-                    // 重新載入裝備資料以確保資料一致
-                    loadEquipmentData();
-                    showToast('裝備已更新', 'success');
-                    break;
-                    
-                case 'equipment_deleted':
-                    console.log('裝備刪除:', data.equipmentId);
-                    // 從本地資料中移除
-                    equipmentData = equipmentData.filter(item => item.id !== data.equipmentId);
-                    renderEquipment();
-                    updateCategoryFilter();
-                    showToast('裝備已刪除', 'success');
-                    break;
-                    
-                case 'ping':
-                    // 心跳包，保持連接
-                    break;
-                    
-                case 'connected':
-                    console.log('SSE 連接成功');
-                    break;
-                    
-                default:
-                    console.log('未知事件類型:', data.type);
-            }
-        }
         async function initializeApp() {
             try {
                 // 檢查 Session Token
@@ -1330,17 +1251,6 @@
         }
 
         function logout() {
-            // 關閉事件監聽
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
-            
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
-                reconnectTimeout = null;
-            }
-            
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
             window.location.href = '/';
