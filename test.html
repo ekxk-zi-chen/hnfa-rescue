@@ -511,6 +511,100 @@
             border-radius: 6px;
             background: white;
         }
+
+        /* 新增折叠卡片样式 */
+        .collapsed-card {
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .expanded-content {
+            display: none;
+            padding: 1.5rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .card-expanded .expanded-content {
+            display: block;
+        }
+
+        .card-expanded {
+            border-color: var(--primary);
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .card-expanded .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        /* 视频容器样式 */
+        .video-container {
+            margin-top: 1rem;
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 比例 */
+        }
+
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+
+        /* 历史记录样式 */
+        .history-modal .modal-content {
+            max-width: 800px;
+        }
+
+        .history-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .history-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--gray-200);
+            font-size: 0.875rem;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-time {
+            color: var(--gray-600);
+            font-weight: 600;
+        }
+
+        .history-user {
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        /* 过期提醒样式 */
+        .expired-badge {
+            background: var(--danger);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+        }
+
+        .expired-filter {
+            margin-top: 1rem;
+        }
     </style>
 </head>
 
@@ -542,10 +636,17 @@
                     <label for="statusFilter">狀態</label>
                     <select id="statusFilter" class="form-control">
                         <option value="">全部狀態</option>
-                        <option value="可用">可用</option>
+                        <option value="在隊">在隊</option>
+                        <option value="出勤中">出勤中</option>
+                        <option value="借出">借出</option>
                         <option value="維修中">維修中</option>
-                        <option value="不可用">不可用</option>
                     </select>
+                </div>
+                <div class="filter-group expired-filter">
+                    <button class="btn btn-warning" style="width: 100%;" onclick="showExpiredEquipment()">
+                        顯示逾期未歸裝備
+                        <span id="expiredCount" class="expired-badge" style="display: none;">0</span>
+                    </button>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;" onclick="clearFilters()">清除篩選</button>
 
@@ -593,13 +694,15 @@
                         </div>
                         <div class="form-group">
                             <label for="equipmentGroup">分群組 *</label>
-                            <input type="text" id="equipmentGroup" class="form-control" required>
+                            <select id="equipmentGroup" class="form-control" required>
+                                <option value="">選擇分群組</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="equipmentNumber">裝備編號 *</label>
-                            <input type="text" id="equipmentNumber" class="form-control" required>
+                            <input type="text" id="equipmentNumber" class="form-control" required readonly>
                         </div>
                         <div class="form-group">
                             <label for="equipmentModel">型號</label>
@@ -630,11 +733,16 @@
                     </div>
                     <div class="form-group">
                         <label for="equipmentStatus">目前狀態 *</label>
-                        <select id="equipmentStatus" class="form-control" required>
-                            <option value="可用">可用</option>
+                        <select id="equipmentStatus" class="form-control" required onchange="toggleStatusNoteField()">
+                            <option value="在隊">在隊</option>
+                            <option value="出勤中">出勤中</option>
+                            <option value="借出">借出</option>
                             <option value="維修中">維修中</option>
-                            <option value="不可用">不可用</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="statusNoteGroup" style="display: none;">
+                        <label for="equipmentStatusNote">狀態備註</label>
+                        <input type="text" id="equipmentStatusNote" class="form-control" placeholder="例如：借給誰了、出勤地點等">
                     </div>
                     <div style="text-align: right; margin-top: 2rem;">
                         <button type="button" class="btn btn-secondary" onclick="closeModal('equipmentModal')">取消</button>
@@ -663,6 +771,22 @@
         </div>
     </div>
 
+    <!-- 歷史紀錄 Modal -->
+    <div id="historyModal" class="modal history-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">歷史更新紀錄</h3>
+                <button class="close" onclick="closeModal('historyModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4 id="historyEquipmentName"></h4>
+                <div class="history-list" id="historyList">
+                    <!-- 歷史紀錄將在這裡動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast 通知 -->
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
@@ -671,12 +795,14 @@
     <script>
         // 配置常數
         const CONFIG = {
-            API_BASE: "https://hnfa-rescue.vercel.app/api/verify"
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
+            POLLING_INTERVAL: 10000 // 10秒輪詢一次
         };
 
         // 全域變數
         let currentUser = null;
         let equipmentData = [];
+        let pollingInterval = null;
 
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function() {
@@ -700,6 +826,9 @@
                 
                 // 設置事件監聽器
                 setupEventListeners();
+                
+                // 開始輪詢檢查更新
+                startPolling();
                 
             } catch (error) {
                 console.error('初始化失敗:', error);
@@ -767,6 +896,11 @@
                 const data = await response.json();
                 if (data.status === 'ok') {
                     equipmentData = data.equipment || [];
+                    
+                    // 按照裝備編號排序
+                    equipmentData.sort((a, b) => {
+                        return a.裝備編號.localeCompare(b.裝備編號, undefined, {numeric: true, sensitivity: 'base'});
+                    });
                 } else {
                     throw new Error(data.message || '載入失敗');
                 }
@@ -776,6 +910,7 @@
                 
                 renderEquipment();
                 updateCategoryFilter();
+                updateExpiredCount();
                 
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
@@ -791,10 +926,12 @@
                         特別位置: '醫療車第二層',
                         數量: 5,
                         說明書連結: '',
-                        目前狀態: '可用',
+                        目前狀態: '在隊',
+                        狀態備註: '',
                         填表人: '張三',
                         狀態: '正常',
                         教學影片相關: '',
+                        歷史更新紀錄: [],
                         updated_at: new Date().toISOString()
                     },
                     {
@@ -807,10 +944,12 @@
                         特別位置: '工具箱A',
                         數量: 10,
                         說明書連結: '',
-                        目前狀態: '可用',
+                        目前狀態: '在隊',
+                        狀態備註: '',
                         填表人: '李四',
                         狀態: '正常',
                         教學影片相關: '',
+                        歷史更新紀錄: [],
                         updated_at: new Date().toISOString()
                     }
                 ];
@@ -819,6 +958,7 @@
                 document.getElementById('equipmentGrid').style.display = 'grid';
                 renderEquipment();
                 updateCategoryFilter();
+                updateExpiredCount();
             }
         }
 
@@ -842,6 +982,11 @@
 
             const filteredData = filterEquipment();
 
+            // 按照裝備編號排序
+            filteredData.sort((a, b) => {
+                return a.裝備編號.localeCompare(b.裝備編號, undefined, {numeric: true, sensitivity: 'base'});
+            });
+
             filteredData.forEach(equipment => {
                 const card = createEquipmentCard(equipment);
                 grid.appendChild(card);
@@ -855,26 +1000,37 @@
         function createEquipmentCard(equipment) {
             const card = document.createElement('div');
             card.className = 'equipment-card';
+            card.id = `equipment-${equipment.id}`;
             
-            const statusClass = equipment.目前狀態 === '可用' ? 'status-available' : 
+            const statusClass = equipment.目前狀態 === '在隊' ? 'status-available' : 
                                equipment.目前狀態 === '維修中' ? 'status-maintenance' : 'status-unavailable';
 
+            const isExpired = checkIfExpired(equipment);
+            const expiredBadge = isExpired ? '<span class="expired-badge">逾期</span>' : '';
+
             card.innerHTML = `
-                <div class="card-image">
-                    ${equipment.圖片檔案位置 ? 
-                        `<iframe 
-                            src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview" 
-                            frameborder="0" 
-                            allowfullscreen
-                            style="width:100%;height:200px;">
-                        </iframe>` :
-                        '<div>📦</div>'
-                    }
-                    <div class="status-badge ${statusClass}">${equipment.目前狀態}</div>
+                <div class="collapsed-card" onclick="toggleCard('${equipment.id}')">
+                    <div>
+                        <div class="card-title">${equipment.器材名稱} ${expiredBadge}</div>
+                        <div class="card-subtitle">${equipment.分群組} - ${equipment.裝備編號}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="status-badge ${statusClass}">${equipment.目前狀態}</div>
+                        <div class="toggle-icon">▼</div>
+                    </div>
                 </div>
-                <div class="card-content">
-                    <div class="card-title">${equipment.器材名稱}</div>
-                    <div class="card-subtitle">${equipment.分群組} - ${equipment.裝備編號}</div>
+                <div class="expanded-content">
+                    <div class="card-image">
+                        ${equipment.圖片檔案位置 ? 
+                            `<iframe 
+                                src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview" 
+                                frameborder="0" 
+                                allowfullscreen
+                                style="width:100%;height:200px;">
+                            </iframe>` :
+                            '<div>📦</div>'
+                        }
+                    </div>
                     <div class="card-info">
                         <div class="info-row">
                             <span class="info-label">型號:</span>
@@ -892,10 +1048,25 @@
                             <span class="info-label">填表人:</span>
                             <span class="info-value">${equipment.填表人 || '未知'}</span>
                         </div>
+                        ${equipment.狀態備註 ? `
+                        <div class="info-row">
+                            <span class="info-label">狀態備註:</span>
+                            <span class="info-value">${equipment.狀態備註}</span>
+                        </div>
+                        ` : ''}
                     </div>
+                    ${equipment.教學影片相關 ? `
+                    <div class="video-container">
+                        <iframe 
+                            src="${getEmbedVideoUrl(equipment.教學影片相關)}" 
+                            frameborder="0" 
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                    ` : ''}
                     <div class="card-actions">
                         ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
-                        ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
+                        <button class="btn btn-info btn-sm" onclick="showHistory('${equipment.id}')">歷史紀錄</button>
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
                     </div>
@@ -934,6 +1105,21 @@
                 option.textContent = category;
                 categorySelect.appendChild(option);
             });
+
+            // 同時更新新增裝備時的分群組選項
+            const equipmentGroupSelect = document.getElementById('equipmentGroup');
+            equipmentGroupSelect.innerHTML = '<option value="">選擇分群組</option>';
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                equipmentGroupSelect.appendChild(option);
+            });
+            // 添加"新增群組"選項
+            const newOption = document.createElement('option');
+            newOption.value = 'new';
+            newOption.textContent = '+ 新增群組';
+            equipmentGroupSelect.appendChild(newOption);
         }
 
         function setupEventListeners() {
@@ -944,6 +1130,32 @@
 
             // 表單提交
             document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
+
+            // 分群組選擇變化
+            document.getElementById('equipmentGroup').addEventListener('change', function() {
+                if (this.value === 'new') {
+                    // 顯示輸入框讓用戶輸入新群組名稱
+                    const newGroupInput = document.createElement('input');
+                    newGroupInput.type = 'text';
+                    newGroupInput.id = 'newGroupInput';
+                    newGroupInput.className = 'form-control';
+                    newGroupInput.placeholder = '輸入新群組名稱';
+                    newGroupInput.style.marginTop = '0.5rem';
+                    
+                    const groupContainer = this.parentElement;
+                    if (!document.getElementById('newGroupInput')) {
+                        groupContainer.appendChild(newGroupInput);
+                    }
+                } else {
+                    // 移除輸入框
+                    const newGroupInput = document.getElementById('newGroupInput');
+                    if (newGroupInput) {
+                        newGroupInput.remove();
+                    }
+                    // 更新裝備編號
+                    updateEquipmentNumber();
+                }
+            });
 
             // 點擊外部關閉 modal
             document.addEventListener('click', function(event) {
@@ -957,6 +1169,8 @@
             document.getElementById('modalTitle').textContent = '新增裝備';
             document.getElementById('equipmentForm').reset();
             document.getElementById('equipmentId').value = '';
+            document.getElementById('equipmentNumber').value = '';
+            document.getElementById('statusNoteGroup').style.display = 'none';
             showModal('equipmentModal');
         }
 
@@ -976,29 +1190,132 @@
             document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
             document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
             document.getElementById('equipmentStatus').value = equipment.目前狀態;
-
+            document.getElementById('equipmentStatusNote').value = equipment.狀態備註 || '';
+            
+            toggleStatusNoteField();
             showModal('equipmentModal');
+        }
+
+        function updateEquipmentNumber() {
+            const group = document.getElementById('equipmentGroup').value;
+            if (!group || group === 'new') {
+                document.getElementById('equipmentNumber').value = '';
+                return;
+            }
+
+            // 找出該群組中最大的裝備編號
+            const groupEquipment = equipmentData.filter(item => item.分群組 === group);
+            let maxNumber = 0;
+            
+            groupEquipment.forEach(item => {
+                const match = item.裝備編號.match(/\d+/);
+                if (match) {
+                    const num = parseInt(match[0]);
+                    if (num > maxNumber) maxNumber = num;
+                }
+            });
+
+            // 生成下一個編號
+            const nextNumber = maxNumber + 1;
+            
+            // 根據群組名稱生成前綴（例如：醫療設備 -> MED）
+            let prefix = '';
+            if (group.includes('醫療')) prefix = 'MED';
+            else if (group.includes('救援')) prefix = 'RES';
+            else if (group.includes('通訊')) prefix = 'COM';
+            else if (group.includes('個人')) prefix = 'PER';
+            else {
+                // 取前三個字母大寫
+                prefix = group.substring(0, 3).toUpperCase();
+            }
+            
+            document.getElementById('equipmentNumber').value = `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
         }
 
         async function handleEquipmentSubmit(event) {
             event.preventDefault();
             
+            // 處理新群組
+            let group = document.getElementById('equipmentGroup').value;
+            if (group === 'new') {
+                const newGroupInput = document.getElementById('newGroupInput');
+                if (!newGroupInput || !newGroupInput.value.trim()) {
+                    showToast('請輸入新群組名稱', 'error');
+                    return;
+                }
+                group = newGroupInput.value.trim();
+            }
+
             const formData = {
                 id: document.getElementById('equipmentId').value,
                 器材名稱: document.getElementById('equipmentName').value,
-                分群組: document.getElementById('equipmentGroup').value,
+                分群組: group,
                 裝備編號: document.getElementById('equipmentNumber').value,
                 型號: document.getElementById('equipmentModel').value,
                 特別位置: document.getElementById('equipmentLocation').value,
-                數量: parseInt(document.getElementById('equipmentQuantity').value),
+                數量: document.getElementById('equipmentQuantity').value,
                 圖片檔案位置: document.getElementById('equipmentImage').value,
                 說明書連結: document.getElementById('equipmentManual').value,
                 教學影片相關: document.getElementById('equipmentVideo').value,
                 目前狀態: document.getElementById('equipmentStatus').value,
+                狀態備註: document.getElementById('equipmentStatusNote').value,
                 填表人: currentUser.displayName,
                 狀態: '正常',
                 updated_at: new Date().toISOString()
             };
+
+            // 如果是編輯，添加歷史紀錄
+            if (formData.id) {
+                const originalEquipment = equipmentData.find(item => item.id === formData.id);
+                if (originalEquipment) {
+                    const changes = [];
+                    
+                    if (originalEquipment.器材名稱 !== formData.器材名稱) {
+                        changes.push(`將器材名稱從 "${originalEquipment.器材名稱}" 改為 "${formData.器材名稱}"`);
+                    }
+                    if (originalEquipment.分群組 !== formData.分群組) {
+                        changes.push(`將分群組從 "${originalEquipment.分群組}" 改為 "${formData.分群組}"`);
+                    }
+                    if (originalEquipment.裝備編號 !== formData.裝備編號) {
+                        changes.push(`將裝備編號從 "${originalEquipment.裝備編號}" 改為 "${formData.裝備編號}"`);
+                    }
+                    if (originalEquipment.目前狀態 !== formData.目前狀態) {
+                        changes.push(`將狀態從 "${originalEquipment.目前狀態}" 改為 "${formData.目前狀態}"`);
+                    }
+                    if (originalEquipment.狀態備註 !== formData.狀態備註) {
+                        if (originalEquipment.狀態備註) {
+                            changes.push(`將狀態備註從 "${originalEquipment.狀態備註}" 改為 "${formData.狀態備註}"`);
+                        } else {
+                            changes.push(`新增狀態備註: "${formData.狀態備註}"`);
+                        }
+                    }
+
+                    if (changes.length > 0) {
+                        const historyEntry = {
+                            timestamp: new Date().toISOString(),
+                            user: currentUser.displayName,
+                            changes: changes
+                        };
+                        
+                        formData.歷史更新紀錄 = originalEquipment.歷史更新紀錄 || [];
+                        formData.歷史更新紀錄.unshift(historyEntry);
+                        
+                        // 只保留最近30筆紀錄
+                        if (formData.歷史更新紀錄.length > 30) {
+                            formData.歷史更新紀錄 = formData.歷史更新紀錄.slice(0, 30);
+                        }
+                    } else {
+                        formData.歷史更新紀錄 = originalEquipment.歷史更新紀錄 || [];
+                    }
+                }
+            } else {
+                // 新增裝備時的初始歷史紀錄
+                formData.歷史更新紀錄 = [{
+                    timestamp: new Date().toISOString(),
+                    user: currentUser.displayName,
+                    changes: ['新增裝備']
+                }];
+            }
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -1031,8 +1348,14 @@
                         showToast('裝備新增成功', 'success');
                     }
 
+                    // 重新排序裝備資料
+                    equipmentData.sort((a, b) => {
+                        return a.裝備編號.localeCompare(b.裝備編號, undefined, {numeric: true, sensitivity: 'base'});
+                    });
+
                     renderEquipment();
                     updateCategoryFilter();
+                    updateExpiredCount();
                     closeModal('equipmentModal');
                 } else {
                     throw new Error(data.message || '儲存失敗');
@@ -1068,6 +1391,7 @@
                     equipmentData = equipmentData.filter(item => item.id !== equipmentId);
                     renderEquipment();
                     updateCategoryFilter();
+                    updateExpiredCount();
                     showToast('裝備刪除成功', 'success');
                 } else {
                     throw new Error(data.message || '刪除失敗');
@@ -1079,6 +1403,162 @@
             }
         }
 
+        function toggleCard(equipmentId) {
+            const card = document.getElementById(`equipment-${equipmentId}`);
+            card.classList.toggle('card-expanded');
+        }
+
+        function getEmbedVideoUrl(videoUrl) {
+            // 將 YouTube 網址轉換為嵌入網址
+            if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+                const videoId = videoUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+                if (videoId) {
+                    return `https://www.youtube.com/embed/${videoId[1]}`;
+                }
+            }
+            return videoUrl;
+        }
+
+        function showHistory(equipmentId) {
+            const equipment = equipmentData.find(item => item.id === equipmentId);
+            if (!equipment) return;
+
+            document.getElementById('historyEquipmentName').textContent = `${equipment.器材名稱} (${equipment.裝備編號})`;
+            
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+
+            if (!equipment.歷史更新紀錄 || equipment.歷史更新紀錄.length === 0) {
+                historyList.innerHTML = '<div class="history-item">暫無歷史紀錄</div>';
+            } else {
+                equipment.歷史更新紀錄.forEach(record => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-item';
+                    
+                    const date = new Date(record.timestamp);
+                    const timeString = date.toLocaleString('zh-TW', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    let changesHtml = '';
+                    if (Array.isArray(record.changes)) {
+                        changesHtml = record.changes.map(change => `<div>${change}</div>`).join('');
+                    } else {
+                        changesHtml = `<div>${record.changes}</div>`;
+                    }
+                    
+                    historyItem.innerHTML = `
+                        <div class="history-time">${timeString}</div>
+                        <div class="history-user">${record.user}</div>
+                        ${changesHtml}
+                    `;
+                    
+                    historyList.appendChild(historyItem);
+                });
+            }
+
+            showModal('historyModal');
+        }
+
+        function toggleStatusNoteField() {
+            const status = document.getElementById('equipmentStatus').value;
+            const statusNoteGroup = document.getElementById('statusNoteGroup');
+            
+            if (status === '借出' || status === '出勤中') {
+                statusNoteGroup.style.display = 'block';
+            } else {
+                statusNoteGroup.style.display = 'none';
+            }
+        }
+
+        function checkIfExpired(equipment) {
+            if (equipment.目前狀態 === '在隊' || equipment.目前狀態 === '維修中') {
+                return false;
+            }
+            
+            // 檢查 updated_at 是否超過3天
+            const updatedDate = new Date(equipment.updated_at);
+            const now = new Date();
+            const diffTime = Math.abs(now - updatedDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return diffDays > 3;
+        }
+
+        function updateExpiredCount() {
+            const expiredCount = equipmentData.filter(checkIfExpired).length;
+            const expiredBadge = document.getElementById('expiredCount');
+            
+            if (expiredCount > 0) {
+                expiredBadge.textContent = expiredCount;
+                expiredBadge.style.display = 'inline';
+            } else {
+                expiredBadge.style.display = 'none';
+            }
+        }
+
+        function showExpiredEquipment() {
+            // 篩選出逾期的裝備
+            const expiredEquipment = equipmentData.filter(checkIfExpired);
+            
+            if (expiredEquipment.length === 0) {
+                showToast('目前沒有逾期未歸的裝備', 'success');
+                return;
+            }
+            
+            // 設置狀態篩選器為空，然後顯示所有逾期裝備
+            document.getElementById('statusFilter').value = '';
+            renderEquipment();
+            
+            showToast(`找到 ${expiredEquipment.length} 個逾期未歸的裝備`, 'warning');
+        }
+
+        function startPolling() {
+            // 每10秒檢查一次更新
+            pollingInterval = setInterval(async () => {
+                try {
+                    const sessionToken = sessionStorage.getItem('sessionToken');
+                    const response = await fetch(CONFIG.API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            action: 'getEquipment',
+                            sessionToken 
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.status === 'ok' && data.equipment) {
+                            // 檢查是否有更新
+                            const newData = data.equipment;
+                            if (JSON.stringify(newData) !== JSON.stringify(equipmentData)) {
+                                equipmentData = newData;
+                                
+                                // 按照裝備編號排序
+                                equipmentData.sort((a, b) => {
+                                    return a.裝備編號.localeCompare(b.裝備編號, undefined, {numeric: true, sensitivity: 'base'});
+                                });
+                                
+                                renderEquipment();
+                                updateCategoryFilter();
+                                updateExpiredCount();
+                                
+                                showToast('裝備資料已更新', 'success');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('輪詢更新失敗:', error);
+                }
+            }, CONFIG.POLLING_INTERVAL);
+        }
+
+        // 其他函數保持不變（showUserManagement, updateUserPermission, deleteUser, clearFilters, showModal, closeModal, showToast, generateId, renderUserList, logout）
         async function showUserManagement() {
             if (currentUser.role !== '管理') {
                 showToast('您沒有權限管理用戶', 'error');
@@ -1217,40 +1697,46 @@
             const usersList = document.getElementById('usersList');
             usersList.innerHTML = `
                 <table class="user-table">
-                    <thead> ... </thead>
+                    <thead>
+                        <tr>
+                            <th>姓名</th>
+                            <th>顯示名稱</th>
+                            <th>權限</th>
+                            <th>註冊時間</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         ${users.map(user => `
-                            <tr data-id="${user.user_id}">
+                            <tr>
                                 <td>${user.姓名}</td>
                                 <td>${user.display_name}</td>
                                 <td>
-                                    <select class="permission-select">
+                                    <select class="permission-select" onchange="updateUserPermission('${user_id}', this.value)">
                                         <option value="一般用戶" ${user.管理員 === '一般用戶' ? 'selected' : ''}>一般用戶</option>
                                         <option value="管理" ${user.管理員 === '管理' ? 'selected' : ''}>管理</option>
-                                        ...
+                                        <option value="救援" ${user.管理員 === '救援' ? 'selected' : ''}>救援</option>
+                                        <option value="醫療" ${user.管理員 === '醫療' ? 'selected' : ''}>醫療</option>
+                                        <option value="後勤" ${user.管理員 === '後勤' ? 'selected' : ''}>後勤</option>
                                     </select>
                                 </td>
                                 <td>${new Date(user.創建時間).toLocaleDateString()}</td>
-                                <td><button class="btn btn-danger btn-sm delete-user">刪除</button></td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteUser('${user_id}')">刪除</button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
-
-            // 綁定事件（這樣不怕字元衝突）
-            usersList.querySelectorAll('.permission-select').forEach(select => {
-                const userId = select.closest('tr').dataset.id;
-                select.addEventListener('change', e => updateUserPermission(userId, e.target.value));
-            });
-
-            usersList.querySelectorAll('.delete-user').forEach(btn => {
-                const userId = btn.closest('tr').dataset.id;
-                btn.addEventListener('click', () => deleteUser(userId));
-            });
         }
 
         function logout() {
+            // 停止輪詢
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
             window.location.href = '/';
