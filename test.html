@@ -965,9 +965,7 @@
 
 
         function createEquipmentCard(equipment) {
-            const wrapper = document.createElement('div');
-            wrapper.className = `equipment-item ${wrapperClass}`;
-
+            // 1) 先決定狀態對應的 CSS class（跟 wrapper class）
             let statusClass = '';
             let wrapperClass = '';
 
@@ -989,11 +987,16 @@
                     wrapperClass = 'maintenance';
                     break;
                 default:
+                    // 預設為在隊（若資料沒填）
                     statusClass = 'status-in-team';
                     wrapperClass = 'in-team';
             }
 
+            // 2) 建立 wrapper 並加上剛剛決定好的 class
+            const wrapper = document.createElement('div');
+            wrapper.className = `equipment-item ${wrapperClass}`;
 
+            // 3) 填入 HTML（注意：equipment-details 一定會存在，避免 null）
             wrapper.innerHTML = `
                 <div class="equipment-summary">
                     <div class="summary-left">
@@ -1001,7 +1004,7 @@
                         <span class="equipment-number">(${equipment.裝備編號})</span>
                     </div>
                     <div class="summary-right">
-                        <span class="status-badge ${statusClass}">${equipment.目前狀態}</span>
+                        <span class="status-badge ${statusClass}">${equipment.目前狀態 || '在隊'}</span>
                         <button class="btn btn-secondary btn-sm toggle-btn">展開</button>
                     </div>
                 </div>
@@ -1017,9 +1020,9 @@
                     ` : ''}
 
                     <div class="detail-info">
-                        <p><strong>分群組：</strong>${equipment.分群組}</p>
+                        <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
                         <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
-                        <p><strong>數量：</strong>${equipment.數量}</p>
+                        <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
                         <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
                         <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
                     </div>
@@ -1027,19 +1030,31 @@
                     <div class="card-actions">
                         ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
                         ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
-                        ${currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
-                        ${currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
                     </div>
                 </div>
             `;
 
-            // 綁定展開/收合功能
+            // 4) 綁定展開/收合按鈕（並避免事件冒泡）
             const toggleBtn = wrapper.querySelector('.toggle-btn');
             const details = wrapper.querySelector('.equipment-details');
-            toggleBtn.addEventListener('click', () => {
+
+            // 若你希望點 summary 也能展開，可以同時綁定 summary 的 click（下方示範）
+            const summary = wrapper.querySelector('.equipment-summary');
+
+            function toggle() {
                 const isVisible = details.classList.toggle('show');
                 toggleBtn.textContent = isVisible ? '收合' : '展開';
+            }
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggle();
             });
+
+            // 可選：點整行 summary 也展開（若不想要就把這一行移除）
+            summary.addEventListener('click', () => toggle());
 
             return wrapper;
         }
