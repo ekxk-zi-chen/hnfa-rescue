@@ -930,8 +930,21 @@
 
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
-            const categories = [...new Set(equipmentData.map(item => item.分群組))];
-            
+
+            // 先依裝備編號排序後，再抽出群組
+            const sortedByNumber = [...equipmentData].sort((a, b) => 
+                String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+            );
+
+            // 按照排序後順序提取「分群組」(避免 Set 打亂順序)
+            const categories = [];
+            for (const item of sortedByNumber) {
+                if (!categories.includes(item.分群組)) {
+                    categories.push(item.分群組);
+                }
+            }
+
+            // 更新選單
             categorySelect.innerHTML = '<option value="">全部群組</option>';
             categories.forEach(category => {
                 const option = document.createElement('option');
@@ -940,6 +953,7 @@
                 categorySelect.appendChild(option);
             });
         }
+
 
         function setupEventListeners() {
             // 搜尋和篩選
