@@ -775,7 +775,7 @@
                 // 檢查 Session Token
                 const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
                 if (!sessionToken) {
-                    window.location.href = '/';
+                    window.location.href = 'index.html';
                     return;
                 }
 
@@ -792,7 +792,7 @@
                 console.error('初始化失敗:', error);
                 showToast('初始化失敗，請重新登入', 'error');
                 setTimeout(() => {
-                    window.location.href = '/';
+                    window.location.href = 'index.html';
                 }, 2000);
             }
         }
@@ -1421,7 +1421,7 @@
         function logout() {
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
-            window.location.href = '/';
+            window.location.href = 'index.html';
         }
     </script>
 
