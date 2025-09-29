@@ -487,26 +487,19 @@
                     const result = await verifyTokenAtServer(null, SESSION_TOKEN);
 
                     if (result?.status === 'ok') {
-                        addDebugInfo('sessionToken 驗證成功');
-                        
-                        // 直接跳轉到 test.html，不要只渲染界面
+                        addDebugInfo('sessionToken 驗證成功，直接跳轉到 test.html');
                         showStatus('驗證成功，即將進入系統...', 'success');
+                        
+                        // 立即停止所有後續執行
                         setTimeout(() => {
-                            window.location.href = 'test.html';
-                        }, 1500);
-                        return; // 確保返回，避免後續流程
-                    } else if (result?.status === 'needsignup') {
-                        addDebugInfo('sessionToken 需要註冊');
-                        // 需要註冊的情況才顯示註冊表單
-                        renderUserInterface({
-                            displayName: result.displayName || '新用戶',
-                            needsSignup: true
-                        });
-                        return;
+                            window.location.replace('test.html'); // 使用 replace 避免歷史記錄
+                        }, 1000);
+                        return; // 關鍵：立即返回，阻止後續代碼執行
                     } else {
                         addDebugInfo('sessionToken 無效，清除本地資料');
                         localStorage.removeItem('sessionToken');
                         SESSION_TOKEN = null;
+                        // 繼續執行後面的流程
                     }
                 }
 
