@@ -1217,38 +1217,37 @@
             const usersList = document.getElementById('usersList');
             usersList.innerHTML = `
                 <table class="user-table">
-                    <thead>
-                        <tr>
-                            <th>姓名</th>
-                            <th>顯示名稱</th>
-                            <th>權限</th>
-                            <th>註冊時間</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
+                    <thead> ... </thead>
                     <tbody>
                         ${users.map(user => `
-                            <tr>
+                            <tr data-id="${user.user_id}">
                                 <td>${user.姓名}</td>
                                 <td>${user.display_name}</td>
                                 <td>
-                                    <select class="permission-select" onchange="updateUserPermission('${user_id}', this.value)">
+                                    <select class="permission-select">
                                         <option value="一般用戶" ${user.管理員 === '一般用戶' ? 'selected' : ''}>一般用戶</option>
                                         <option value="管理" ${user.管理員 === '管理' ? 'selected' : ''}>管理</option>
-                                        <option value="救援" ${user.管理員 === '救援' ? 'selected' : ''}>救援</option>
-                                        <option value="醫療" ${user.管理員 === '醫療' ? 'selected' : ''}>醫療</option>
-                                        <option value="後勤" ${user.管理員 === '後勤' ? 'selected' : ''}>後勤</option>
+                                        ...
                                     </select>
                                 </td>
                                 <td>${new Date(user.創建時間).toLocaleDateString()}</td>
-                                <td>
-                                    <button class="btn btn-danger btn-sm" onclick="deleteUser('${user_id}')">刪除</button>
-                                </td>
+                                <td><button class="btn btn-danger btn-sm delete-user">刪除</button></td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             `;
+
+            // 綁定事件（這樣不怕字元衝突）
+            usersList.querySelectorAll('.permission-select').forEach(select => {
+                const userId = select.closest('tr').dataset.id;
+                select.addEventListener('change', e => updateUserPermission(userId, e.target.value));
+            });
+
+            usersList.querySelectorAll('.delete-user').forEach(btn => {
+                const userId = btn.closest('tr').dataset.id;
+                btn.addEventListener('click', () => deleteUser(userId));
+            });
         }
 
         function logout() {
