@@ -488,13 +488,20 @@
 
                     if (result?.status === 'ok') {
                         addDebugInfo('sessionToken 驗證成功');
+                        
+                        // 直接跳轉到 test.html，不要只渲染界面
+                        showStatus('驗證成功，即將進入系統...', 'success');
+                        setTimeout(() => {
+                            window.location.href = 'test.html';
+                        }, 1500);
+                        return; // 確保返回，避免後續流程
+                    } else if (result?.status === 'needsignup') {
+                        addDebugInfo('sessionToken 需要註冊');
+                        // 需要註冊的情況才顯示註冊表單
                         renderUserInterface({
-                            displayName: result.displayName,
-                            userId: result.userId
+                            displayName: result.displayName || '新用戶',
+                            needsSignup: true
                         });
-                        // 🟢 這裡加入跳轉
-                        addDebugInfo('子頁跳轉到 test.html');
-                        setTimeout(() => { window.location.href = 'test.html'; }, 700);
                         return;
                     } else {
                         addDebugInfo('sessionToken 無效，清除本地資料');
@@ -562,7 +569,7 @@
 
                     showStatus('驗證成功，即將進入系統...', 'success');
                     setTimeout(() => {
-                        window.location.href = './test.html';
+                        window.location.href = 'test.html';
                     }, 1500);
                     return true;
                 }
