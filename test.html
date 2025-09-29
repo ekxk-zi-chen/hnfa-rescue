@@ -1232,7 +1232,7 @@
                                 <td>${user.姓名}</td>
                                 <td>${user.display_name}</td>
                                 <td>
-                                    <select class="permission-select" onchange="updateUserPermission('${user.id}', this.value)">
+                                    <select class="permission-select" onchange="updateUserPermission('${user_id}', this.value)">
                                         <option value="一般用戶" ${user.管理員 === '一般用戶' ? 'selected' : ''}>一般用戶</option>
                                         <option value="管理" ${user.管理員 === '管理' ? 'selected' : ''}>管理</option>
                                         <option value="救援" ${user.管理員 === '救援' ? 'selected' : ''}>救援</option>
@@ -1242,7 +1242,7 @@
                                 </td>
                                 <td>${new Date(user.創建時間).toLocaleDateString()}</td>
                                 <td>
-                                    <button class="btn btn-danger btn-sm" onclick="deleteUser('${user.id}')">刪除</button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteUser('${user_id}')">刪除</button>
                                 </td>
                             </tr>
                         `).join('')}
