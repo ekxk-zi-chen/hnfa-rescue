@@ -237,13 +237,32 @@
             object-fit: cover;
         }
 
+        /* 狀態標籤 */
         .status-badge {
             padding: 0.25rem 0.75rem;
             border-radius: 8px;
             font-size: 0.75rem;
             font-weight: 600;
             white-space: nowrap;
+            color: white;
         }
+        /* 新顏色配置 */
+        .status-in-team { background: #4caf50; }   /* 在隊 - 綠 */
+        .status-on-duty { background: #f44336; }   /* 出勤中 - 紅 */
+        .status-loaned  { background: #ffb300; }   /* 借出 - 黃 */
+        .status-maintenance { background: #9c27b0; } /* 維修中 - 紫 */
+
+        /* 小框框背景顏色（summary 行） */
+        .equipment-item.in-team .equipment-summary { background: rgba(76, 175, 80, 0.15); }
+        .equipment-item.on-duty .equipment-summary { background: rgba(244, 67, 54, 0.15); }
+        .equipment-item.loaned  .equipment-summary { background: rgba(255, 179, 0, 0.15); }
+        .equipment-item.maintenance .equipment-summary { background: rgba(156, 39, 176, 0.15); }
+
+        /* 展開後卡片背景 */
+        .equipment-item.in-team .equipment-details { background: rgba(76, 175, 80, 0.05); }
+        .equipment-item.on-duty .equipment-details { background: rgba(244, 67, 54, 0.05); }
+        .equipment-item.loaned  .equipment-details { background: rgba(255, 179, 0, 0.05); }
+        .equipment-item.maintenance .equipment-details { background: rgba(156, 39, 176, 0.05); }
 
         .status-available {
             background: var(--success);
@@ -697,10 +716,12 @@
                     <div class="form-group">
                         <label for="equipmentStatus">目前狀態 *</label>
                         <select id="equipmentStatus" class="form-control" required>
-                            <option value="可用">可用</option>
+                            <option value="在隊">在隊</option>
+                            <option value="出勤中">出勤中</option>
+                            <option value="借出">借出</option>
                             <option value="維修中">維修中</option>
-                            <option value="不可用">不可用</option>
                         </select>
+
                     </div>
                     <div style="text-align: right; margin-top: 2rem;">
                         <button type="button" class="btn btn-secondary" onclick="closeModal('equipmentModal')">取消</button>
@@ -945,12 +966,33 @@
 
         function createEquipmentCard(equipment) {
             const wrapper = document.createElement('div');
-            wrapper.className = 'equipment-item';
+            wrapper.className = `equipment-item ${wrapperClass}`;
 
-            const statusClass =
-                equipment.目前狀態 === '可用' ? 'status-available' :
-                equipment.目前狀態 === '維修中' ? 'status-maintenance' :
-                'status-unavailable';
+            let statusClass = '';
+            let wrapperClass = '';
+
+            switch (equipment.目前狀態) {
+                case '在隊':
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+                    break;
+                case '出勤中':
+                    statusClass = 'status-on-duty';
+                    wrapperClass = 'on-duty';
+                    break;
+                case '借出':
+                    statusClass = 'status-loaned';
+                    wrapperClass = 'loaned';
+                    break;
+                case '維修中':
+                    statusClass = 'status-maintenance';
+                    wrapperClass = 'maintenance';
+                    break;
+                default:
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+            }
+
 
             wrapper.innerHTML = `
                 <div class="equipment-summary">
