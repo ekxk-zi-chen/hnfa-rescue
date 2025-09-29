@@ -238,13 +238,11 @@
         }
 
         .status-badge {
-            position: absolute;
-            top: 12px;
-            right: 12px;
             padding: 0.25rem 0.75rem;
-            border-radius: 50px;
+            border-radius: 8px;
             font-size: 0.75rem;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .status-available {
@@ -622,10 +620,15 @@
             <div class="main-content">
                 <div class="content-header">
                     <h2>裝備清單</h2>
+                    <div class="list-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="expandAll()">全部展開</button>
+                        <button class="btn btn-secondary btn-sm" onclick="collapseAll()">全部收合</button>
+                    </div>
                     <div id="adminActions" style="display: none;">
                         <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
                     </div>
                 </div>
+
 
                 <div id="loadingIndicator" class="loading">
                     <div class="spinner"></div>
@@ -898,7 +901,7 @@
                 document.getElementById('userManagementSection').style.display = 'block';
             }
         }
-
+        // 設置事件監聽器
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
             grid.innerHTML = '';
@@ -919,6 +922,26 @@
                 grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">沒有找到符合條件的裝備</div>';
             }
         }
+        // 全部展開
+        function expandAll() {
+            document.querySelectorAll('.equipment-details').forEach(detail => {
+                detail.classList.add('show');
+            });
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.textContent = '收合';
+            });
+        }
+        // 全部收合
+        function collapseAll() {
+            document.querySelectorAll('.equipment-details').forEach(detail => {
+                detail.classList.remove('show');
+            });
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.textContent = '展開';
+            });
+        }
+
+
 
         function createEquipmentCard(equipment) {
             const wrapper = document.createElement('div');
