@@ -840,8 +840,13 @@
             const grid = document.getElementById('equipmentGrid');
             grid.innerHTML = '';
 
+            // 先篩選
             const filteredData = filterEquipment();
-
+            // ✅ 新增：依照「裝備編號」排序
+            filteredData.sort((a, b) => {
+                return a.裝備編號.localeCompare(b.裝備編號, 'zh-Hant', { numeric: true });
+            });
+            // 再渲染
             filteredData.forEach(equipment => {
                 const card = createEquipmentCard(equipment);
                 grid.appendChild(card);
