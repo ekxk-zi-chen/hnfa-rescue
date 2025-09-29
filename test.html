@@ -884,7 +884,7 @@
             card.innerHTML = `
                 <div class="card-image">
                     ${equipment.圖片檔案位置 ? 
-                        `<img src="${equipment.圖片檔案位置}" alt="${equipment.器材名稱}">` :
+                        `<img src="https://drive.google.com/uc?export=view&id=${equipment.圖片檔案位置}" alt="${equipment.器材名稱}">` :
                         '<div>📦</div>'
                     }
                     <div class="status-badge ${statusClass}">${equipment.目前狀態}</div>
@@ -911,7 +911,7 @@
                         </div>
                     </div>
                     <div class="card-actions">
-                        ${equipment.說明書連結 ? `<a href="https://drive.google.com/file/d/${equipment.說明書連結}/view" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
+                        ${equipment.說明書連結 ? <a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a> : ''}
                         ${getVideoIframe(equipment.教學影片相關)}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
