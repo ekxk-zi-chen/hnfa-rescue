@@ -2,26 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
-
-const eventClients = new Set();
-
-// 添加廣播函數
-function broadcastToClients(data) {
-  eventClients.forEach(client => {
-    if (client.res && !client.res.finished) {
-      client.res.write(`data: ${JSON.stringify(data)}\n\n`);
-    }
-  });
-}
-
-// 清理斷開的連接
-setInterval(() => {
-  eventClients.forEach(client => {
-    if (client.res && client.res.finished) {
-      eventClients.delete(client);
-    }
-  });
-}, 30000);
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
   const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
@@ -121,20 +101,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "Failed to create equipment" });
       }
 
-      if (data.status === 'ok') {
-        // 廣播新增事件
-        broadcastToClients({
-          type: 'equipment_created',
-          equipment: data
-        });
-        
-        return res.status(200).json({
-          status: "ok",
-          equipmentId: data.id,
-          message: "裝備創建成功"
-        });
-      }
-      
+      return res.status(200).json({
+        status: "ok",
+        equipmentId: data.id,
+        message: "裝備創建成功"
+      });
     } catch (error) {
       console.error('createEquipment 錯誤:', error);
       return res.status(500).json({ status: "error", message: error.message });
@@ -163,18 +134,10 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "Failed to update equipment" });
       }
 
-      if (data.status === 'ok') {
-        // 廣播更新事件
-        broadcastToClients({
-          type: 'equipment_updated',
-          equipment: data
-        });
-        
-        return res.status(200).json({
-          status: "ok",
-          message: "裝備更新成功"
-        });
-      }
+      return res.status(200).json({
+        status: "ok",
+        message: "裝備更新成功"
+      });
     } catch (error) {
       console.error('updateEquipment 錯誤:', error);
       return res.status(500).json({ status: "error", message: error.message });
@@ -198,18 +161,10 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "Failed to delete equipment" });
       }
 
-      if (data.status === 'ok') {
-        // 廣播刪除事件
-        broadcastToClients({
-          type: 'equipment_deleted',
-          equipmentId: equipmentId
-        });
-        
-        return res.status(200).json({
-          status: "ok",
-          message: "裝備刪除成功"
-        });
-      }
+      return res.status(200).json({
+        status: "ok",
+        message: "裝備刪除成功"
+      });
     } catch (error) {
       console.error('deleteEquipment 錯誤:', error);
       return res.status(500).json({ status: "error", message: error.message });
