@@ -911,7 +911,7 @@
                         </div>
                     </div>
                     <div class="card-actions">
-                        ${equipment.說明書連結 ? <a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a> : ''}
+                        ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
                         ${getVideoIframe(equipment.教學影片相關)}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
