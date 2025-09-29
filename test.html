@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>花蓮特搜裝備管理系統</title>
     <style>
         :root {
@@ -613,12 +613,12 @@
                         </div>
                         <div class="form-group">
                             <label for="equipmentQuantity">數量 *</label>
-                            <input type="number" id="equipmentQuantity" class="form-control" min="0" required>
+                            <input type="text" id="equipmentQuantity" class="form-control" required placeholder="例如：2組、1支">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="equipmentImage">圖片檔案位置</label>
-                        <input type="url" id="equipmentImage" class="form-control" placeholder="https://example.com/image.jpg">
+                        <label for="equipmentImage">圖片檔案位置（Google Drive ID）</label>
+                        <input type="text" id="equipmentImage" class="form-control" placeholder="例如：1ABcDefGhIjKlMnOpQrStUvWxYz">
                     </div>
                     <div class="form-group">
                         <label for="equipmentManual">說明書連結</label>
@@ -709,7 +709,7 @@
                 }, 2000);
             }
         }
-        // 驗證用戶身份
+
         async function verifyUser(sessionToken) {
             try {
                 const response = await fetch(CONFIG.API_BASE, {
@@ -747,7 +747,7 @@
                 throw error;
             }
         }
-        // 載入裝備資料
+
         async function loadEquipmentData() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -821,7 +821,7 @@
                 updateCategoryFilter();
             }
         }
-        // 更新用戶介面
+
         function updateUserInterface() {
             document.getElementById('userName').textContent = currentUser.displayName;
             document.getElementById('userRole').textContent = currentUser.role;
@@ -835,7 +835,7 @@
                 document.getElementById('userManagementSection').style.display = 'block';
             }
         }
-        // 渲染裝備卡片
+
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
             grid.innerHTML = '';
@@ -851,29 +851,7 @@
                 grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">沒有找到符合條件的裝備</div>';
             }
         }
-        // 解析並嵌入影片 iframe
-        function getVideoIframe(equipmentVideo) {
-            if (!equipmentVideo) return '';
 
-            // 1. YouTube 完整網址或短網址
-            if (equipmentVideo.includes('youtube.com') || equipmentVideo.includes('youtu.be')) {
-                const match = equipmentVideo.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                if (match) {
-                    const videoId = match[1];
-                    return `<iframe width="100%" height="200" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>`;
-                }
-            }
-
-            // 2. Google Drive 影片 ID
-            // 假設你存的是純 ID
-            if (!equipmentVideo.startsWith('http')) {
-                return `<iframe width="100%" height="200" src="https://drive.google.com/file/d/${equipmentVideo}/preview" frameborder="0" allowfullscreen></iframe>`;
-            }
-
-            // 3. 其他網址直接用 a 連結
-            return `<a href="${equipmentVideo}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>`;
-        }
-        // 建立裝備卡片
         function createEquipmentCard(equipment) {
             const card = document.createElement('div');
             card.className = 'equipment-card';
@@ -917,7 +895,7 @@
                     </div>
                     <div class="card-actions">
                         ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
-                        ${getVideoIframe(equipment.教學影片相關)}
+                        ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
                         ${currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
                     </div>
@@ -926,8 +904,7 @@
 
             return card;
         }
-        
-        // 篩選裝備資料
+
         function filterEquipment() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const categoryFilter = document.getElementById('categoryFilter').value;
@@ -945,7 +922,7 @@
                 return matchSearch && matchCategory && matchStatus;
             });
         }
-        // 清除篩選條件
+
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
             const categories = [...new Set(equipmentData.map(item => item.分群組))];
@@ -958,7 +935,7 @@
                 categorySelect.appendChild(option);
             });
         }
-        // 清除所有篩選條件
+
         function setupEventListeners() {
             // 搜尋和篩選
             document.getElementById('searchInput').addEventListener('input', renderEquipment);
@@ -975,14 +952,14 @@
                 }
             });
         }
-        // 清除篩選條件
+
         function showAddEquipmentModal() {
             document.getElementById('modalTitle').textContent = '新增裝備';
             document.getElementById('equipmentForm').reset();
             document.getElementById('equipmentId').value = '';
             showModal('equipmentModal');
         }
-        // 顯示 Modal
+
         function editEquipment(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
@@ -1002,7 +979,7 @@
 
             showModal('equipmentModal');
         }
-        // 顯示 Modal
+
         async function handleEquipmentSubmit(event) {
             event.preventDefault();
             
@@ -1066,7 +1043,7 @@
                 showToast('儲存失敗: ' + error.message, 'error');
             }
         }
-        // 刪除裝備
+
         async function deleteEquipment(equipmentId) {
             if (!confirm('確定要刪除這個裝備嗎？')) return;
 
@@ -1101,7 +1078,7 @@
                 showToast('刪除失敗: ' + error.message, 'error');
             }
         }
-        // 登出
+
         async function showUserManagement() {
             if (currentUser.role !== '管理') {
                 showToast('您沒有權限管理用戶', 'error');
@@ -1136,7 +1113,7 @@
                 showToast('載入用戶資料失敗: ' + error.message, 'error');
             }
         }
-        // 更新用戶權限
+
         async function updateUserPermission(userId, newPermission) {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -1167,7 +1144,7 @@
                 showToast('更新權限失敗: ' + error.message, 'error');
             }
         }
-        // 刪除用戶
+
         async function deleteUser(userId) {
             if (!confirm('確定要刪除這個用戶嗎？')) return;
 
@@ -1201,24 +1178,24 @@
                 showToast('刪除用戶失敗: ' + error.message, 'error');
             }
         }
-        // 清除篩選條件
+
         function clearFilters() {
             document.getElementById('searchInput').value = '';
             document.getElementById('categoryFilter').value = '';
             document.getElementById('statusFilter').value = '';
             renderEquipment();
         }
-        // 顯示/隱藏 Modal
+
         function showModal(modalId) {
             document.getElementById(modalId).classList.add('show');
             document.body.style.overflow = 'hidden';
         }
-        // 隱藏 Modal
+
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('show');
             document.body.style.overflow = 'auto';
         }
-        // 顯示 Toast 通知
+
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
@@ -1231,11 +1208,11 @@
                 toast.classList.remove('show');
             }, 3000);
         }
-        // 產生唯一 ID (用於新增裝備)
+
         function generateId() {
             return Date.now().toString(36) + Math.random().toString(36).substr(2);
         }
-        // 渲染用戶列表
+
         function renderUserList(users) {
             const usersList = document.getElementById('usersList');
             usersList.innerHTML = `
@@ -1273,7 +1250,7 @@
                 </table>
             `;
         }
-        // 登出
+
         function logout() {
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
