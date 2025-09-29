@@ -796,13 +796,15 @@
         // 配置常數
         const CONFIG = {
             API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
-            POLLING_INTERVAL: 10000 // 10秒輪詢一次
+            WS_URL: "wss://hnfa-rescue.vercel.app/api/ws" // 假設您的 WebSocket 端點
         };
 
         // 全域變數
         let currentUser = null;
         let equipmentData = [];
-        let pollingInterval = null;
+        let wsConnection = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
 
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function() {
@@ -827,8 +829,8 @@
                 // 設置事件監聽器
                 setupEventListeners();
                 
-                // 開始輪詢檢查更新
-                startPolling();
+                // 開始 WebSocket 監聽
+                startWebSocketListener(sessionToken);
                 
             } catch (error) {
                 console.error('初始化失敗:', error);
@@ -836,6 +838,123 @@
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 2000);
+            }
+        }
+
+        // WebSocket 監聽功能
+        function startWebSocketListener(sessionToken) {
+            try {
+                // 建立 WebSocket 連接
+                wsConnection = new WebSocket(CONFIG.WS_URL);
+                
+                wsConnection.onopen = function() {
+                    console.log('WebSocket 連接已建立');
+                    reconnectAttempts = 0;
+                    
+                    // 發送認證訊息
+                    wsConnection.send(JSON.stringify({
+                        type: 'auth',
+                        sessionToken: sessionToken
+                    }));
+                };
+                
+                wsConnection.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('解析 WebSocket 訊息失敗:', error);
+                    }
+                };
+                
+                wsConnection.onclose = function(event) {
+                    console.log('WebSocket 連接關閉:', event.code, event.reason);
+                    
+                    // 自動重連機制
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        const delay = Math.min(1000 * reconnectAttempts, 10000); // 指數退避
+                        console.log(`${delay}ms 後嘗試重新連接... (嘗試 ${reconnectAttempts}/${maxReconnectAttempts})`);
+                        
+                        setTimeout(() => {
+                            if (sessionStorage.getItem('sessionToken')) {
+                                startWebSocketListener(sessionStorage.getItem('sessionToken'));
+                            }
+                        }, delay);
+                    } else {
+                        console.error('達到最大重連次數，停止嘗試');
+                        showToast('即時更新連接已中斷，請刷新頁面', 'error');
+                    }
+                };
+                
+                wsConnection.onerror = function(error) {
+                    console.error('WebSocket 錯誤:', error);
+                };
+                
+            } catch (error) {
+                console.error('建立 WebSocket 連接失敗:', error);
+            }
+        }
+
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'equipment_created':
+                    console.log('收到裝備新增通知:', data.equipment);
+                    equipmentData.push(data.equipment);
+                    equipmentData.sort((a, b) => {
+                        const aCode = a.裝備編號 ? String(a.裝備編號) : '';
+                        const bCode = b.裝備編號 ? String(b.裝備編號) : '';
+                        return aCode.localeCompare(bCode, 'zh-Hant', { numeric: true });
+                    });
+                    renderEquipment();
+                    updateCategoryFilter();
+                    updateExpiredCount();
+                    showToast(`新增裝備: ${data.equipment.器材名稱}`, 'success');
+                    break;
+                    
+                case 'equipment_updated':
+                    console.log('收到裝備更新通知:', data.equipment);
+                    const updateIndex = equipmentData.findIndex(item => item.id === data.equipment.id);
+                    if (updateIndex !== -1) {
+                        equipmentData[updateIndex] = data.equipment;
+                    }
+                    renderEquipment();
+                    updateExpiredCount();
+                    showToast(`更新裝備: ${data.equipment.器材名稱}`, 'success');
+                    break;
+                    
+                case 'equipment_deleted':
+                    console.log('收到裝備刪除通知:', data.equipmentId);
+                    equipmentData = equipmentData.filter(item => item.id !== data.equipmentId);
+                    renderEquipment();
+                    updateCategoryFilter();
+                    updateExpiredCount();
+                    showToast('裝備已刪除', 'success');
+                    break;
+                    
+                case 'equipment_reordered':
+                    console.log('收到裝備重新排序通知');
+                    // 重新載入所有裝備資料以確保順序正確
+                    loadEquipmentData();
+                    showToast('裝備順序已更新', 'success');
+                    break;
+                    
+                case 'auth_success':
+                    console.log('WebSocket 認證成功');
+                    break;
+                    
+                case 'auth_failed':
+                    console.error('WebSocket 認證失敗');
+                    showToast('即時更新認證失敗', 'error');
+                    break;
+                    
+                case 'error':
+                    console.error('WebSocket 錯誤訊息:', data.message);
+                    showToast(`即時更新錯誤: ${data.message}`, 'error');
+                    break;
+                    
+                default:
+                    console.log('未知的 WebSocket 訊息類型:', data.type);
             }
         }
 
@@ -899,9 +1018,9 @@
                     
                     // 按照裝備編號排序
                     equipmentData.sort((a, b) => {
-                    const aCode = a.裝備編號 ? String(a.裝備編號) : '';
-                    const bCode = b.裝備編號 ? String(b.裝備編號) : '';
-                    return aCode.localeCompare(bCode, 'zh-Hant', { numeric: true });
+                        const aCode = a.裝備編號 ? String(a.裝備編號) : '';
+                        const bCode = b.裝備編號 ? String(b.裝備編號) : '';
+                        return aCode.localeCompare(bCode, 'zh-Hant', { numeric: true });
                     });
                 } else {
                     throw new Error(data.message || '載入失敗');
@@ -916,46 +1035,8 @@
                 
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
-                // 暫時使用假資料
-                equipmentData = [
-                    {
-                        id: '1',
-                        器材名稱: '氧氣瓶',
-                        分群組: '醫療設備',
-                        圖片檔案位置: '',
-                        裝備編號: 'MED-001',
-                        型號: 'OXY-500L',
-                        特別位置: '醫療車第二層',
-                        數量: 5,
-                        說明書連結: '',
-                        目前狀態: '在隊',
-                        狀態備註: '',
-                        填表人: '張三',
-                        狀態: '正常',
-                        教學影片相關: '',
-                        歷史更新紀錄: [],
-                        updated_at: new Date().toISOString()
-                    },
-                    {
-                        id: '2',
-                        器材名稱: '繩索',
-                        分群組: '救援設備',
-                        圖片檔案位置: '',
-                        裝備編號: 'RES-001',
-                        型號: 'ROPE-10MM',
-                        特別位置: '工具箱A',
-                        數量: 10,
-                        說明書連結: '',
-                        目前狀態: '在隊',
-                        狀態備註: '',
-                        填表人: '李四',
-                        狀態: '正常',
-                        教學影片相關: '',
-                        歷史更新紀錄: [],
-                        updated_at: new Date().toISOString()
-                    }
-                ];
-
+                // 使用假資料
+                equipmentData = getMockEquipmentData();
                 document.getElementById('loadingIndicator').style.display = 'none';
                 document.getElementById('equipmentGrid').style.display = 'grid';
                 renderEquipment();
@@ -963,7 +1044,8 @@
                 updateExpiredCount();
             }
         }
-
+            
+    
         function updateUserInterface() {
             document.getElementById('userName').textContent = currentUser.displayName;
             document.getElementById('userRole').textContent = currentUser.role;
@@ -1740,14 +1822,55 @@
         }
 
         function logout() {
-            // 停止輪詢
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
+            // 關閉 WebSocket 連接
+            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+                wsConnection.close();
             }
             
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
             window.location.href = '/';
+        }
+        // 輔助函數：獲取模擬裝備資料
+        function getMockEquipmentData() {
+            return [
+                {
+                    id: '1',
+                    器材名稱: '氧氣瓶',
+                    分群組: '醫療設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'MED-001',
+                    型號: 'OXY-500L',
+                    特別位置: '醫療車第二層',
+                    數量: 5,
+                    說明書連結: '',
+                    目前狀態: '在隊',
+                    狀態備註: '',
+                    填表人: '張三',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    歷史更新紀錄: [],
+                    updated_at: new Date().toISOString()
+                },
+                {
+                    id: '2',
+                    器材名稱: '繩索',
+                    分群組: '救援設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'RES-001',
+                    型號: 'ROPE-10MM',
+                    特別位置: '工具箱A',
+                    數量: 10,
+                    說明書連結: '',
+                    目前狀態: '在隊',
+                    狀態備註: '',
+                    填表人: '李四',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    歷史更新紀錄: [],
+                    updated_at: new Date().toISOString()
+                }
+            ];
         }
     </script>
 
