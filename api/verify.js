@@ -1,3 +1,10 @@
+// 在文件頂部添加
+import { 
+    broadcastEquipmentCreated, 
+    broadcastEquipmentUpdated, 
+    broadcastEquipmentDeleted,
+    broadcastEquipmentReordered 
+} from './ws';
 import { createClient } from "@supabase/supabase-js";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
@@ -81,94 +88,104 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   }
 
   if (action === 'createEquipment') {
-    if (userRole === '一般用戶') {
-      return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
-    }
-
-    try {
-      const { equipmentData } = body;
-      equipmentData.填表人 = userData.display_name || userData.姓名;
-      equipmentData.updated_at = new Date().toISOString();
-
-      const { data, error } = await supabase
-        .from('equipment')
-        .insert(equipmentData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('創建裝備錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to create equipment" });
+      if (userRole === '一般用戶') {
+          return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
       }
 
-      return res.status(200).json({
-        status: "ok",
-        equipmentId: data.id,
-        message: "裝備創建成功"
-      });
-    } catch (error) {
-      console.error('createEquipment 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
+      try {
+          const { equipmentData } = body;
+          equipmentData.填表人 = userData.display_name || userData.姓名;
+          equipmentData.updated_at = new Date().toISOString();
+
+          const { data, error } = await supabase
+              .from('equipment')
+              .insert(equipmentData)
+              .select()
+              .single();
+
+          if (error) {
+              console.error('創建裝備錯誤:', error);
+              return res.status(500).json({ status: "error", message: "Failed to create equipment" });
+          }
+
+          // 廣播裝備創建事件
+          broadcastEquipmentCreated(data);
+
+          return res.status(200).json({
+              status: "ok",
+              equipmentId: data.id,
+              message: "裝備創建成功"
+          });
+      } catch (error) {
+          console.error('createEquipment 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
   }
 
+
   if (action === 'updateEquipment') {
-    if (userRole === '一般用戶') {
-      return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
-    }
-
-    try {
-      const { equipmentData } = body;
-      equipmentData.填表人 = userData.display_name || userData.姓名;
-      equipmentData.updated_at = new Date().toISOString();
-
-      const { data, error } = await supabase
-        .from('equipment')
-        .update(equipmentData)
-        .eq('id', equipmentData.id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('更新裝備錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to update equipment" });
+      if (userRole === '一般用戶') {
+          return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
       }
 
-      return res.status(200).json({
-        status: "ok",
-        message: "裝備更新成功"
-      });
-    } catch (error) {
-      console.error('updateEquipment 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
+      try {
+          const { equipmentData } = body;
+          equipmentData.填表人 = userData.display_name || userData.姓名;
+          equipmentData.updated_at = new Date().toISOString();
+
+          const { data, error } = await supabase
+              .from('equipment')
+              .update(equipmentData)
+              .eq('id', equipmentData.id)
+              .select()
+              .single();
+
+          if (error) {
+              console.error('更新裝備錯誤:', error);
+              return res.status(500).json({ status: "error", message: "Failed to update equipment" });
+          }
+
+          // 廣播裝備更新事件
+          broadcastEquipmentUpdated(data);
+
+          return res.status(200).json({
+              status: "ok",
+              message: "裝備更新成功"
+          });
+      } catch (error) {
+          console.error('updateEquipment 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
   }
 
   if (action === 'deleteEquipment') {
-    if (userRole === '一般用戶') {
-      return res.status(403).json({ status: "error", message: "沒有權限刪除裝備" });
-    }
-
-    try {
-      const { equipmentId } = body;
-      const { error } = await supabase
-        .from('equipment')
-        .delete()
-        .eq('id', equipmentId);
-
-      if (error) {
-        console.error('刪除裝備錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to delete equipment" });
+      if (userRole === '一般用戶') {
+          return res.status(403).json({ status: "error", message: "沒有權限刪除裝備" });
       }
 
-      return res.status(200).json({
-        status: "ok",
-        message: "裝備刪除成功"
-      });
-    } catch (error) {
-      console.error('deleteEquipment 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
+      try {
+          const { equipmentId } = body;
+          const { error } = await supabase
+              .from('equipment')
+              .delete()
+              .eq('id', equipmentId);
+
+          if (error) {
+              console.error('刪除裝備錯誤:', error);
+              return res.status(500).json({ status: "error", message: "Failed to delete equipment" });
+          }
+
+          // 廣播裝備刪除事件
+          broadcastEquipmentDeleted(equipmentId);
+
+          return res.status(200).json({
+              status: "ok",
+              message: "裝備刪除成功"
+          });
+      } catch (error) {
+          console.error('deleteEquipment 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
   }
 
   if (action === 'getUsers') {
