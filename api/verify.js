@@ -179,7 +179,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     try {
       const { data: users, error } = await supabase
         .from('users')
-        .select('id, 姓名, display_name, 管理員, 創建時間')
+        .select('user_id, 姓名, display_name, 管理員, 創建時間')
         .order('創建時間', { ascending: false });
 
       if (error) {
