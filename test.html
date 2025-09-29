@@ -986,7 +986,9 @@
 
             // 按照裝備編號排序
             filteredData.sort((a, b) => {
-                return a.裝備編號.localeCompare(b.裝備編號, undefined, {numeric: true, sensitivity: 'base'});
+                const aCode = a.裝備編號 ? String(a.裝備編號) : '';
+                const bCode = b.裝備編號 ? String(b.裝備編號) : '';
+                return aCode.localeCompare(bCode, undefined, { numeric: true, sensitivity: 'base' });
             });
 
             filteredData.forEach(equipment => {
