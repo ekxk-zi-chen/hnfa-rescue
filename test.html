@@ -1493,10 +1493,9 @@
         let supabaseRealtime = null;
         // 設定 Realtime 訂閱
         function setupRealtimeUpdates() {
-            if (!sessionStorage.getItem('sessionToken')) return;
-
+            // ⚠ 不要在這裡直接檢查 sessionToken
             supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                realtime: { params: { eventsPerSecond: 5 } } // 防止事件過多
+                realtime: { params: { eventsPerSecond: 5 } }
             });
 
             const channel = supabaseRealtime.channel('equipment-updates')
@@ -1548,14 +1547,12 @@
         function initRealtimeOrRefresh(data) {
             if (!data || !data.role) return;
 
+            // ⚠ 改用嚴格匹配後端資料
             if (data.role === '管理') {
-                // 只有管理員訂閱 Realtime
                 setupRealtimeUpdates();
-                // 隱藏手動刷新按鈕
                 const refreshBtn = document.getElementById('refreshBtn');
                 if (refreshBtn) refreshBtn.style.display = 'none';
             } else {
-                // 一般用戶：不訂閱，只能手動刷新
                 const refreshBtn = document.getElementById('refreshBtn');
                 if (refreshBtn) {
                     refreshBtn.style.display = 'block';
