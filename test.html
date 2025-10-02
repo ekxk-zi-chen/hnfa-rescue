@@ -936,7 +936,7 @@
             try {
                 const supabasePresence = await initializeSupabaseClient();
 
-                const userKey = `${currentUser.display_name}-${Date.now()}`;
+                const userKey = `${currentUser.displayName}-${Date.now()}`;
 
                 presenceChannel = supabasePresence.channel('online-users', {
                     config: {
@@ -952,22 +952,23 @@
                         updateOnlineUsers();
                     })
                     .on('presence', { event: 'join' }, ({ newPresences }) => {
-                        console.log('[Presence] 用戶加入:', newPresences.map(p => p.display_name));
+                        const names = newPresences.map(p => p.display_name).filter(Boolean);
+                        console.log('[Presence] 用戶加入:', names);
                         handleUserJoin(newPresences);
                     })
                     .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                        console.log('[Presence] 用戶離開:', leftPresences.map(p => p.display_name));
+                        const names = leftPresences.map(p => p.display_name).filter(Boolean);
+                        console.log('[Presence] 用戶離開:', names);
                         handleUserLeave(leftPresences);
                     })
                     .subscribe(async (status) => {
                         if (status === 'SUBSCRIBED') {
-                            // 只發送必要資訊，不包含 user_id
                             await presenceChannel.track({
                                 display_name: currentUser.displayName,
                                 role: currentUser.role,
                                 online_at: new Date().toISOString()
                             });
-                            console.log('[Presence] 線上狀態追蹤已啟動');
+                            console.log('[Presence] 線上狀態追蹤已啟動 - 當前用戶:', currentUser.displayName);
                         }
                     });
 
@@ -975,31 +976,23 @@
                 console.error('線上狀態追蹤失敗:', error);
             }
         }
-
         // 處理用戶加入
         function handleUserJoin(newPresences) {
-            newPresences.forEach(presence => {
-                // 只記錄 display_name，不記錄 user_id
-                if (presence.user_id !== currentUser.userId) {
-                    onlineUsers.set(presence.display_name, { // 改用 display_name 作為 key
-                        display_name: presence.display_name,
-                        role: presence.role,
-                        joinTime: new Date()
-                    });
-                }
-            });
-            updateOnlineDisplay();
+            const names = newPresences.map(p => p.display_name).filter(name =>
+                name && name !== currentUser.displayName
+            );
+            console.log('[Presence] 用戶加入:', names);
+            // 不直接操作 onlineUsers，等待 sync 事件
         }
 
         // 處理用戶離開
         function handleUserLeave(leftPresences) {
-            leftPresences.forEach(presence => {
-                onlineUsers.delete(presence.display_name); // 改用 display_name
-            });
-            updateOnlineDisplay();
+            const names = leftPresences.map(p => p.display_name).filter(Boolean);
+            console.log('[Presence] 用戶離開:', names);
+            // 不直接操作 onlineUsers，等待 sync 事件
         }
 
-        // 更新線上用戶顯示
+        // 修正：更新線上用戶顯示
         function updateOnlineDisplay() {
             const onlineCount = onlineUsers.size + 1; // +1 包含自己
             console.log(`[線上顯示] 總人數: ${onlineCount}, 其他用戶: ${onlineUsers.size}`);
@@ -1012,42 +1005,39 @@
             }
         }
 
-        // 管理員查看詳細線上資訊
+        // 管理員詳細資訊顯示
         function showDetailedOnlineInfo() {
             const totalUsers = onlineUsers.size + 1;
             const adminUsers = Array.from(onlineUsers.values()).filter(user => user.role === '管理').length;
-            const normalUsers = totalUsers - adminUsers - 1;
+            const totalAdmins = adminUsers + (currentUser.role === '管理' ? 1 : 0);
+            const normalUsers = totalUsers - totalAdmins;
 
-            console.log(`[線上統計] 總人數: ${totalUsers}, 管理員: ${adminUsers + 1}, 一般用戶: ${normalUsers}`);
+            console.log(`[線上統計] 總人數: ${totalUsers}, 管理員: ${totalAdmins}, 一般用戶: ${normalUsers}`);
 
-            // 更新管理員面板顯示 - 只顯示統計數字，不顯示具體資訊
             if (document.getElementById('adminOnlineInfo')) {
                 document.getElementById('adminOnlineInfo').innerHTML = `
             <div style="font-size: 0.75rem; line-height: 1.4;">
-                <div>管理員: ${adminUsers + 1} 人</div>
+                <div>管理員: ${totalAdmins} 人</div>
                 <div>一般用戶: ${normalUsers} 人</div>
                 <div>總線上: ${totalUsers} 人</div>
             </div>
         `;
             }
         }
-
-        // ✅ 修正：添加檢查並確保更新顯示
+        // 更新線上用戶列表
         function updateOnlineUsers() {
-            if (!presenceChannel) {
-                console.warn('[Presence] presenceChannel 未初始化');
-                return;
-            }
+            if (!presenceChannel) return;
 
             const state = presenceChannel.presenceState();
-            console.log('[Presence] 當前狀態:', Object.keys(state).length, '個用戶在線');
+            const userCount = Object.keys(state).length;
+            console.log(`[Presence] 當前狀態: ${userCount} 個用戶在線`);
 
             onlineUsers.clear();
 
             Object.values(state).forEach(presences => {
                 presences.forEach(presence => {
-                    if (presence.user_id !== currentUser.userId) {
-                        // 改用 display_name 作為唯一識別，不儲存 user_id
+                    // 排除自己，並且確保有 display_name
+                    if (presence.display_name && presence.display_name !== currentUser.displayName) {
                         onlineUsers.set(presence.display_name, {
                             display_name: presence.display_name,
                             role: presence.role,
@@ -1059,6 +1049,7 @@
 
             updateOnlineDisplay();
         }
+
 
         // 資源使用統計
         function getResourceUsageStats() {
@@ -1167,7 +1158,7 @@
                 console.error('Realtime 訂閱失敗:', error);
             }
         }
-        
+
         // 處理 Realtime 事件 - 優化版本
         function handleRealtimeEvent(payload) {
             const eventType = payload.eventType;
@@ -1252,16 +1243,101 @@
 
         // 修改 createEquipmentCard 函數，添加 data attribute
         function createEquipmentCard(equipment) {
-            // ... 前面的程式碼不變 ...
+            // 1) 先決定狀態對應的 CSS class（跟 wrapper class）
+            let statusClass = '';
+            let wrapperClass = '';
 
+            switch (equipment.目前狀態) {
+                case '在隊':
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+                    break;
+                case '出勤中':
+                    statusClass = 'status-on-duty';
+                    wrapperClass = 'on-duty';
+                    break;
+                case '借出':
+                    statusClass = 'status-loaned';
+                    wrapperClass = 'loaned';
+                    break;
+                case '維修中':
+                    statusClass = 'status-maintenance';
+                    wrapperClass = 'maintenance';
+                    break;
+                default:
+                    // 預設為在隊（若資料沒填）
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+            }
+
+            // 2) 建立 wrapper 並加上剛剛決定好的 class
             const wrapper = document.createElement('div');
             wrapper.className = `equipment-item ${wrapperClass}`;
             wrapper.setAttribute('data-equipment-id', equipment.id); // 添加這個
 
-            // ... 後面的程式碼不變 ...
+            // 3) 填入 HTML（注意：equipment-details 一定會存在，避免 null）
+            wrapper.innerHTML = `
+                <div class="equipment-summary">
+                    <div class="summary-left">
+                        <span class="equipment-name">${equipment.器材名稱}</span>
+                        <span class="equipment-number">(${equipment.裝備編號})</span>
+                    </div>
+                    <div class="summary-right">
+                        <span class="status-badge ${statusClass}">${equipment.目前狀態 || '在隊'}</span>
+                        <button class="btn btn-secondary btn-sm toggle-btn">展開</button>
+                    </div>
+                </div>
+
+                <div class="equipment-details">
+                    ${equipment.圖片檔案位置 ? `
+                        <div class="detail-image">
+                            <iframe 
+                                src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview"
+                                frameborder="0" allowfullscreen
+                                style="width:100%;height:200px;"></iframe>
+                        </div>
+                    ` : ''}
+
+                    <div class="detail-info">
+                        <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
+                        <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
+                        <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
+                        <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
+                        <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
+                    </div>
+
+                    <div class="card-actions">
+                        ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
+                        ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // 4) 綁定展開/收合按鈕（並避免事件冒泡）
+            const toggleBtn = wrapper.querySelector('.toggle-btn');
+            const details = wrapper.querySelector('.equipment-details');
+
+            // 若你希望點 summary 也能展開，可以同時綁定 summary 的 click（下方示範）
+            const summary = wrapper.querySelector('.equipment-summary');
+
+            function toggle() {
+                const isVisible = details.classList.toggle('show');
+                toggleBtn.textContent = isVisible ? '收合' : '展開';
+            }
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggle();
+            });
+
+            // 可選：點整行 summary 也展開（若不想要就把這一行移除）
+            summary.addEventListener('click', () => toggle());
 
             return wrapper;
         }
+
         async function verifyUser(sessionToken) {
             try {
                 const response = await fetch(CONFIG.API_BASE, {
