@@ -1538,12 +1538,17 @@
             const categoryFilter = document.getElementById('categoryFilter').value;
             const statusFilter = document.getElementById('statusFilter').value;
 
+            // 如果是搜尋過期裝備的特殊標記
+            if (searchTerm === '__expired__') {
+                return checkExpiredEquipment();
+            }
+
             const filtered = equipmentData.filter(equipment => {
-                // 確保所有字串都有預設值
-                const equipmentName = equipment.器材名稱 || '';
-                const equipmentNumber = equipment.裝備編號 || '';
-                const equipmentModel = equipment.型號 || '';
-                const equipmentGroup = equipment.分群組 || '';
+                // 確保所有要搜尋的欄位都是字串
+                const equipmentName = String(equipment.器材名稱 || '');
+                const equipmentNumber = String(equipment.裝備編號 || '');
+                const equipmentModel = String(equipment.型號 || '');
+                const equipmentGroup = String(equipment.分群組 || '');
 
                 const matchSearch = !searchTerm ||
                     equipmentName.toLowerCase().includes(searchTerm) ||
@@ -1556,10 +1561,12 @@
                 return matchSearch && matchCategory && matchStatus;
             });
 
-            // 檢查是否有過期裝備
-            const expired = checkExpiredEquipment();
-            if (expired.length > 0 && document.getElementById('searchInput').value === '') {
-                showExpiredAlert(expired);
+            // 只在完全沒有篩選條件時檢查過期裝備
+            if (searchTerm === '' && categoryFilter === '' && statusFilter === '') {
+                const expired = checkExpiredEquipment();
+                if (expired.length > 0 && !window.expiredAlertShown) {
+                    showExpiredAlert(expired);
+                }
             }
 
             return filtered;
@@ -1727,21 +1734,23 @@
         }
         // 顯示過期提醒
         function showExpiredAlert(expired) {
-            // 檢查是否已經顯示過提醒，避免重複觸發
-            if (window.expiredAlertShown) return;
-            window.expiredAlertShown = true;
-
-            if (confirm(`有 ${expired.length} 個裝備超過3天未歸隊，是否查看？`)) {
-                // 篩選顯示過期裝備
-                document.getElementById('statusFilter').value = '';
-                document.getElementById('searchInput').value = '過期';
-                renderEquipment();
-            }
-
-            // 5秒後重置標記
+            // 使用 setTimeout 避免在渲染過程中觸發
             setTimeout(() => {
-                window.expiredAlertShown = false;
-            }, 5000);
+                if (window.expiredAlertShown) return;
+                window.expiredAlertShown = true;
+
+                if (confirm(`有 ${expired.length} 個裝備超過3天未歸隊，是否查看？`)) {
+                    // 使用特殊標記來篩選過期裝備
+                    document.getElementById('statusFilter').value = '';
+                    document.getElementById('searchInput').value = '__expired__';
+                    renderEquipment();
+                }
+
+                // 10秒後重置標記
+                setTimeout(() => {
+                    window.expiredAlertShown = false;
+                }, 10000);
+            }, 1000);
         }
         // 刪除裝備
         async function deleteEquipment(equipmentId) {
