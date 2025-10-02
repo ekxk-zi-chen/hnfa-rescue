@@ -246,23 +246,62 @@
             white-space: nowrap;
             color: white;
         }
+
         /* 新顏色配置 */
-        .status-in-team { background: #4caf50; }   /* 在隊 - 綠 */
-        .status-on-duty { background: #f44336; }   /* 出勤中 - 紅 */
-        .status-loaned  { background: #ffb300; }   /* 借出 - 黃 */
-        .status-maintenance { background: #9c27b0; } /* 維修中 - 紫 */
+        .status-in-team {
+            background: #4caf50;
+        }
+
+        /* 在隊 - 綠 */
+        .status-on-duty {
+            background: #f44336;
+        }
+
+        /* 出勤中 - 紅 */
+        .status-loaned {
+            background: #ffb300;
+        }
+
+        /* 借出 - 黃 */
+        .status-maintenance {
+            background: #9c27b0;
+        }
+
+        /* 維修中 - 紫 */
 
         /* 小框框背景顏色（summary 行） */
-        .equipment-item.in-team .equipment-summary { background: rgba(76, 175, 80, 0.15); }
-        .equipment-item.on-duty .equipment-summary { background: rgba(244, 67, 54, 0.15); }
-        .equipment-item.loaned  .equipment-summary { background: rgba(255, 179, 0, 0.15); }
-        .equipment-item.maintenance .equipment-summary { background: rgba(156, 39, 176, 0.15); }
+        .equipment-item.in-team .equipment-summary {
+            background: rgba(76, 175, 80, 0.15);
+        }
+
+        .equipment-item.on-duty .equipment-summary {
+            background: rgba(244, 67, 54, 0.15);
+        }
+
+        .equipment-item.loaned .equipment-summary {
+            background: rgba(255, 179, 0, 0.15);
+        }
+
+        .equipment-item.maintenance .equipment-summary {
+            background: rgba(156, 39, 176, 0.15);
+        }
 
         /* 展開後卡片背景 */
-        .equipment-item.in-team .equipment-details { background: rgba(76, 175, 80, 0.05); }
-        .equipment-item.on-duty .equipment-details { background: rgba(244, 67, 54, 0.05); }
-        .equipment-item.loaned  .equipment-details { background: rgba(255, 179, 0, 0.05); }
-        .equipment-item.maintenance .equipment-details { background: rgba(156, 39, 176, 0.05); }
+        .equipment-item.in-team .equipment-details {
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .equipment-item.on-duty .equipment-details {
+            background: rgba(244, 67, 54, 0.05);
+        }
+
+        .equipment-item.loaned .equipment-details {
+            background: rgba(255, 179, 0, 0.05);
+        }
+
+        .equipment-item.maintenance .equipment-details {
+            background: rgba(156, 39, 176, 0.05);
+        }
 
         .status-available {
             background: var(--success);
@@ -358,6 +397,7 @@
                 transform: scale(0.7);
                 opacity: 0;
             }
+
             to {
                 transform: scale(1);
                 opacity: 1;
@@ -433,8 +473,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .toast {
@@ -528,12 +573,13 @@
             border-radius: 6px;
             background: white;
         }
+
         .equipment-item {
             border-radius: 12px;
             border: 1px solid var(--gray-300);
             background: white;
             margin-bottom: 1rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
             overflow: hidden;
         }
 
@@ -587,10 +633,16 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
 
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 
@@ -627,7 +679,8 @@
                         <option value="不可用">不可用</option>
                     </select>
                 </div>
-                <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;" onclick="clearFilters()">清除篩選</button>
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
+                    onclick="clearFilters()">清除篩選</button>
 
                 <!-- 用戶管理區塊 (僅管理員可見) -->
                 <div id="userManagementSection" class="user-management" style="display: none;">
@@ -642,6 +695,9 @@
                     <div class="list-actions">
                         <button class="btn btn-secondary btn-sm" onclick="expandAll()">全部展開</button>
                         <button class="btn btn-secondary btn-sm" onclick="collapseAll()">全部收合</button>
+                        <!-- 一般用戶的手動刷新按鈕 -->
+                        <button class="btn btn-secondary btn-sm" id="refreshBtn" style="display: none;"
+                            onclick="loadEquipmentData()">刷新資料</button>
                     </div>
                     <div id="adminActions" style="display: none;">
                         <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
@@ -698,20 +754,24 @@
                         </div>
                         <div class="form-group">
                             <label for="equipmentQuantity">數量 *</label>
-                            <input type="text" id="equipmentQuantity" class="form-control" required placeholder="例如：2組、1支">
+                            <input type="text" id="equipmentQuantity" class="form-control" required
+                                placeholder="例如：2組、1支">
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="equipmentImage">圖片檔案位置（Google Drive ID）</label>
-                        <input type="text" id="equipmentImage" class="form-control" placeholder="例如：1ABcDefGhIjKlMnOpQrStUvWxYz">
+                        <input type="text" id="equipmentImage" class="form-control"
+                            placeholder="例如：1ABcDefGhIjKlMnOpQrStUvWxYz">
                     </div>
                     <div class="form-group">
                         <label for="equipmentManual">說明書連結</label>
-                        <input type="url" id="equipmentManual" class="form-control" placeholder="https://example.com/manual.pdf">
+                        <input type="url" id="equipmentManual" class="form-control"
+                            placeholder="https://example.com/manual.pdf">
                     </div>
                     <div class="form-group">
                         <label for="equipmentVideo">教學影片相關</label>
-                        <input type="url" id="equipmentVideo" class="form-control" placeholder="https://youtube.com/watch?v=...">
+                        <input type="url" id="equipmentVideo" class="form-control"
+                            placeholder="https://youtube.com/watch?v=...">
                     </div>
                     <div class="form-group">
                         <label for="equipmentStatus">目前狀態 *</label>
@@ -724,7 +784,8 @@
 
                     </div>
                     <div style="text-align: right; margin-top: 2rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('equipmentModal')">取消</button>
+                        <button type="button" class="btn btn-secondary"
+                            onclick="closeModal('equipmentModal')">取消</button>
                         <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">儲存</button>
                     </div>
                 </form>
@@ -758,15 +819,18 @@
     <script>
         // 配置常數
         const CONFIG = {
-            API_BASE: "https://hnfa-rescue.vercel.app/api/verify"
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
+            SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
         };
 
         // 全域變數
         let currentUser = null;
         let equipmentData = [];
+        let supabaseRealtime = null;
 
         // 初始化應用
-        document.addEventListener('DOMContentLoaded', async function() {
+        document.addEventListener('DOMContentLoaded', async function () {
             await initializeApp();
         });
 
@@ -781,14 +845,16 @@
 
                 // 驗證用戶身份並獲取角色
                 await verifyUser(sessionToken);
-                
+
                 // 載入裝備資料
                 await loadEquipmentData();
-                
+
                 // 設置事件監聽器
                 setupEventListeners();
-                // 啟動 Supabase Realtime 訂閱（僅限已驗證的使用者）
-                setupRealtimeUpdates();
+
+                // 根據用戶角色決定是否啟動實時更新
+                initRealtimeOrRefresh(currentUser);
+
             } catch (error) {
                 console.error('初始化失敗:', error);
                 showToast('初始化失敗，請重新登入', 'error');
@@ -798,11 +864,103 @@
             }
         }
 
+        // 根據使用者角色決定是否訂閱
+        function initRealtimeOrRefresh(userData) {
+            if (!userData || !userData.role) return;
+
+            if (userData.role === '管理') {
+                setupRealtimeUpdates();
+                // 隱藏手動刷新按鈕（如果有的話）
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) refreshBtn.style.display = 'none';
+            } else {
+                // 顯示手動刷新按鈕
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.style.display = 'block';
+                    refreshBtn.addEventListener('click', loadEquipmentData);
+                }
+            }
+        }
+
+        // 設定 Realtime 訂閱
+        async function setupRealtimeUpdates() {
+            try {
+                // 動態導入 Supabase
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+
+                supabaseRealtime = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+                    realtime: {
+                        params: {
+                            eventsPerSecond: 5
+                        }
+                    }
+                });
+
+                const channel = supabaseRealtime.channel('equipment-updates')
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'equipment'
+                    }, payload => handleRealtimeEvent(payload))
+                    .subscribe(status => {
+                        if (status === 'SUBSCRIBED') {
+                            console.log('[Realtime] 已訂閱 Supabase equipment 變更');
+                        } else if (status === 'CHANNEL_ERROR') {
+                            console.error('[Realtime] 頻道錯誤');
+                        } else if (status === 'TIMED_OUT') {
+                            console.error('[Realtime] 連線超時');
+                        }
+                    });
+
+                window.addEventListener('beforeunload', () => {
+                    if (channel) {
+                        supabaseRealtime.removeChannel(channel);
+                    }
+                });
+            } catch (error) {
+                console.error('Realtime 訂閱失敗:', error);
+            }
+        }
+
+        // 處理 Realtime 事件
+        function handleRealtimeEvent(payload) {
+            const eventType = payload.eventType;
+            const newData = payload.new;
+            const oldData = payload.old;
+
+            console.log('[Realtime 收到]', eventType, payload);
+
+            switch (eventType) {
+                case 'INSERT':
+                    if (!equipmentData.some(e => e.id === newData.id)) {
+                        equipmentData.unshift(newData);
+                        showToast(`新裝備「${newData.器材名稱}」已新增`, 'success');
+                    }
+                    break;
+                case 'UPDATE':
+                    const idx = equipmentData.findIndex(e => e.id === newData.id);
+                    if (idx !== -1) {
+                        equipmentData[idx] = newData;
+                        showToast(`「${newData.器材名稱}」已更新`, 'info');
+                    }
+                    break;
+                case 'DELETE':
+                    equipmentData = equipmentData.filter(e => e.id !== oldData.id);
+                    showToast('裝備已被刪除', 'error');
+                    break;
+            }
+
+            renderEquipment();
+            updateCategoryFilter();
+        }
         async function verifyUser(sessionToken) {
             try {
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ sessionToken })
                 });
 
@@ -815,36 +973,32 @@
                     throw new Error('用戶驗證失敗');
                 }
 
-                // 從後端獲取完整用戶資訊，包含角色
                 currentUser = {
                     userId: data.userId,
                     displayName: data.displayName,
-                    role: data.role || '一般用戶'  // 這個需要您在後端 API 中回傳
+                    role: data.role || '一般用戶'
                 };
 
-                // 將 token 移到 sessionStorage
                 sessionStorage.setItem('sessionToken', sessionToken);
                 if (localStorage.getItem('sessionToken')) {
                     localStorage.removeItem('sessionToken');
                 }
 
                 updateUserInterface();
-                
             } catch (error) {
                 console.error('用戶驗證錯誤:', error);
                 throw error;
             }
         }
-
         async function loadEquipmentData() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         action: 'getEquipment',
-                        sessionToken 
+                        sessionToken
                     })
                 });
 
@@ -861,10 +1015,10 @@
 
                 document.getElementById('loadingIndicator').style.display = 'none';
                 document.getElementById('equipmentGrid').style.display = 'grid';
-                
+
                 renderEquipment();
                 updateCategoryFilter();
-                
+
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
                 // 暫時使用假資料
@@ -1066,11 +1220,11 @@
             const statusFilter = document.getElementById('statusFilter').value;
 
             return equipmentData.filter(equipment => {
-                const matchSearch = !searchTerm || 
+                const matchSearch = !searchTerm ||
                     equipment.器材名稱.toLowerCase().includes(searchTerm) ||
                     equipment.裝備編號.toLowerCase().includes(searchTerm) ||
                     (equipment.型號 && equipment.型號.toLowerCase().includes(searchTerm));
-                
+
                 const matchCategory = !categoryFilter || equipment.分群組 === categoryFilter;
                 const matchStatus = !statusFilter || equipment.目前狀態 === statusFilter;
 
@@ -1082,7 +1236,7 @@
             const categorySelect = document.getElementById('categoryFilter');
 
             // 先依裝備編號排序後，再抽出群組
-            const sortedByNumber = [...equipmentData].sort((a, b) => 
+            const sortedByNumber = [...equipmentData].sort((a, b) =>
                 String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
             );
 
@@ -1115,7 +1269,7 @@
             document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
 
             // 點擊外部關閉 modal
-            document.addEventListener('click', function(event) {
+            document.addEventListener('click', function (event) {
                 if (event.target.classList.contains('modal')) {
                     closeModal(event.target.id);
                 }
@@ -1151,7 +1305,7 @@
 
         async function handleEquipmentSubmit(event) {
             event.preventDefault();
-            
+
             const formData = {
                 id: document.getElementById('equipmentId').value,
                 器材名稱: document.getElementById('equipmentName').value,
@@ -1368,7 +1522,7 @@
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
-            
+
             toastMessage.textContent = message;
             toast.className = `toast toast-${type}`;
             toast.classList.add('show');
@@ -1425,69 +1579,7 @@
             window.location.href = 'index.html';
         }
     </script>
-    <!-- ✅ 新增在這裡（放在後面） -->
-    <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-    const SUPABASE_URL = 'https://gltzwtqcrdpdumzitbib.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE';
-
-    let supabaseRealtime = null;
-
-    function setupRealtimeUpdates() {
-        if (!sessionStorage.getItem('sessionToken')) return;
-
-        supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            realtime: { params: { eventsPerSecond: 5 } } // 防止事件過多
-        });
-
-        const channel = supabaseRealtime.channel('equipment-updates')
-            .on('postgres_changes', 
-                { event: '*', schema: 'public', table: 'equipment' }, 
-                payload => handleRealtimeEvent(payload)
-            )
-            .subscribe(status => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('[Realtime] 已訂閱 Supabase equipment 變更');
-                }
-            });
-
-        window.addEventListener('beforeunload', () => {
-            supabaseRealtime.removeChannel(channel);
-        });
-    }
-
-    function handleRealtimeEvent(payload) {
-        const eventType = payload.eventType || payload.event;
-        const newData = payload.new;
-        const oldData = payload.old;
-
-        console.log('[Realtime 收到]', eventType, payload);
-
-        switch (eventType) {
-            case 'INSERT':
-                if (!equipmentData.some(e => e.id === newData.id)) {
-                    equipmentData.unshift(newData);
-                    showToast(`新裝備「${newData.器材名稱}」已新增`, 'success');
-                }
-                break;
-            case 'UPDATE':
-                const idx = equipmentData.findIndex(e => e.id === newData.id);
-                if (idx !== -1) {
-                    equipmentData[idx] = newData;
-                    showToast(`「${newData.器材名稱}」已更新`, 'info');
-                }
-                break;
-            case 'DELETE':
-                equipmentData = equipmentData.filter(e => e.id !== oldData.id);
-                showToast('裝備已被刪除', 'error');
-                break;
-        }
-
-        renderEquipment();
-    }
-
-    window.setupRealtimeUpdates = setupRealtimeUpdates;
-    </script>
 </body>
+
 </html>
