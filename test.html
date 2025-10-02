@@ -1500,19 +1500,10 @@
                 <div class="equipment-details">
                     ${equipment.圖片檔案位置 ? `
                         <div class="detail-image">
-                            <img 
-                                src="https://drive.google.com/uc?export=view&id=${equipment.圖片檔案位置}"
-                                alt="${equipment.器材名稱}"
-                                style="width:100%;height:200px;object-fit:cover;border-radius:8px;"
-                                onerror="this.style.display='none'"
-                            >
-                            <div style="text-align:center;margin-top:0.5rem;">
-                                <a href="https://drive.google.com/file/d/${equipment.圖片檔案位置}/view" 
-                                target="_blank" 
-                                class="btn btn-secondary btn-sm">
-                                查看原圖
-                                </a>
-                            </div>
+                            <iframe 
+                                src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview"
+                                frameborder="0" allowfullscreen
+                                style="width:100%;height:200px;"></iframe>
                         </div>
                     ` : ''}
 
