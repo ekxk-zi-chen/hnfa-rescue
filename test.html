@@ -1391,7 +1391,9 @@
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         action: formData.id ? 'updateEquipment' : 'createEquipment',
                         sessionToken,
@@ -1405,26 +1407,32 @@
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    // 更新本地資料
+                    // ✅ 改為局部更新
                     if (formData.id) {
+                        // 編輯現有裝備
                         const index = equipmentData.findIndex(item => item.id === formData.id);
                         if (index !== -1) {
                             equipmentData[index] = { ...equipmentData[index], ...formData };
+                            // 只更新這一筆卡片
+                            updateSingleEquipmentCard(formData);
                         }
                         showToast('裝備更新成功', 'success');
                     } else {
+                        // 新增裝備
                         formData.id = data.equipmentId || generateId();
                         equipmentData.push(formData);
+                        // 只新增這一筆卡片
+                        addSingleEquipmentCard(formData);
                         showToast('裝備新增成功', 'success');
                     }
 
-                    renderEquipment();
+                    // 只需要更新分類篩選器（因為可能有新的分群組）
                     updateCategoryFilter();
                     closeModal('equipmentModal');
+
                 } else {
                     throw new Error(data.message || '儲存失敗');
                 }
-
             } catch (error) {
                 console.error('儲存裝備失敗:', error);
                 showToast('儲存失敗: ' + error.message, 'error');
@@ -1438,7 +1446,9 @@
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         action: 'deleteEquipment',
                         sessionToken,
@@ -1452,14 +1462,22 @@
 
                 const data = await response.json();
                 if (data.status === 'ok') {
+                    // 先找到要刪除的裝備資料（用於顯示名稱）
+                    const equipmentToDelete = equipmentData.find(item => item.id === equipmentId);
+
+                    // 從資料陣列中移除
                     equipmentData = equipmentData.filter(item => item.id !== equipmentId);
-                    renderEquipment();
+
+                    // 只移除這一筆卡片
+                    removeSingleEquipmentCard(equipmentId);
+
+                    // 更新分類篩選器
                     updateCategoryFilter();
-                    showToast('裝備刪除成功', 'success');
+
+                    showToast(`裝備「${equipmentToDelete?.器材名稱 || ''}」刪除成功`, 'success');
                 } else {
                     throw new Error(data.message || '刪除失敗');
                 }
-
             } catch (error) {
                 console.error('刪除裝備失敗:', error);
                 showToast('刪除失敗: ' + error.message, 'error');
