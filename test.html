@@ -923,7 +923,7 @@
             }
         }
 
-        // 處理 Realtime 事件
+        // 處理 Realtime 事件 - 優化版本
         function handleRealtimeEvent(payload) {
             const eventType = payload.eventType;
             const newData = payload.new;
@@ -935,24 +935,87 @@
                 case 'INSERT':
                     if (!equipmentData.some(e => e.id === newData.id)) {
                         equipmentData.unshift(newData);
+                        // 只新增這一筆到畫面，不重新渲染全部
+                        addSingleEquipmentCard(newData);
                         showToast(`新裝備「${newData.器材名稱}」已新增`, 'success');
                     }
                     break;
+
                 case 'UPDATE':
                     const idx = equipmentData.findIndex(e => e.id === newData.id);
                     if (idx !== -1) {
                         equipmentData[idx] = newData;
+                        // 只更新這一筆的畫面
+                        updateSingleEquipmentCard(newData);
                         showToast(`「${newData.器材名稱}」已更新`, 'info');
                     }
                     break;
+
                 case 'DELETE':
                     equipmentData = equipmentData.filter(e => e.id !== oldData.id);
+                    // 只刪除這一筆的畫面
+                    removeSingleEquipmentCard(oldData.id);
                     showToast('裝備已被刪除', 'error');
                     break;
             }
 
-            renderEquipment();
-            updateCategoryFilter();
+            // 不再呼叫 renderEquipment()，改為局部更新
+            updateCategoryFilter(); // 這個還是需要，因為群組可能改變
+        }
+
+        // 新增單一裝備卡片到畫面
+        function addSingleEquipmentCard(equipment) {
+            const grid = document.getElementById('equipmentGrid');
+            const card = createEquipmentCard(equipment);
+
+            // 插入到列表開頭
+            if (grid.firstChild) {
+                grid.insertBefore(card, grid.firstChild);
+            } else {
+                grid.appendChild(card);
+            }
+        }
+
+        // 更新單一裝備卡片
+        function updateSingleEquipmentCard(equipment) {
+            const existingCard = document.querySelector(`[data-equipment-id="${equipment.id}"]`);
+            if (existingCard) {
+                // 先保存展開狀態
+                const wasExpanded = existingCard.querySelector('.equipment-details').classList.contains('show');
+
+                // 替換整個卡片
+                const newCard = createEquipmentCard(equipment);
+                existingCard.parentNode.replaceChild(newCard, existingCard);
+
+                // 恢復展開狀態
+                if (wasExpanded) {
+                    const newDetails = newCard.querySelector('.equipment-details');
+                    const newToggleBtn = newCard.querySelector('.toggle-btn');
+                    newDetails.classList.add('show');
+                    newToggleBtn.textContent = '收合';
+                }
+            }
+        }
+
+        // 移除單一裝備卡片
+        function removeSingleEquipmentCard(equipmentId) {
+            const cardToRemove = document.querySelector(`[data-equipment-id="${equipmentId}"]`);
+            if (cardToRemove) {
+                cardToRemove.remove();
+            }
+        }
+
+        // 修改 createEquipmentCard 函數，添加 data attribute
+        function createEquipmentCard(equipment) {
+            // ... 前面的程式碼不變 ...
+
+            const wrapper = document.createElement('div');
+            wrapper.className = `equipment-item ${wrapperClass}`;
+            wrapper.setAttribute('data-equipment-id', equipment.id); // 添加這個
+
+            // ... 後面的程式碼不變 ...
+
+            return wrapper;
         }
         async function verifyUser(sessionToken) {
             try {
@@ -1150,6 +1213,7 @@
             // 2) 建立 wrapper 並加上剛剛決定好的 class
             const wrapper = document.createElement('div');
             wrapper.className = `equipment-item ${wrapperClass}`;
+            wrapper.setAttribute('data-equipment-id', equipment.id); // 添加這個
 
             // 3) 填入 HTML（注意：equipment-details 一定會存在，避免 null）
             wrapper.innerHTML = `
