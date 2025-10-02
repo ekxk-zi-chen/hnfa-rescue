@@ -1,460 +1,1571 @@
-import { createClient } from "@supabase/supabase-js";
-import jwt from "jsonwebtoken";
-import fetch from "node-fetch";
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>花蓮特搜裝備管理系統</title>
+    <style>
+        :root {
+            --primary: #00C300;
+            --primary-dark: #009900;
+            --secondary: #0084ff;
+            --accent: #ff6b35;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --success: #4caf50;
+            --info: #2196f3;
+            --dark: #1a1a1a;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-600: #6c757d;
+            --gray-800: #343a40;
+            --gray-900: #212529;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--gray-900);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            color: var(--primary-dark);
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .user-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 195, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-700);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-300);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 300px 1fr;
+            }
+        }
+
+        .sidebar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 1rem;
+            color: var(--gray-800);
+            font-size: 1.125rem;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-300);
+            border-radius: 8px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .main-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .equipment-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .equipment-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            border: 2px solid transparent;
+        }
+
+        .equipment-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            border-color: var(--primary);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 200px;
+            background: var(--gray-100);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-600);
+            font-size: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 狀態標籤 */
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            color: white;
+        }
+
+        /* 新顏色配置 */
+        .status-in-team {
+            background: #4caf50;
+        }
+
+        /* 在隊 - 綠 */
+        .status-on-duty {
+            background: #f44336;
+        }
+
+        /* 出勤中 - 紅 */
+        .status-loaned {
+            background: #ffb300;
+        }
+
+        /* 借出 - 黃 */
+        .status-maintenance {
+            background: #9c27b0;
+        }
+
+        /* 維修中 - 紫 */
+
+        /* 小框框背景顏色（summary 行） */
+        .equipment-item.in-team .equipment-summary {
+            background: rgba(76, 175, 80, 0.15);
+        }
+
+        .equipment-item.on-duty .equipment-summary {
+            background: rgba(244, 67, 54, 0.15);
+        }
+
+        .equipment-item.loaned .equipment-summary {
+            background: rgba(255, 179, 0, 0.15);
+        }
+
+        .equipment-item.maintenance .equipment-summary {
+            background: rgba(156, 39, 176, 0.15);
+        }
+
+        /* 展開後卡片背景 */
+        .equipment-item.in-team .equipment-details {
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .equipment-item.on-duty .equipment-details {
+            background: rgba(244, 67, 54, 0.05);
+        }
+
+        .equipment-item.loaned .equipment-details {
+            background: rgba(255, 179, 0, 0.05);
+        }
+
+        .equipment-item.maintenance .equipment-details {
+            background: rgba(156, 39, 176, 0.05);
+        }
+
+        .status-available {
+            background: var(--success);
+            color: white;
+        }
+
+        .status-maintenance {
+            background: var(--warning);
+            color: white;
+        }
+
+        .status-unavailable {
+            background: var(--danger);
+            color: white;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--gray-900);
+        }
+
+        .card-subtitle {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-info {
+            margin-bottom: 1rem;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-label {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalShow 0.3s ease;
+        }
+
+        @keyframes modalShow {
+            from {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-600);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--gray-600);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--gray-200);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast-success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast-error {
+            border-left: 4px solid var(--danger);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0.5rem;
+            }
+
+            .header {
+                padding: 1rem;
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .equipment-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .modal-content {
+                margin: 0.5rem;
+                max-height: 95vh;
+            }
+
+            .modal-body {
+                padding: 1.5rem;
+            }
+
+            .btn {
+                padding: 0.625rem 1.25rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        .user-management {
+            margin-top: 2rem;
+        }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .user-table th,
+        .user-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .user-table th {
+            background: var(--gray-100);
+            font-weight: 600;
+            color: var(--gray-800);
+        }
+
+        .permission-select {
+            padding: 0.5rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            background: white;
+        }
+
+        .equipment-item {
+            border-radius: 12px;
+            border: 1px solid var(--gray-300);
+            background: white;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .equipment-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: var(--gray-100);
+            cursor: pointer;
+        }
+
+        .summary-left {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--gray-900);
+        }
+
+        .summary-left .equipment-number {
+            color: var(--gray-600);
+            margin-left: 0.5rem;
+        }
+
+        .summary-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .equipment-details {
+            display: none;
+            padding: 1rem 1.25rem;
+            background: white;
+            border-top: 1px solid var(--gray-200);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .equipment-details.show {
+            display: block;
+        }
+
+        .detail-image {
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .detail-info p {
+            margin: 0.25rem 0;
+            color: var(--gray-800);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>花蓮特搜裝備管理系統</h1>
+            <div class="user-info">
+                <div class="user-badge" id="userRole">載入中...</div>
+                <span id="userName">載入中...</span>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">登出</button>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <div class="sidebar">
+                <h3>篩選條件</h3>
+                <div class="filter-group">
+                    <label for="searchInput">搜尋器材</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="輸入器材名稱或編號">
+                </div>
+                <div class="filter-group">
+                    <label for="categoryFilter">分群組</label>
+                    <select id="categoryFilter" class="form-control">
+                        <option value="">全部群組</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="statusFilter">狀態</label>
+                    <select id="statusFilter" class="form-control">
+                        <option value="">全部狀態</option>
+                        <option value="可用">可用</option>
+                        <option value="維修中">維修中</option>
+                        <option value="不可用">不可用</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
+                    onclick="clearFilters()">清除篩選</button>
+
+                <!-- 用戶管理區塊 (僅管理員可見) -->
+                <div id="userManagementSection" class="user-management" style="display: none;">
+                    <h3>用戶管理</h3>
+                    <button class="btn btn-primary" style="width: 100%;" onclick="showUserManagement()">管理用戶權限</button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="content-header">
+                    <h2>裝備清單</h2>
+                    <div class="list-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="expandAll()">全部展開</button>
+                        <button class="btn btn-secondary btn-sm" onclick="collapseAll()">全部收合</button>
+                    </div>
+                    <div id="adminActions" style="display: none;">
+                        <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
+                    </div>
+                </div>
 
 
+                <div id="loadingIndicator" class="loading">
+                    <div class="spinner"></div>
+                    載入中...
+                </div>
 
-// ------------------- 驗證 LINE idToken -------------------
-async function verifyIdToken(idToken, clientId) {
-  const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `id_token=${encodeURIComponent(idToken)}&client_id=${clientId}`,
-  });
+                <div id="equipmentGrid" class="equipment-grid" style="display: none;">
+                    <!-- 裝備卡片將在這裡動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error("idToken 驗證失敗: " + errorText);
-  }
+    <!-- 新增/編輯裝備 Modal -->
+    <div id="equipmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">新增裝備</h3>
+                <button class="close" onclick="closeModal('equipmentModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="equipmentForm">
+                    <input type="hidden" id="equipmentId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentName">器材名稱 *</label>
+                            <input type="text" id="equipmentName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentGroup">分群組 *</label>
+                            <input type="text" id="equipmentGroup" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentNumber">裝備編號 *</label>
+                            <input type="text" id="equipmentNumber" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentModel">型號</label>
+                            <input type="text" id="equipmentModel" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="equipmentLocation">特別位置</label>
+                            <input type="text" id="equipmentLocation" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="equipmentQuantity">數量 *</label>
+                            <input type="text" id="equipmentQuantity" class="form-control" required
+                                placeholder="例如：2組、1支">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentImage">圖片檔案位置（Google Drive ID）</label>
+                        <input type="text" id="equipmentImage" class="form-control"
+                            placeholder="例如：1ABcDefGhIjKlMnOpQrStUvWxYz">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentManual">說明書連結</label>
+                        <input type="url" id="equipmentManual" class="form-control"
+                            placeholder="https://example.com/manual.pdf">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentVideo">教學影片相關</label>
+                        <input type="url" id="equipmentVideo" class="form-control"
+                            placeholder="https://youtube.com/watch?v=...">
+                    </div>
+                    <div class="form-group">
+                        <label for="equipmentStatus">目前狀態 *</label>
+                        <select id="equipmentStatus" class="form-control" required>
+                            <option value="在隊">在隊</option>
+                            <option value="出勤中">出勤中</option>
+                            <option value="借出">借出</option>
+                            <option value="維修中">維修中</option>
+                        </select>
 
-  const data = await res.json();
-  if (!data.sub) throw new Error("idToken 驗證失敗: sub 不存在");
-  return { sub: data.sub, name: data.name || null };
-}
+                    </div>
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary"
+                            onclick="closeModal('equipmentModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
-// ------------------- 建立 sessionToken（JWT） -------------------
-function createSessionToken(userId, payload = {}) {
-  const secret = process.env.JWT_SECRET;
-  return jwt.sign({ userId, ...payload }, secret, { expiresIn: "12h" });
-}
+    <!-- 用戶管理 Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">用戶管理</h3>
+                <button class="close" onclick="closeModal('userModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="usersList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        載入用戶資料中...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-// ------------------- 驗證 sessionToken -------------------
-function verifySessionToken(sessionToken, secret) {
-  try {
-    return jwt.verify(sessionToken, secret);
-  } catch (e) {
-    return null;
-  }
-}
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast">
+        <div id="toastMessage"></div>
+    </div>
 
-// ------------------- 處理 action -------------------
-async function handleAction(action, body, supabase, JWT_SECRET, res) {
-  const { sessionToken } = body;
+    <script>
+        // 配置常數
+        const CONFIG = {
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify"
+        };
 
-  // 驗證 sessionToken
-  const decoded = verifySessionToken(sessionToken, JWT_SECRET);
-  if (!decoded || !decoded.userId) {
-    return res.status(401).json({ status: "error", message: "Invalid session" });
-  }
+        // 全域變數
+        let currentUser = null;
+        let equipmentData = [];
 
-  // 獲取用戶資訊
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("user_id", decoded.userId)
-    .single();
-
-  if (userError || !userData) {
-    return res.status(404).json({ status: "error", message: "User not found" });
-  }
-
-  const userRole = userData.管理員 || "一般用戶";
-
-  // ====== 讀取裝備 ======
-  if (action === "getEquipment") {
-    const { data: equipment, error } = await supabase
-      .from("equipment")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
-    if (error) {
-      console.error("獲取裝備資料錯誤:", error);
-      return res.status(500).json({ status: "error", message: "Failed to fetch equipment" });
-    }
-
-    return res.status(200).json({
-      status: "ok",
-      equipment: equipment || [],
-    });
-  }
-
-  // ====== 新增裝備 ======
-  if (action === "createEquipment") {
-    if (userRole === "一般用戶") {
-      return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
-    }
-
-    const { equipmentData } = body;
-    equipmentData.填表人 = userData.display_name || userData.姓名;
-    equipmentData.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabase.from("equipment").insert(equipmentData).select().single();
-
-    if (error) {
-      console.error("創建裝備錯誤:", error);
-      return res.status(500).json({ status: "error", message: "Failed to create equipment" });
-    }
-
-    // ✅ Supabase Realtime 會自動通知所有訂閱者
-    return res.status(200).json({
-      status: "ok",
-      equipmentId: data.id,
-      message: "裝備創建成功 (Realtime 已同步)",
-    });
-  }
-
-  // ====== 更新裝備 ======
-  if (action === "updateEquipment") {
-    if (userRole === "一般用戶") {
-      return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
-    }
-
-    const { equipmentData } = body;
-    equipmentData.填表人 = userData.display_name || userData.姓名;
-    equipmentData.updated_at = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from("equipment")
-      .update(equipmentData)
-      .eq("id", equipmentData.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("更新裝備錯誤:", error);
-      return res.status(500).json({ status: "error", message: "Failed to update equipment" });
-    }
-
-    return res.status(200).json({
-      status: "ok",
-      message: "裝備更新成功 (Realtime 已同步)",
-    });
-  }
-
-  // ====== 刪除裝備 ======
-  if (action === "deleteEquipment") {
-    if (userRole === "一般用戶") {
-      return res.status(403).json({ status: "error", message: "沒有權限刪除裝備" });
-    }
-
-    const { equipmentId } = body;
-    const { error } = await supabase.from("equipment").delete().eq("id", equipmentId);
-
-    if (error) {
-      console.error("刪除裝備錯誤:", error);
-      return res.status(500).json({ status: "error", message: "Failed to delete equipment" });
-    }
-
-    return res.status(200).json({
-      status: "ok",
-      message: "裝備刪除成功 (Realtime 已同步)",
-    });
-  }
-
-
-  if (action === 'getUsers') {
-    if (userRole !== '管理') {
-      return res.status(403).json({ status: "error", message: "沒有權限查看用戶列表" });
-    }
-
-    try {
-      const { data: users, error } = await supabase
-        .from('users')
-        .select('user_id, 姓名, display_name, 管理員, 創建時間')
-        .order('創建時間', { ascending: false });
-
-      if (error) {
-        console.error('獲取用戶列表錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to fetch users" });
-      }
-
-      return res.status(200).json({
-        status: "ok",
-        users: users || []
-      });
-    } catch (error) {
-      console.error('getUsers 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
-  }
-
-  if (action === 'updateUserPermission') {
-    if (userRole !== '管理') {
-      return res.status(403).json({ status: "error", message: "沒有權限更新用戶權限" });
-    }
-
-    try {
-      const { userId, permission } = body;
-      const { error } = await supabase
-        .from('users')
-        .update({ 管理員: permission })
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('更新用戶權限錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to update user permission" });
-      }
-
-      return res.status(200).json({
-        status: "ok",
-        message: "權限更新成功"
-      });
-    } catch (error) {
-      console.error('updateUserPermission 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
-  }
-
-  if (action === 'deleteUser') {
-    if (userRole !== '管理') {
-      return res.status(403).json({ status: "error", message: "沒有權限刪除用戶" });
-    }
-
-    try {
-      const { userId } = body;
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('user_id', userId);
-
-      if (error) {
-        console.error('刪除用戶錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to delete user" });
-      }
-
-      return res.status(200).json({
-        status: "ok",
-        message: "用戶刪除成功"
-      });
-    } catch (error) {
-      console.error('deleteUser 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
-  }
-
-  // 如果沒有匹配的 action
-  return res.status(400).json({ status: "error", message: "Unknown action" });
-}
-
-// ------------------- 主 handler -------------------
-export default async function handler(req, res) {
-  // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST")
-    return res.status(405).json({ status: "error", message: "Method not allowed" });
-
-  try {
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-    const JWT_SECRET = process.env.JWT_SECRET;
-    const LIFF_CLIENT_ID = process.env.LIFF_CLIENT_ID;
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const { idToken, sessionToken, signup, action } = body;
-
-    console.log(`[${new Date().toISOString()}] 收到請求:`, {
-      hasIdToken: !!idToken,
-      hasSessionToken: !!sessionToken,
-      isSignup: signup,
-      action: action,
-      bodyKeys: Object.keys(body)
-    });
-
-    // ========== 處理 action 操作 ==========
-    if (action) {
-      return await handleAction(action, body, supabase, JWT_SECRET, res);
-    }
-
-    // ========== 原有的驗證邏輯 ==========
-
-    // ---------- 情況1：純 sessionToken 驗證（快速登入檢查） ----------
-    if (!idToken && sessionToken && !signup) {
-      console.log('[sessionToken驗證] 開始驗證純 sessionToken');
-      const decoded = verifySessionToken(sessionToken, JWT_SECRET);
-      if (!decoded || !decoded.userId) {
-        console.log('[sessionToken驗證] sessionToken 無效');
-        return res.status(401).json({ status: "error", message: "Invalid sessionToken" });
-      }
-
-      // 檢查用戶是否還存在
-      const { data: userData, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("user_id", decoded.userId)
-        .single();
-
-      console.log('[sessionToken驗證] 資料庫查詢結果:', { userData, error });
-
-      if (error && error.code !== "PGRST116") {
-        console.error("[sessionToken驗證] Supabase 查詢錯誤", error);
-        return res.status(500).json({ status: "error", message: "Database query error" });
-      }
-
-      if (!userData) {
-        console.log('[sessionToken驗證] 用戶不存在');
-        return res.status(404).json({ status: "error", message: "User not found" });
-      }
-
-      // 使用您的資料表欄位
-      const displayName = userData.display_name || userData.姓名 || decoded.displayName || "用戶";
-      
-      return res.status(200).json({
-        status: "ok",
-        displayName: displayName,
-        userId: decoded.userId,
-        role: userData.管理員 || "一般用戶"
-      });
-    }
-
-    // ---------- 情況2：註冊流程 (signup === true) ----------
-    if (signup === true) {
-      console.log('[註冊] 開始處理註冊流程');
-      const { name, email, phone, job, unit, script, displayName } = body;
-
-      if (!idToken) {
-        return res.status(400).json({ 
-          status: "error", 
-          message: "註冊需要 idToken" 
+        // 初始化應用
+        document.addEventListener('DOMContentLoaded', async function () {
+            await initializeApp();
         });
-      }
 
-      const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
-      const userId = profile.sub;
-      const resolvedDisplayName = displayName || name || profile.name || "用戶";
+        async function initializeApp() {
+            try {
+                // 檢查 Session Token
+                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
+                if (!sessionToken) {
+                    window.location.href = 'index.html';
+                    return;
+                }
 
-      console.log('[註冊] LINE 用戶資訊:', { userId, resolvedDisplayName });
+                // 驗證用戶身份並獲取角色
+                await verifyUser(sessionToken);
 
-      const { data: existing, error: selErr } = await supabase
-        .from("users")
-        .select("*")
-        .eq("user_id", userId)
-        .single();
+                // 載入裝備資料
+                await loadEquipmentData();
 
-      if (selErr && selErr.code !== "PGRST116") {
-        console.error("[註冊] Supabase 查詢錯誤", selErr);
-        return res.status(500).json({ status: "error", message: "Database query error" });
-      }
+                // 設置事件監聽器
+                setupEventListeners();
+                // 啟動 Supabase Realtime 訂閱（僅限已驗證的使用者）
+                setupRealtimeUpdates();
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showToast('初始化失敗，請重新登入', 'error');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
+        }
 
-      if (existing) {
-        console.log('[註冊] 用戶已存在，直接登入');
-        const displayName = existing.display_name || existing.姓名 || resolvedDisplayName;
-        const token = createSessionToken(userId, { displayName, role: existing.管理員 });
-        return res.status(200).json({
-          status: "ok",
-          displayName: displayName,
-          sessionToken: token,
-          role: existing.管理員 || "一般用戶",
-          message: "用戶已存在，登入成功"
-        });
-      }
+        async function verifyUser(sessionToken) {
+            try {
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken })
+                });
 
-      console.log('[註冊] 創建新用戶');
-      
-      const insertPayload = {
-        user_id: userId,
-        姓名: name || resolvedDisplayName,
-        display_name: resolvedDisplayName,
-        電子信箱: email || null,
-        電話: phone || null,
-        職稱: job || null,
-        單位: unit || null,
-        管理員: "一般用戶", 
-        申請備註: script || null,
-        創建時間: new Date().toISOString()
-      };
+                if (!response.ok) {
+                    throw new Error('驗證失敗');
+                }
 
-      console.log('[註冊] 準備插入資料:', insertPayload);
+                const data = await response.json();
+                if (data.status !== 'ok') {
+                    throw new Error('用戶驗證失敗');
+                }
 
-      const { data: inserted, error: insErr } = await supabase
-        .from("users")
-        .insert(insertPayload)
-        .select()
-        .single();
+                // 從後端獲取完整用戶資訊，包含角色
+                currentUser = {
+                    userId: data.userId,
+                    displayName: data.displayName,
+                    role: data.role || '一般用戶'  // 這個需要您在後端 API 中回傳
+                };
 
-      if (insErr) {
-        console.error("[註冊] Supabase 插入錯誤", insErr);
-        return res.status(500).json({ 
-          status: "error", 
-          message: "Failed to create user", 
-          error: insErr.message || insErr.code || String(insErr)
-        });
-      }
+                // 將 token 移到 sessionStorage
+                sessionStorage.setItem('sessionToken', sessionToken);
+                if (localStorage.getItem('sessionToken')) {
+                    localStorage.removeItem('sessionToken');
+                }
 
-      console.log('[註冊] 用戶創建成功:', inserted);
+                updateUserInterface();
 
-      const finalDisplayName = inserted.display_name || inserted.姓名 || resolvedDisplayName;
-      const newToken = createSessionToken(userId, { displayName: finalDisplayName, role: inserted.管理員 });
-      return res.status(200).json({
-        status: "ok",
-        displayName: finalDisplayName,
-        sessionToken: newToken,
-        role: inserted.管理員 || "一般用戶",
-        message: "註冊成功"
-      });
-    }
+            } catch (error) {
+                console.error('用戶驗證錯誤:', error);
+                throw error;
+            }
+        }
 
-    // ---------- 情況3：一般驗證流程（檢查登入狀態） ----------
-    if (!idToken) {
-      return res.status(400).json({ status: "error", message: "缺少 idToken" });
-    }
+        async function loadEquipmentData() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getEquipment',
+                        sessionToken
+                    })
+                });
 
-    console.log('[驗證] 開始一般驗證流程');
+                if (!response.ok) {
+                    throw new Error('載入裝備資料失敗');
+                }
 
-    const profile = await verifyIdToken(idToken, LIFF_CLIENT_ID);
-    const userId = profile.sub;
-    const displayName = profile.name || "用戶";
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    equipmentData = data.equipment || [];
+                } else {
+                    throw new Error(data.message || '載入失敗');
+                }
 
-    console.log('[驗證] LINE 用戶資訊:', { userId, displayName });
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('equipmentGrid').style.display = 'grid';
 
-    const { data: userData, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+                renderEquipment();
+                updateCategoryFilter();
 
-    if (error && error.code !== "PGRST116") {
-      console.error("[驗證] Supabase 查詢錯誤", error);
-      return res.status(500).json({ status: "error", message: "Database query error" });
-    }
+            } catch (error) {
+                console.error('載入裝備資料失敗:', error);
+                // 暫時使用假資料
+                equipmentData = [
+                    {
+                        id: '1',
+                        器材名稱: '氧氣瓶',
+                        分群組: '醫療設備',
+                        圖片檔案位置: '',
+                        裝備編號: 'MED-001',
+                        型號: 'OXY-500L',
+                        特別位置: '醫療車第二層',
+                        數量: 5,
+                        說明書連結: '',
+                        目前狀態: '可用',
+                        填表人: '張三',
+                        狀態: '正常',
+                        教學影片相關: '',
+                        updated_at: new Date().toISOString()
+                    },
+                    {
+                        id: '2',
+                        器材名稱: '繩索',
+                        分群組: '救援設備',
+                        圖片檔案位置: '',
+                        裝備編號: 'RES-001',
+                        型號: 'ROPE-10MM',
+                        特別位置: '工具箱A',
+                        數量: 10,
+                        說明書連結: '',
+                        目前狀態: '可用',
+                        填表人: '李四',
+                        狀態: '正常',
+                        教學影片相關: '',
+                        updated_at: new Date().toISOString()
+                    }
+                ];
 
-    if (!userData) {
-      console.log('[驗證] 用戶不存在，需要註冊');
-      const tempSessionToken = createSessionToken(userId, { 
-        displayName, 
-        temporary: true 
-      });
-      
-      return res.status(200).json({
-        status: "needsignup",
-        displayName: displayName,
-        sessionToken: tempSessionToken
-      });
-    }
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('equipmentGrid').style.display = 'grid';
+                renderEquipment();
+                updateCategoryFilter();
+            }
+        }
 
-    console.log('[驗證] 用戶存在，登入成功');
-    const finalDisplayName = userData.display_name || userData.姓名 || displayName;
-    const sessionTokenForLogin = createSessionToken(userId, { 
-      displayName: finalDisplayName,
-      role: userData.管理員
-    });
-    
-    return res.status(200).json({
-      status: "ok",
-      displayName: finalDisplayName,
-      sessionToken: sessionTokenForLogin,
-      role: userData.管理員 || "一般用戶"
-    });
+        function updateUserInterface() {
+            document.getElementById('userName').textContent = currentUser.displayName;
+            document.getElementById('userRole').textContent = currentUser.role;
 
-  } catch (err) {
-    console.error("[handler] 錯誤:", err);
-    res.status(500).json({ 
-      status: "error", 
-      message: err.message || "Internal server error"
-    });
-  }
-}
+            // 根據權限顯示/隱藏功能
+            if (currentUser.role !== '一般用戶') {
+                document.getElementById('adminActions').style.display = 'block';
+            }
+
+            if (currentUser.role === '管理') {
+                document.getElementById('userManagementSection').style.display = 'block';
+            }
+        }
+        // 設置事件監聽器
+        function renderEquipment() {
+            const grid = document.getElementById('equipmentGrid');
+            grid.innerHTML = '';
+
+            // 先篩選
+            const filteredData = filterEquipment();
+            // ✅ 依照「裝備編號」文字排序（支援含字母或數字）
+            filteredData.sort((a, b) => {
+                return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
+            });
+            // 再渲染
+            filteredData.forEach(equipment => {
+                const card = createEquipmentCard(equipment);
+                grid.appendChild(card);
+            });
+
+            if (filteredData.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">沒有找到符合條件的裝備</div>';
+            }
+        }
+        // 全部展開
+        function expandAll() {
+            document.querySelectorAll('.equipment-details').forEach(detail => {
+                detail.classList.add('show');
+            });
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.textContent = '收合';
+            });
+        }
+        // 全部收合
+        function collapseAll() {
+            document.querySelectorAll('.equipment-details').forEach(detail => {
+                detail.classList.remove('show');
+            });
+            document.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.textContent = '展開';
+            });
+        }
+
+
+
+        function createEquipmentCard(equipment) {
+            // 1) 先決定狀態對應的 CSS class（跟 wrapper class）
+            let statusClass = '';
+            let wrapperClass = '';
+
+            switch (equipment.目前狀態) {
+                case '在隊':
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+                    break;
+                case '出勤中':
+                    statusClass = 'status-on-duty';
+                    wrapperClass = 'on-duty';
+                    break;
+                case '借出':
+                    statusClass = 'status-loaned';
+                    wrapperClass = 'loaned';
+                    break;
+                case '維修中':
+                    statusClass = 'status-maintenance';
+                    wrapperClass = 'maintenance';
+                    break;
+                default:
+                    // 預設為在隊（若資料沒填）
+                    statusClass = 'status-in-team';
+                    wrapperClass = 'in-team';
+            }
+
+            // 2) 建立 wrapper 並加上剛剛決定好的 class
+            const wrapper = document.createElement('div');
+            wrapper.className = `equipment-item ${wrapperClass}`;
+
+            // 3) 填入 HTML（注意：equipment-details 一定會存在，避免 null）
+            wrapper.innerHTML = `
+                <div class="equipment-summary">
+                    <div class="summary-left">
+                        <span class="equipment-name">${equipment.器材名稱}</span>
+                        <span class="equipment-number">(${equipment.裝備編號})</span>
+                    </div>
+                    <div class="summary-right">
+                        <span class="status-badge ${statusClass}">${equipment.目前狀態 || '在隊'}</span>
+                        <button class="btn btn-secondary btn-sm toggle-btn">展開</button>
+                    </div>
+                </div>
+
+                <div class="equipment-details">
+                    ${equipment.圖片檔案位置 ? `
+                        <div class="detail-image">
+                            <iframe 
+                                src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview"
+                                frameborder="0" allowfullscreen
+                                style="width:100%;height:200px;"></iframe>
+                        </div>
+                    ` : ''}
+
+                    <div class="detail-info">
+                        <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
+                        <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
+                        <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
+                        <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
+                        <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
+                    </div>
+
+                    <div class="card-actions">
+                        ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
+                        ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
+                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // 4) 綁定展開/收合按鈕（並避免事件冒泡）
+            const toggleBtn = wrapper.querySelector('.toggle-btn');
+            const details = wrapper.querySelector('.equipment-details');
+
+            // 若你希望點 summary 也能展開，可以同時綁定 summary 的 click（下方示範）
+            const summary = wrapper.querySelector('.equipment-summary');
+
+            function toggle() {
+                const isVisible = details.classList.toggle('show');
+                toggleBtn.textContent = isVisible ? '收合' : '展開';
+            }
+
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggle();
+            });
+
+            // 可選：點整行 summary 也展開（若不想要就把這一行移除）
+            summary.addEventListener('click', () => toggle());
+
+            return wrapper;
+        }
+
+        function filterEquipment() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            return equipmentData.filter(equipment => {
+                const matchSearch = !searchTerm ||
+                    equipment.器材名稱.toLowerCase().includes(searchTerm) ||
+                    equipment.裝備編號.toLowerCase().includes(searchTerm) ||
+                    (equipment.型號 && equipment.型號.toLowerCase().includes(searchTerm));
+
+                const matchCategory = !categoryFilter || equipment.分群組 === categoryFilter;
+                const matchStatus = !statusFilter || equipment.目前狀態 === statusFilter;
+
+                return matchSearch && matchCategory && matchStatus;
+            });
+        }
+
+        function updateCategoryFilter() {
+            const categorySelect = document.getElementById('categoryFilter');
+
+            // 先依裝備編號排序後，再抽出群組
+            const sortedByNumber = [...equipmentData].sort((a, b) =>
+                String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+            );
+
+            // 按照排序後順序提取「分群組」(避免 Set 打亂順序)
+            const categories = [];
+            for (const item of sortedByNumber) {
+                if (!categories.includes(item.分群組)) {
+                    categories.push(item.分群組);
+                }
+            }
+
+            // 更新選單
+            categorySelect.innerHTML = '<option value="">全部群組</option>';
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categorySelect.appendChild(option);
+            });
+        }
+
+
+        function setupEventListeners() {
+            // 搜尋和篩選
+            document.getElementById('searchInput').addEventListener('input', renderEquipment);
+            document.getElementById('categoryFilter').addEventListener('change', renderEquipment);
+            document.getElementById('statusFilter').addEventListener('change', renderEquipment);
+
+            // 表單提交
+            document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
+
+            // 點擊外部關閉 modal
+            document.addEventListener('click', function (event) {
+                if (event.target.classList.contains('modal')) {
+                    closeModal(event.target.id);
+                }
+            });
+        }
+
+        function showAddEquipmentModal() {
+            document.getElementById('modalTitle').textContent = '新增裝備';
+            document.getElementById('equipmentForm').reset();
+            document.getElementById('equipmentId').value = '';
+            showModal('equipmentModal');
+        }
+
+        function editEquipment(equipmentId) {
+            const equipment = equipmentData.find(item => item.id === equipmentId);
+            if (!equipment) return;
+
+            document.getElementById('modalTitle').textContent = '編輯裝備';
+            document.getElementById('equipmentId').value = equipment.id;
+            document.getElementById('equipmentName').value = equipment.器材名稱;
+            document.getElementById('equipmentGroup').value = equipment.分群組;
+            document.getElementById('equipmentNumber').value = equipment.裝備編號;
+            document.getElementById('equipmentModel').value = equipment.型號 || '';
+            document.getElementById('equipmentLocation').value = equipment.特別位置 || '';
+            document.getElementById('equipmentQuantity').value = equipment.數量;
+            document.getElementById('equipmentImage').value = equipment.圖片檔案位置 || '';
+            document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
+            document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
+            document.getElementById('equipmentStatus').value = equipment.目前狀態;
+
+            showModal('equipmentModal');
+        }
+
+        async function handleEquipmentSubmit(event) {
+            event.preventDefault();
+
+            const formData = {
+                id: document.getElementById('equipmentId').value,
+                器材名稱: document.getElementById('equipmentName').value,
+                分群組: document.getElementById('equipmentGroup').value,
+                裝備編號: document.getElementById('equipmentNumber').value,
+                型號: document.getElementById('equipmentModel').value,
+                特別位置: document.getElementById('equipmentLocation').value,
+                數量: parseInt(document.getElementById('equipmentQuantity').value),
+                圖片檔案位置: document.getElementById('equipmentImage').value,
+                說明書連結: document.getElementById('equipmentManual').value,
+                教學影片相關: document.getElementById('equipmentVideo').value,
+                目前狀態: document.getElementById('equipmentStatus').value,
+                填表人: currentUser.displayName,
+                狀態: '正常',
+                updated_at: new Date().toISOString()
+            };
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: formData.id ? 'updateEquipment' : 'createEquipment',
+                        sessionToken,
+                        equipmentData: formData
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('儲存失敗');
+                }
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    // 更新本地資料
+                    if (formData.id) {
+                        const index = equipmentData.findIndex(item => item.id === formData.id);
+                        if (index !== -1) {
+                            equipmentData[index] = { ...equipmentData[index], ...formData };
+                        }
+                        showToast('裝備更新成功', 'success');
+                    } else {
+                        formData.id = data.equipmentId || generateId();
+                        equipmentData.push(formData);
+                        showToast('裝備新增成功', 'success');
+                    }
+
+                    renderEquipment();
+                    updateCategoryFilter();
+                    closeModal('equipmentModal');
+                } else {
+                    throw new Error(data.message || '儲存失敗');
+                }
+
+            } catch (error) {
+                console.error('儲存裝備失敗:', error);
+                showToast('儲存失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteEquipment(equipmentId) {
+            if (!confirm('確定要刪除這個裝備嗎？')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'deleteEquipment',
+                        sessionToken,
+                        equipmentId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('刪除失敗');
+                }
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    equipmentData = equipmentData.filter(item => item.id !== equipmentId);
+                    renderEquipment();
+                    updateCategoryFilter();
+                    showToast('裝備刪除成功', 'success');
+                } else {
+                    throw new Error(data.message || '刪除失敗');
+                }
+
+            } catch (error) {
+                console.error('刪除裝備失敗:', error);
+                showToast('刪除失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function showUserManagement() {
+            if (currentUser.role !== '管理') {
+                showToast('您沒有權限管理用戶', 'error');
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getUsers',
+                        sessionToken
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('載入用戶資料失敗');
+                }
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    renderUserList(data.users || []);
+                    showModal('userModal');
+                } else {
+                    throw new Error(data.message || '載入失敗');
+                }
+
+            } catch (error) {
+                console.error('載入用戶資料失敗:', error);
+                showToast('載入用戶資料失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function updateUserPermission(userId, newPermission) {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'updateUserPermission',
+                        sessionToken,
+                        userId,
+                        permission: newPermission
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('更新權限失敗');
+                }
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('權限更新成功', 'success');
+                } else {
+                    throw new Error(data.message || '更新失敗');
+                }
+
+            } catch (error) {
+                console.error('更新權限失敗:', error);
+                showToast('更新權限失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('確定要刪除這個用戶嗎？')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'deleteUser',
+                        sessionToken,
+                        userId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('刪除用戶失敗');
+                }
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('用戶刪除成功', 'success');
+                    // 重新載入用戶列表
+                    showUserManagement();
+                } else {
+                    throw new Error(data.message || '刪除失敗');
+                }
+
+            } catch (error) {
+                console.error('刪除用戶失敗:', error);
+                showToast('刪除用戶失敗: ' + error.message, 'error');
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            renderEquipment();
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toastMessage.textContent = message;
+            toast.className = `toast toast-${type}`;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function renderUserList(users) {
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = `
+                <table class="user-table">
+                    <thead> ... </thead>
+                    <tbody>
+                        ${users.map(user => `
+                            <tr data-id="${user.user_id}">
+                                <td>${user.姓名}</td>
+                                <td>${user.display_name}</td>
+                                <td>
+                                    <select class="permission-select">
+                                        <option value="一般用戶" ${user.管理員 === '一般用戶' ? 'selected' : ''}>一般用戶</option>
+                                        <option value="管理" ${user.管理員 === '管理' ? 'selected' : ''}>管理</option>
+                                        ...
+                                    </select>
+                                </td>
+                                <td>${new Date(user.創建時間).toLocaleDateString()}</td>
+                                <td><button class="btn btn-danger btn-sm delete-user">刪除</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            // 綁定事件（這樣不怕字元衝突）
+            usersList.querySelectorAll('.permission-select').forEach(select => {
+                const userId = select.closest('tr').dataset.id;
+                select.addEventListener('change', e => updateUserPermission(userId, e.target.value));
+            });
+
+            usersList.querySelectorAll('.delete-user').forEach(btn => {
+                const userId = btn.closest('tr').dataset.id;
+                btn.addEventListener('click', () => deleteUser(userId));
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('sessionToken');
+            localStorage.removeItem('sessionToken');
+            window.location.href = 'index.html';
+        }
+    </script>
+    <!-- ✅ 新增在這裡（放在後面） -->
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+        const SUPABASE_URL = 'https://gltzwtqcrdpdumzitbib.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE';
+        // 用來儲存 Realtime client
+        let supabaseRealtime = null;
+        // 設定 Realtime 訂閱
+        function setupRealtimeUpdates() {
+            if (!sessionStorage.getItem('sessionToken')) return;
+
+            supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                realtime: { params: { eventsPerSecond: 5 } } // 防止事件過多
+            });
+
+            const channel = supabaseRealtime.channel('equipment-updates')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'equipment' },
+                    payload => handleRealtimeEvent(payload)
+                )
+                .subscribe(status => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('[Realtime] 已訂閱 Supabase equipment 變更');
+                    }
+                });
+
+            window.addEventListener('beforeunload', () => {
+                supabaseRealtime.removeChannel(channel);
+            });
+        }
+        // 處理 Realtime 事件
+        function handleRealtimeEvent(payload) {
+            const eventType = payload.eventType || payload.event;
+            const newData = payload.new;
+            const oldData = payload.old;
+
+            console.log('[Realtime 收到]', eventType, payload);
+
+            switch (eventType) {
+                case 'INSERT':
+                    if (!equipmentData.some(e => e.id === newData.id)) {
+                        equipmentData.unshift(newData);
+                        showToast(`新裝備「${newData.器材名稱}」已新增`, 'success');
+                    }
+                    break;
+                case 'UPDATE':
+                    const idx = equipmentData.findIndex(e => e.id === newData.id);
+                    if (idx !== -1) {
+                        equipmentData[idx] = newData;
+                        showToast(`「${newData.器材名稱}」已更新`, 'info');
+                    }
+                    break;
+                case 'DELETE':
+                    equipmentData = equipmentData.filter(e => e.id !== oldData.id);
+                    showToast('裝備已被刪除', 'error');
+                    break;
+            }
+
+            renderEquipment();
+        }
+        // ==== 根據使用者角色決定是否訂閱 ====
+        function initRealtimeOrRefresh(data) {
+            if (!data || !data.role) return;
+
+            if (data.role === '管理') {
+                // 只有管理員訂閱 Realtime
+                setupRealtimeUpdates();
+                // 隱藏手動刷新按鈕
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) refreshBtn.style.display = 'none';
+            } else {
+                // 一般用戶：不訂閱，只能手動刷新
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.style.display = 'block';
+                    refreshBtn.addEventListener('click', fetchEquipment);
+                }
+            }
+        }
+        // 將 initRealtimeOrRefresh 暴露給外部使用
+        window.initRealtimeOrRefresh = initRealtimeOrRefresh;
+    </script>
+</body>
+
+</html>
