@@ -632,6 +632,40 @@
             color: var(--gray-800);
         }
 
+        .online-users {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(0, 195, 0, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+
+        .online-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -651,6 +685,11 @@
         <div class="header">
             <h1>花蓮特搜裝備管理系統</h1>
             <div class="user-info">
+                <!-- 新增線上人數顯示 -->
+                <div class="online-users">
+                    <span class="online-indicator"></span>
+                    <span id="onlineCount">0</span> 人在線
+                </div>
                 <div class="user-badge" id="userRole">載入中...</div>
                 <span id="userName">載入中...</span>
                 <button class="btn btn-secondary btn-sm" onclick="logout()">登出</button>
@@ -685,6 +724,9 @@
                 <!-- 用戶管理區塊 (僅管理員可見) -->
                 <div id="userManagementSection" class="user-management" style="display: none;">
                     <h3>用戶管理</h3>
+                    <div id="adminOnlineInfo" style="font-size: 0.875rem; color: #666; margin-bottom: 0.5rem;">
+                        <!-- 詳細線上統計會顯示在這裡 -->
+                    </div>
                     <button class="btn btn-primary" style="width: 100%;" onclick="showUserManagement()">管理用戶權限</button>
                 </div>
             </div>
@@ -828,7 +870,9 @@
         let currentUser = null;
         let equipmentData = [];
         let supabaseRealtime = null;
-
+        // 新增全域變數
+        let onlineUsers = new Map(); // 儲存線上用戶
+        let presenceChannel = null;
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function () {
             await initializeApp();
@@ -845,6 +889,9 @@
 
                 // 驗證用戶身份並獲取角色
                 await verifyUser(sessionToken);
+
+                // 啟動線上狀態追蹤
+                await setupPresenceTracking();
 
                 // 載入裝備資料
                 await loadEquipmentData();
@@ -863,6 +910,192 @@
                 }, 2000);
             }
         }
+        // 設定線上狀態追蹤
+        async function setupPresenceTracking() {
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+
+                const supabasePresence = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+                const userKey = `${currentUser.userId}-${Date.now()}`;
+
+                presenceChannel = supabasePresence.channel('online-users', {
+                    config: {
+                        presence: {
+                            key: userKey
+                        }
+                    }
+                });
+
+                // ✅ 修正：sync 事件呼叫 updateOnlineUsers
+                presenceChannel
+                    .on('presence', { event: 'sync' }, () => {
+                        console.log('[Presence] 線上用戶同步');
+                        updateOnlineUsers();
+                    })
+                    .on('presence', { event: 'join' }, ({ newPresences }) => {
+                        console.log('[Presence] 用戶加入:', newPresences);
+                        handleUserJoin(newPresences);
+                    })
+                    .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+                        console.log('[Presence] 用戶離開:', leftPresences);
+                        handleUserLeave(leftPresences);
+                    })
+                    .subscribe(async (status) => {
+                        if (status === 'SUBSCRIBED') {
+                            // 初始發送一次
+                            await presenceChannel.track({
+                                user_id: currentUser.userId,
+                                display_name: currentUser.displayName,
+                                role: currentUser.role,
+                                online_at: new Date().toISOString()
+                            });
+                            console.log('[Presence] 線上狀態追蹤已啟動');
+                        }
+                    });
+
+            } catch (error) {
+                console.error('線上狀態追蹤失敗:', error);
+            }
+        }
+
+        // 處理用戶加入
+        function handleUserJoin(newPresences) {
+            newPresences.forEach(presence => {
+                if (presence.user_id !== currentUser.userId) {
+                    onlineUsers.set(presence.user_id, {
+                        ...presence,
+                        joinTime: new Date()
+                    });
+                }
+            });
+            updateOnlineDisplay();
+        }
+
+        // 處理用戶離開
+        function handleUserLeave(leftPresences) {
+            leftPresences.forEach(presence => {
+                onlineUsers.delete(presence.user_id);
+            });
+            updateOnlineDisplay();
+        }
+
+        // 更新線上用戶顯示
+        function updateOnlineDisplay() {
+            const onlineCount = onlineUsers.size + 1; // +1 包含自己
+            console.log(`[線上顯示] 總人數: ${onlineCount}, 其他用戶: ${onlineUsers.size}`);
+
+            document.getElementById('onlineCount').textContent = onlineCount;
+
+            // 如果是在線管理員，顯示詳細資訊
+            if (currentUser.role === '管理') {
+                showDetailedOnlineInfo();
+            }
+        }
+
+        // 管理員查看詳細線上資訊
+        function showDetailedOnlineInfo() {
+            const totalUsers = onlineUsers.size + 1;
+            const adminUsers = Array.from(onlineUsers.values()).filter(user => user.role === '管理').length;
+            const normalUsers = totalUsers - adminUsers - 1; // 扣除自己
+
+            console.log(`[線上統計] 總人數: ${totalUsers}, 管理員: ${adminUsers + 1}, 一般用戶: ${normalUsers}`);
+
+            // 更新管理員面板顯示
+            if (document.getElementById('adminOnlineInfo')) {
+                document.getElementById('adminOnlineInfo').innerHTML = `
+            <div style="font-size: 0.75rem; line-height: 1.4;">
+                <div>管理員: ${adminUsers + 1} 人</div>
+                <div>一般用戶: ${normalUsers} 人</div>
+                <div>總線上: ${totalUsers} 人</div>
+            </div>
+        `;
+            }
+        }
+
+        // ✅ 修正：添加檢查並確保更新顯示
+        function updateOnlineUsers() {
+            if (!presenceChannel) {
+                console.warn('[Presence] presenceChannel 未初始化');
+                return;
+            }
+
+            const state = presenceChannel.presenceState();
+            console.log('[Presence] 當前狀態:', state);
+
+            onlineUsers.clear();
+
+            Object.values(state).forEach(presences => {
+                presences.forEach(presence => {
+                    if (presence.user_id !== currentUser.userId) {
+                        onlineUsers.set(presence.user_id, {
+                            ...presence,
+                            joinTime: new Date(presence.online_at || Date.now())
+                        });
+                    }
+                });
+            });
+
+            updateOnlineDisplay();
+        }
+
+        // 資源使用統計
+        function getResourceUsageStats() {
+            const stats = {
+                totalEquipment: equipmentData.length,
+                equipmentByStatus: {
+                    '在隊': equipmentData.filter(e => e.目前狀態 === '在隊').length,
+                    '出勤中': equipmentData.filter(e => e.目前狀態 === '出勤中').length,
+                    '借出': equipmentData.filter(e => e.目前狀態 === '借出').length,
+                    '維修中': equipmentData.filter(e => e.目前狀態 === '維修中').length
+                },
+                equipmentByGroup: {},
+                onlineUsers: onlineUsers.size + 1,
+                lastUpdated: new Date().toLocaleString()
+            };
+
+            // 計算各群組數量
+            equipmentData.forEach(equipment => {
+                const group = equipment.分群組 || '未分類';
+                stats.equipmentByGroup[group] = (stats.equipmentByGroup[group] || 0) + 1;
+            });
+
+            return stats;
+        }
+
+        // 顯示資源統計（管理員專用）
+        function showResourceStats() {
+            if (currentUser.role !== '管理') return;
+
+            const stats = getResourceUsageStats();
+            console.log('📊 資源使用統計:', stats);
+
+            // 可以選擇性地顯示給管理員
+            const statsText = `
+                總裝備數: ${stats.totalEquipment}
+                在隊: ${stats.equipmentByStatus['在隊']} | 出勤: ${stats.equipmentByStatus['出勤中']}
+                借出: ${stats.equipmentByStatus['借出']} | 維修: ${stats.equipmentByStatus['維修中']}
+                線上用戶: ${stats.onlineUsers} 人
+                更新時間: ${stats.lastUpdated}
+                `.trim();
+
+            // 可以顯示在管理員面板或 console
+            if (document.getElementById('adminOnlineInfo')) {
+                document.getElementById('adminOnlineInfo').innerHTML = `
+                <div style="font-size: 0.75rem; line-height: 1.4;">
+                    <div>裝備: ${stats.totalEquipment} 項</div>
+                    <div>線上: ${stats.onlineUsers} 人</div>
+                </div>
+                `;
+            }
+        }
+
+        // 定期更新統計（每分鐘一次）
+        setInterval(() => {
+            if (currentUser.role === '管理') {
+                showResourceStats();
+            }
+        }, 60000);
 
         // 根據使用者角色決定是否訂閱
         function initRealtimeOrRefresh(userData) {
@@ -1655,7 +1888,14 @@
             });
         }
 
+        // 在登出時清理
         function logout() {
+            // 清理線上狀態
+            if (presenceChannel) {
+                presenceChannel.untrack();
+                presenceChannel.unsubscribe();
+            }
+
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
             window.location.href = 'index.html';
