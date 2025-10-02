@@ -873,6 +873,7 @@
         // 新增全域變數
         let onlineUsers = new Map(); // 儲存線上用戶
         let presenceChannel = null;
+        let supabaseClient = null;
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function () {
             await initializeApp();
@@ -886,6 +887,9 @@
                     window.location.href = 'index.html';
                     return;
                 }
+
+                // 初始化共享的 Supabase 客戶端
+                await initializeSupabaseClient();
 
                 // 驗證用戶身份並獲取角色
                 await verifyUser(sessionToken);
@@ -910,14 +914,29 @@
                 }, 2000);
             }
         }
+
+        // 新增：初始化共享的 Supabase 客戶端
+        async function initializeSupabaseClient() {
+            if (!supabaseClient) {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+                supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+                    realtime: {
+                        params: {
+                            eventsPerSecond: 5
+                        }
+                    }
+                });
+            }
+            return supabaseClient;
+        }
+
+
         // 設定線上狀態追蹤
         async function setupPresenceTracking() {
             try {
-                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+                const supabasePresence = await initializeSupabaseClient();
 
-                const supabasePresence = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-
-                const userKey = `${currentUser.userId}-${Date.now()}`;
+                const userKey = `${currentUser.display_name}-${Date.now()}`;
 
                 presenceChannel = supabasePresence.channel('online-users', {
                     config: {
@@ -927,25 +946,23 @@
                     }
                 });
 
-                // ✅ 修正：sync 事件呼叫 updateOnlineUsers
                 presenceChannel
                     .on('presence', { event: 'sync' }, () => {
-                        console.log('[Presence] 線上用戶同步');
+                        console.log('[Presence] 線上用戶同步完成');
                         updateOnlineUsers();
                     })
                     .on('presence', { event: 'join' }, ({ newPresences }) => {
-                        console.log('[Presence] 用戶加入:', newPresences);
+                        console.log('[Presence] 用戶加入:', newPresences.map(p => p.display_name));
                         handleUserJoin(newPresences);
                     })
                     .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                        console.log('[Presence] 用戶離開:', leftPresences);
+                        console.log('[Presence] 用戶離開:', leftPresences.map(p => p.display_name));
                         handleUserLeave(leftPresences);
                     })
                     .subscribe(async (status) => {
                         if (status === 'SUBSCRIBED') {
-                            // 初始發送一次
+                            // 只發送必要資訊，不包含 user_id
                             await presenceChannel.track({
-                                user_id: currentUser.userId,
                                 display_name: currentUser.displayName,
                                 role: currentUser.role,
                                 online_at: new Date().toISOString()
@@ -962,9 +979,11 @@
         // 處理用戶加入
         function handleUserJoin(newPresences) {
             newPresences.forEach(presence => {
+                // 只記錄 display_name，不記錄 user_id
                 if (presence.user_id !== currentUser.userId) {
-                    onlineUsers.set(presence.user_id, {
-                        ...presence,
+                    onlineUsers.set(presence.display_name, { // 改用 display_name 作為 key
+                        display_name: presence.display_name,
+                        role: presence.role,
                         joinTime: new Date()
                     });
                 }
@@ -975,7 +994,7 @@
         // 處理用戶離開
         function handleUserLeave(leftPresences) {
             leftPresences.forEach(presence => {
-                onlineUsers.delete(presence.user_id);
+                onlineUsers.delete(presence.display_name); // 改用 display_name
             });
             updateOnlineDisplay();
         }
@@ -997,11 +1016,11 @@
         function showDetailedOnlineInfo() {
             const totalUsers = onlineUsers.size + 1;
             const adminUsers = Array.from(onlineUsers.values()).filter(user => user.role === '管理').length;
-            const normalUsers = totalUsers - adminUsers - 1; // 扣除自己
+            const normalUsers = totalUsers - adminUsers - 1;
 
             console.log(`[線上統計] 總人數: ${totalUsers}, 管理員: ${adminUsers + 1}, 一般用戶: ${normalUsers}`);
 
-            // 更新管理員面板顯示
+            // 更新管理員面板顯示 - 只顯示統計數字，不顯示具體資訊
             if (document.getElementById('adminOnlineInfo')) {
                 document.getElementById('adminOnlineInfo').innerHTML = `
             <div style="font-size: 0.75rem; line-height: 1.4;">
@@ -1021,15 +1040,17 @@
             }
 
             const state = presenceChannel.presenceState();
-            console.log('[Presence] 當前狀態:', state);
+            console.log('[Presence] 當前狀態:', Object.keys(state).length, '個用戶在線');
 
             onlineUsers.clear();
 
             Object.values(state).forEach(presences => {
                 presences.forEach(presence => {
                     if (presence.user_id !== currentUser.userId) {
-                        onlineUsers.set(presence.user_id, {
-                            ...presence,
+                        // 改用 display_name 作為唯一識別，不儲存 user_id
+                        onlineUsers.set(presence.display_name, {
+                            display_name: presence.display_name,
+                            role: presence.role,
                             joinTime: new Date(presence.online_at || Date.now())
                         });
                     }
@@ -1116,19 +1137,10 @@
             }
         }
 
-        // 設定 Realtime 訂閱
+        // 修改：設定 Realtime 訂閱 - 使用共享客戶端
         async function setupRealtimeUpdates() {
             try {
-                // 動態導入 Supabase
-                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
-
-                supabaseRealtime = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-                    realtime: {
-                        params: {
-                            eventsPerSecond: 5
-                        }
-                    }
-                });
+                const supabaseRealtime = await initializeSupabaseClient();
 
                 const channel = supabaseRealtime.channel('equipment-updates')
                     .on('postgres_changes', {
@@ -1155,7 +1167,7 @@
                 console.error('Realtime 訂閱失敗:', error);
             }
         }
-
+        
         // 處理 Realtime 事件 - 優化版本
         function handleRealtimeEvent(payload) {
             const eventType = payload.eventType;
