@@ -652,6 +652,19 @@
             animation: pulse 2s infinite;
         }
 
+        .expired-warning {
+            display: inline-block;
+            cursor: pointer;
+            font-size: 1.2rem;
+            animation: blink 1.5s infinite;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        .expired-warning:hover {
+            transform: scale(1.2);
+        }
+
         @keyframes pulse {
             0% {
                 opacity: 1;
@@ -677,6 +690,19 @@
                 transform: translateY(0);
             }
         }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0.3;
+            }
+        }
     </style>
 </head>
 
@@ -698,7 +724,12 @@
 
         <div class="content-grid">
             <div class="sidebar">
-                <h3>篩選條件</h3>
+                <h3>篩選條件
+                    <span id="expiredWarning" class="expired-warning" style="display: none;"
+                        onclick="showExpiredEquipment()">
+                        ⚠️
+                    </span>
+                </h3>
                 <div class="filter-group">
                     <label for="searchInput">搜尋器材</label>
                     <input type="text" id="searchInput" class="form-control" placeholder="輸入器材名稱或編號">
@@ -1318,7 +1349,8 @@
 
                 renderEquipment();
                 updateCategoryFilter();
-
+                // 載入完成後檢查過期裝備
+                updateExpiredWarning();
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
                 // 暫時使用假資料
@@ -1521,13 +1553,17 @@
             threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
             const expired = equipmentData.filter(equipment => {
+                // 過濾條件：狀態不是在隊，且有有效的更新時間
                 if (equipment.目前狀態 === '在隊') return false;
-
-                // 確保 updated_at 存在
                 if (!equipment.updated_at) return false;
 
-                const lastUpdate = new Date(equipment.updated_at);
-                return lastUpdate < threeDaysAgo;
+                try {
+                    const lastUpdate = new Date(equipment.updated_at);
+                    return lastUpdate < threeDaysAgo;
+                } catch (e) {
+                    console.warn('無效的更新時間:', equipment.updated_at);
+                    return false;
+                }
             });
 
             return expired;
@@ -1561,16 +1597,31 @@
                 return matchSearch && matchCategory && matchStatus;
             });
 
-            // 只在完全沒有篩選條件時檢查過期裝備
-            if (searchTerm === '' && categoryFilter === '' && statusFilter === '') {
-                const expired = checkExpiredEquipment();
-                if (expired.length > 0 && !window.expiredAlertShown) {
-                    showExpiredAlert(expired);
-                }
-            }
+            // 檢查並更新過期警告顯示
+            updateExpiredWarning();
 
             return filtered;
         }
+        // 更新過期警告顯示
+        function updateExpiredWarning() {
+            const expired = checkExpiredEquipment();
+            const warningElement = document.getElementById('expiredWarning');
+
+            if (expired.length > 0) {
+                warningElement.style.display = 'inline-block';
+                warningElement.title = `有 ${expired.length} 個裝備超過3天未歸隊，點擊查看`;
+            } else {
+                warningElement.style.display = 'none';
+            }
+        }
+        // 點擊警告圖示顯示過期裝備
+        function showExpiredEquipment() {
+            document.getElementById('searchInput').value = '__expired__';
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            renderEquipment();
+        }
+        // 更新分類選單
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
 
