@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
 
-
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
   const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
@@ -114,6 +113,21 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     equipmentData.裝備編號 = `${prefix}-${newNumber.toString().padStart(3, '0')}`;
 
     equipmentData.填表人 = userData.display_name || userData.姓名;
+    // 新增初始歷史紀錄 - 使用台灣時間
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    equipmentData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
     equipmentData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase.from("equipment").insert(equipmentData).select().single();
@@ -175,9 +189,20 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       changeLog.push(`備註: ${oldData.狀態 || '空'} → ${equipmentData.狀態 || '空'}`);
     }
 
-    // 生成歷史紀錄條目
-    const timestamp = new Date().toLocaleString('zh-TW');
-    equipmentData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
+    // 生成歷史紀錄條目 - 使用台灣時間
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
     const changeSummary = changeLog.length > 0
       ? `修改了: ${changeLog.join(', ')}`
       : '更新了裝備資訊';
@@ -195,6 +220,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     equipmentData.歷史更新紀錄 = historyLines.join('\n');
 
     equipmentData.填表人 = userData.display_name || userData.姓名;
+
+
     equipmentData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -371,7 +398,18 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .single();
 
     // 新增歷史紀錄項目
-    const timestamp = new Date().toLocaleString('zh-TW');
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
     const newEntry = `[${timestamp}] ${userData.display_name} ${historyContent}`;
 
     const currentHistory = oldData.歷史更新紀錄 || '';
@@ -407,9 +445,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 // 解析歷史紀錄文字為結構化資料
 function parseHistoryText(historyText) {
   if (!historyText) return [];
-  
+
   return historyText.split('\n')
-    .filter(line => line.trim())
+    .filter(line => line.trim() && line !== 'null')
     .map(line => {
       // 解析格式: [時間] 人員 操作內容
       const match = line.match(/\[([^\]]+)\]\s+([^\s]+)\s+(.+)/);
@@ -421,8 +459,9 @@ function parseHistoryText(historyText) {
           原始內容: line
         };
       }
+      // 如果格式不符合，返回基本資訊
       return {
-        timestamp: new Date().toLocaleString('zh-TW'),
+        timestamp: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
         操作人員: '系統',
         操作內容: line,
         原始內容: line
