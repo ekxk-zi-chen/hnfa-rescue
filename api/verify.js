@@ -85,6 +85,34 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const { equipmentData } = body;
+
+    // 先獲取該群組的裝備來計算新編號
+    const { data: groupEquipments, error: groupError } = await supabase
+      .from("equipment")
+      .select("裝備編號")
+      .eq("分群組", equipmentData.分群組)
+      .order("裝備編號", { ascending: true });
+
+    if (groupError) {
+      console.error("獲取群組裝備錯誤:", groupError);
+      return res.status(500).json({ status: "error", message: "Failed to get group equipment" });
+    }
+
+    // 計算新編號
+    let newNumber = 1;
+    if (groupEquipments && groupEquipments.length > 0) {
+      // 取得最後一個編號的數字部分
+      const lastNumber = groupEquipments[groupEquipments.length - 1].裝備編號;
+      const match = lastNumber.match(/\d+/);
+      if (match) {
+        newNumber = parseInt(match[0]) + 1;
+      }
+    }
+
+    // 生成新編號（保持原有格式，如 MED-001）
+    const prefix = equipmentData.分群組.substring(0, 3).toUpperCase() || "EQP";
+    equipmentData.裝備編號 = `${prefix}-${newNumber.toString().padStart(3, '0')}`;
+
     equipmentData.填表人 = userData.display_name || userData.姓名;
     equipmentData.updated_at = new Date().toISOString();
 
@@ -95,7 +123,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: "Failed to create equipment" });
     }
 
-    // ✅ Supabase Realtime 會自動通知所有訂閱者
     return res.status(200).json({
       status: "ok",
       equipmentId: data.id,
@@ -113,12 +140,21 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     equipmentData.填表人 = userData.display_name || userData.姓名;
     equipmentData.updated_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    // 獲取舊資料來比對變化
+    const { data: oldData } = await supabase
       .from("equipment")
-      .update(equipmentData)
+      .select("*")
       .eq("id", equipmentData.id)
-      .select()
       .single();
+
+    // 生成歷史紀錄
+    const historyEntry = `[${new Date().toLocaleString('zh-TW')}] ${userData.display_name} 將狀態改為 ${equipmentData.目前狀態}`;
+
+    // 更新歷史紀錄（保留最新30筆）
+    const currentHistory = oldData.歷史更新紀錄 || '';
+    const newHistory = currentHistory.split('\n').slice(0, 29);
+    newHistory.unshift(historyEntry);
+    equipmentData.歷史更新紀錄 = newHistory.join('\n');
 
     if (error) {
       console.error("更新裝備錯誤:", error);
@@ -138,6 +174,20 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const { equipmentId } = body;
+
+    // 先獲取要刪除的裝備資訊
+    const { data: deletedEquipment, error: getError } = await supabase
+      .from("equipment")
+      .select("分群組, 裝備編號")
+      .eq("id", equipmentId)
+      .single();
+
+    if (getError) {
+      console.error("獲取裝備資訊錯誤:", getError);
+      return res.status(500).json({ status: "error", message: "Failed to get equipment info" });
+    }
+
+    // 刪除裝備
     const { error } = await supabase.from("equipment").delete().eq("id", equipmentId);
 
     if (error) {
@@ -302,7 +352,7 @@ export default async function handler(req, res) {
 
       // 使用您的資料表欄位
       const displayName = userData.display_name || userData.姓名 || decoded.displayName || "用戶";
-      
+
       return res.status(200).json({
         status: "ok",
         displayName: displayName,
@@ -317,9 +367,9 @@ export default async function handler(req, res) {
       const { name, email, phone, job, unit, script, displayName } = body;
 
       if (!idToken) {
-        return res.status(400).json({ 
-          status: "error", 
-          message: "註冊需要 idToken" 
+        return res.status(400).json({
+          status: "error",
+          message: "註冊需要 idToken"
         });
       }
 
@@ -354,7 +404,7 @@ export default async function handler(req, res) {
       }
 
       console.log('[註冊] 創建新用戶');
-      
+
       const insertPayload = {
         user_id: userId,
         姓名: name || resolvedDisplayName,
@@ -363,7 +413,7 @@ export default async function handler(req, res) {
         電話: phone || null,
         職稱: job || null,
         單位: unit || null,
-        管理員: "一般用戶", 
+        管理員: "一般用戶",
         申請備註: script || null,
         創建時間: new Date().toISOString()
       };
@@ -378,9 +428,9 @@ export default async function handler(req, res) {
 
       if (insErr) {
         console.error("[註冊] Supabase 插入錯誤", insErr);
-        return res.status(500).json({ 
-          status: "error", 
-          message: "Failed to create user", 
+        return res.status(500).json({
+          status: "error",
+          message: "Failed to create user",
           error: insErr.message || insErr.code || String(insErr)
         });
       }
@@ -424,11 +474,11 @@ export default async function handler(req, res) {
 
     if (!userData) {
       console.log('[驗證] 用戶不存在，需要註冊');
-      const tempSessionToken = createSessionToken(userId, { 
-        displayName, 
-        temporary: true 
+      const tempSessionToken = createSessionToken(userId, {
+        displayName,
+        temporary: true
       });
-      
+
       return res.status(200).json({
         status: "needsignup",
         displayName: displayName,
@@ -438,11 +488,11 @@ export default async function handler(req, res) {
 
     console.log('[驗證] 用戶存在，登入成功');
     const finalDisplayName = userData.display_name || userData.姓名 || displayName;
-    const sessionTokenForLogin = createSessionToken(userId, { 
+    const sessionTokenForLogin = createSessionToken(userId, {
       displayName: finalDisplayName,
       role: userData.管理員
     });
-    
+
     return res.status(200).json({
       status: "ok",
       displayName: finalDisplayName,
@@ -452,8 +502,8 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("[handler] 錯誤:", err);
-    res.status(500).json({ 
-      status: "error", 
+    res.status(500).json({
+      status: "error",
       message: err.message || "Internal server error"
     });
   }
