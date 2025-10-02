@@ -137,8 +137,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const { equipmentData } = body;
-    equipmentData.填表人 = userData.display_name || userData.姓名;
-    equipmentData.updated_at = new Date().toISOString();
 
     // 獲取舊資料來比對變化
     const { data: oldData } = await supabase
@@ -156,6 +154,16 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     newHistory.unshift(historyEntry);
     equipmentData.歷史更新紀錄 = newHistory.join('\n');
 
+    equipmentData.填表人 = userData.display_name || userData.姓名;
+    equipmentData.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("equipment")
+      .update(equipmentData)
+      .eq("id", equipmentData.id)
+      .select()
+      .single();
+
     if (error) {
       console.error("更新裝備錯誤:", error);
       return res.status(500).json({ status: "error", message: "Failed to update equipment" });
@@ -166,6 +174,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       message: "裝備更新成功 (Realtime 已同步)",
     });
   }
+
 
   // ====== 刪除裝備 ======
   if (action === "deleteEquipment") {
