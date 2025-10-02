@@ -131,6 +131,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   }
 
   // ====== 更新裝備 ======
+
   if (action === "updateEquipment") {
     if (userRole === "一般用戶") {
       return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
@@ -145,14 +146,53 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .eq("id", equipmentData.id)
       .single();
 
-    // 生成歷史紀錄
-    const historyEntry = `[${new Date().toLocaleString('zh-TW')}] ${userData.display_name} 將狀態改為 ${equipmentData.目前狀態}`;
+    // 生成詳細的變更紀錄
+    let changeLog = [];
 
-    // 更新歷史紀錄（保留最新30筆）
+    // 比對各個欄位的變化
+    if (oldData.目前狀態 !== equipmentData.目前狀態) {
+      changeLog.push(`狀態: ${oldData.目前狀態} → ${equipmentData.目前狀態}`);
+    }
+    if (oldData.器材名稱 !== equipmentData.器材名稱) {
+      changeLog.push(`器材名稱: ${oldData.器材名稱} → ${equipmentData.器材名稱}`);
+    }
+    if (oldData.分群組 !== equipmentData.分群組) {
+      changeLog.push(`分群組: ${oldData.分群組} → ${equipmentData.分群組}`);
+    }
+    if (oldData.裝備編號 !== equipmentData.裝備編號) {
+      changeLog.push(`裝備編號: ${oldData.裝備編號} → ${equipmentData.裝備編號}`);
+    }
+    if (oldData.型號 !== equipmentData.型號) {
+      changeLog.push(`型號: ${oldData.型號 || '空'} → ${equipmentData.型號 || '空'}`);
+    }
+    if (oldData.特別位置 !== equipmentData.特別位置) {
+      changeLog.push(`位置: ${oldData.特別位置 || '空'} → ${equipmentData.特別位置 || '空'}`);
+    }
+    if (oldData.數量 !== equipmentData.數量) {
+      changeLog.push(`數量: ${oldData.數量} → ${equipmentData.數量}`);
+    }
+    if (oldData.狀態 !== equipmentData.狀態) {
+      changeLog.push(`備註: ${oldData.狀態 || '空'} → ${equipmentData.狀態 || '空'}`);
+    }
+
+    // 生成歷史紀錄條目
+    const timestamp = new Date().toLocaleString('zh-TW');
+    equipmentData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
+    const changeSummary = changeLog.length > 0
+      ? `修改了: ${changeLog.join(', ')}`
+      : '更新了裝備資訊';
+
+    const historyEntry = `[${timestamp}] ${userData.display_name} ${changeSummary}`;
+
+    // 更新歷史紀錄（保留最新50筆）
     const currentHistory = oldData.歷史更新紀錄 || '';
-    const newHistory = currentHistory.split('\n').slice(0, 29);
-    newHistory.unshift(historyEntry);
-    equipmentData.歷史更新紀錄 = newHistory.join('\n');
+    const newHistory = currentHistory
+      ? `${historyEntry}\n${currentHistory}`
+      : historyEntry;
+
+    // 只保留最新50筆
+    const historyLines = newHistory.split('\n').slice(0, 50);
+    equipmentData.歷史更新紀錄 = historyLines.join('\n');
 
     equipmentData.填表人 = userData.display_name || userData.姓名;
     equipmentData.updated_at = new Date().toISOString();
@@ -290,9 +330,104 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: error.message });
     }
   }
+  // ====== 獲取裝備歷史紀錄 ======
+  if (action === "getEquipmentHistory") {
+    const { equipmentId } = body;
 
+    // 先獲取裝備的歷史紀錄
+    const { data: equipment, error } = await supabase
+      .from("equipment")
+      .select("歷史更新紀錄")
+      .eq("id", equipmentId)
+      .single();
+
+    if (error) {
+      console.error("獲取裝備歷史紀錄錯誤:", error);
+      return res.status(500).json({ status: "error", message: "Failed to fetch equipment history" });
+    }
+
+    // 解析歷史紀錄文字為結構化資料
+    const historyList = parseHistoryText(equipment.歷史更新紀錄 || '');
+
+    return res.status(200).json({
+      status: "ok",
+      history: historyList,
+    });
+  }
+
+  // ====== 新增裝備歷史紀錄 ======
+  if (action === "addEquipmentHistory") {
+    if (userRole === "一般用戶") {
+      return res.status(403).json({ status: "error", message: "沒有權限編輯歷史紀錄" });
+    }
+
+    const { equipmentId, historyContent } = body;
+
+    // 獲取現有歷史紀錄
+    const { data: oldData } = await supabase
+      .from("equipment")
+      .select("歷史更新紀錄")
+      .eq("id", equipmentId)
+      .single();
+
+    // 新增歷史紀錄項目
+    const timestamp = new Date().toLocaleString('zh-TW');
+    const newEntry = `[${timestamp}] ${userData.display_name} ${historyContent}`;
+
+    const currentHistory = oldData.歷史更新紀錄 || '';
+    const newHistory = currentHistory ? `${newEntry}\n${currentHistory}` : newEntry;
+
+    // 只保留最新50筆紀錄
+    const historyLines = newHistory.split('\n').slice(0, 50);
+    const trimmedHistory = historyLines.join('\n');
+
+    // 更新到資料庫
+    const { error } = await supabase
+      .from("equipment")
+      .update({
+        歷史更新紀錄: trimmedHistory,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", equipmentId);
+
+    if (error) {
+      console.error("更新歷史紀錄錯誤:", error);
+      return res.status(500).json({ status: "error", message: "Failed to update history" });
+    }
+
+    return res.status(200).json({
+      status: "ok",
+      message: "歷史紀錄新增成功",
+    });
+  }
   // 如果沒有匹配的 action
   return res.status(400).json({ status: "error", message: "Unknown action" });
+}
+
+// 解析歷史紀錄文字為結構化資料
+function parseHistoryText(historyText) {
+  if (!historyText) return [];
+  
+  return historyText.split('\n')
+    .filter(line => line.trim())
+    .map(line => {
+      // 解析格式: [時間] 人員 操作內容
+      const match = line.match(/\[([^\]]+)\]\s+([^\s]+)\s+(.+)/);
+      if (match) {
+        return {
+          timestamp: match[1],
+          操作人員: match[2],
+          操作內容: match[3],
+          原始內容: line
+        };
+      }
+      return {
+        timestamp: new Date().toLocaleString('zh-TW'),
+        操作人員: '系統',
+        操作內容: line,
+        原始內容: line
+      };
+    });
 }
 
 // ------------------- 主 handler -------------------
