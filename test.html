@@ -787,7 +787,8 @@
                 
                 // 設置事件監聽器
                 setupEventListeners();
-                
+                // 啟動 Supabase Realtime 訂閱（僅限已驗證的使用者）
+                setupRealtimeUpdates();
             } catch (error) {
                 console.error('初始化失敗:', error);
                 showToast('初始化失敗，請重新登入', 'error');
@@ -1424,6 +1425,69 @@
             window.location.href = 'index.html';
         }
     </script>
+    <!-- ✅ 新增在這裡（放在後面） -->
+    <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
+    const SUPABASE_URL = 'https://gltzwtqcrdpdumzitbib.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE';
+
+    let supabaseRealtime = null;
+
+    function setupRealtimeUpdates() {
+        if (!sessionStorage.getItem('sessionToken')) return;
+
+        supabaseRealtime = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            realtime: { params: { eventsPerSecond: 5 } } // 防止事件過多
+        });
+
+        const channel = supabaseRealtime.channel('equipment-updates')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'equipment' }, 
+                payload => handleRealtimeEvent(payload)
+            )
+            .subscribe(status => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('[Realtime] 已訂閱 Supabase equipment 變更');
+                }
+            });
+
+        window.addEventListener('beforeunload', () => {
+            supabaseRealtime.removeChannel(channel);
+        });
+    }
+
+    function handleRealtimeEvent(payload) {
+        const eventType = payload.eventType || payload.event;
+        const newData = payload.new;
+        const oldData = payload.old;
+
+        console.log('[Realtime 收到]', eventType, payload);
+
+        switch (eventType) {
+            case 'INSERT':
+                if (!equipmentData.some(e => e.id === newData.id)) {
+                    equipmentData.unshift(newData);
+                    showToast(`新裝備「${newData.器材名稱}」已新增`, 'success');
+                }
+                break;
+            case 'UPDATE':
+                const idx = equipmentData.findIndex(e => e.id === newData.id);
+                if (idx !== -1) {
+                    equipmentData[idx] = newData;
+                    showToast(`「${newData.器材名稱}」已更新`, 'info');
+                }
+                break;
+            case 'DELETE':
+                equipmentData = equipmentData.filter(e => e.id !== oldData.id);
+                showToast('裝備已被刪除', 'error');
+                break;
+        }
+
+        renderEquipment();
+    }
+
+    window.setupRealtimeUpdates = setupRealtimeUpdates;
+    </script>
 </body>
 </html>
