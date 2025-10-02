@@ -1523,6 +1523,9 @@
             const expired = equipmentData.filter(equipment => {
                 if (equipment.目前狀態 === '在隊') return false;
 
+                // 確保 updated_at 存在
+                if (!equipment.updated_at) return false;
+
                 const lastUpdate = new Date(equipment.updated_at);
                 return lastUpdate < threeDaysAgo;
             });
@@ -1536,12 +1539,18 @@
             const statusFilter = document.getElementById('statusFilter').value;
 
             const filtered = equipmentData.filter(equipment => {
-                const matchSearch = !searchTerm ||
-                    equipment.器材名稱.toLowerCase().includes(searchTerm) ||
-                    equipment.裝備編號.toLowerCase().includes(searchTerm) ||
-                    (equipment.型號 && equipment.型號.toLowerCase().includes(searchTerm));
+                // 確保所有字串都有預設值
+                const equipmentName = equipment.器材名稱 || '';
+                const equipmentNumber = equipment.裝備編號 || '';
+                const equipmentModel = equipment.型號 || '';
+                const equipmentGroup = equipment.分群組 || '';
 
-                const matchCategory = !categoryFilter || equipment.分群組 === categoryFilter;
+                const matchSearch = !searchTerm ||
+                    equipmentName.toLowerCase().includes(searchTerm) ||
+                    equipmentNumber.toLowerCase().includes(searchTerm) ||
+                    equipmentModel.toLowerCase().includes(searchTerm);
+
+                const matchCategory = !categoryFilter || equipmentGroup === categoryFilter;
                 const matchStatus = !statusFilter || equipment.目前狀態 === statusFilter;
 
                 return matchSearch && matchCategory && matchStatus;
@@ -1553,9 +1562,8 @@
                 showExpiredAlert(expired);
             }
 
-            return filtered; // 返回 filtered 而不是 filteredData
+            return filtered;
         }
-
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
 
@@ -1719,12 +1727,21 @@
         }
         // 顯示過期提醒
         function showExpiredAlert(expired) {
+            // 檢查是否已經顯示過提醒，避免重複觸發
+            if (window.expiredAlertShown) return;
+            window.expiredAlertShown = true;
+
             if (confirm(`有 ${expired.length} 個裝備超過3天未歸隊，是否查看？`)) {
                 // 篩選顯示過期裝備
                 document.getElementById('statusFilter').value = '';
                 document.getElementById('searchInput').value = '過期';
                 renderEquipment();
             }
+
+            // 5秒後重置標記
+            setTimeout(() => {
+                window.expiredAlertShown = false;
+            }, 5000);
         }
         // 刪除裝備
         async function deleteEquipment(equipmentId) {
