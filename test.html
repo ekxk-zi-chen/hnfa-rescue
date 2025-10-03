@@ -1385,6 +1385,8 @@
         async function loadEquipmentData() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
+                console.log('載入裝備資料，sessionToken:', sessionToken);
+
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1393,71 +1395,90 @@
                         sessionToken
                     })
                 });
+
                 console.log('API 回應狀態:', response.status);
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
+                console.log('API 回應資料:', data);
+
                 if (data.status === 'ok') {
                     equipmentData = data.equipment || [];
                     console.log('成功載入裝備數量:', equipmentData.length);
+
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                    document.getElementById('equipmentGrid').style.display = 'grid';
+
+                    renderEquipment();
+                    updateCategoryFilter();
+                    updateExpiredWarning();
                 } else {
                     throw new Error(data.message || '載入失敗');
                 }
 
-                document.getElementById('loadingIndicator').style.display = 'none';
-                document.getElementById('equipmentGrid').style.display = 'grid';
-
-                renderEquipment();
-                updateCategoryFilter();
-                // 載入完成後檢查過期裝備
-                updateExpiredWarning();
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
-                // 暫時使用假資料
-                equipmentData = [
-                    {
-                        id: '1',
-                        器材名稱: '氧氣瓶',
-                        分群組: '醫療設備',
-                        圖片檔案位置: '',
-                        裝備編號: 'MED-001',
-                        型號: 'OXY-500L',
-                        特別位置: '醫療車第二層',
-                        數量: 5,
-                        說明書連結: '',
-                        目前狀態: '可用',
-                        填表人: '張三',
-                        狀態: '正常',
-                        教學影片相關: '',
-                        updated_at: new Date().toISOString()
-                    },
-                    {
-                        id: '2',
-                        器材名稱: '繩索',
-                        分群組: '救援設備',
-                        圖片檔案位置: '',
-                        裝備編號: 'RES-001',
-                        型號: 'ROPE-10MM',
-                        特別位置: '工具箱A',
-                        數量: 10,
-                        說明書連結: '',
-                        目前狀態: '可用',
-                        填表人: '李四',
-                        狀態: '正常',
-                        教學影片相關: '',
-                        updated_at: new Date().toISOString()
-                    }
-                ];
 
+                // 修正：使用安全的錯誤處理，避免 404
                 document.getElementById('loadingIndicator').style.display = 'none';
-                document.getElementById('equipmentGrid').style.display = 'grid';
+                const equipmentGrid = document.getElementById('equipmentGrid');
+                equipmentGrid.style.display = 'block';
+
+                // 使用安全的 HTML 內容
+                equipmentGrid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">
+                <p>載入失敗: ${error.message}</p>
+                <button class="btn btn-primary" onclick="loadEquipmentData()">重新載入</button>
+            </div>
+        `;
+
+                // 使用假資料作為備用
+                equipmentData = getFallbackEquipmentData();
                 renderEquipment();
                 updateCategoryFilter();
             }
         }
 
+        // 新增備用資料函數
+        function getFallbackEquipmentData() {
+            return [
+                {
+                    id: '1',
+                    器材名稱: '氧氣瓶',
+                    分群組: '醫療設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'MED-001',
+                    型號: 'OXY-500L',
+                    特別位置: '醫療車第二層',
+                    數量: 5,
+                    說明書連結: '',
+                    目前狀態: '可用',
+                    填表人: '張三',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    updated_at: new Date().toISOString()
+                },
+                {
+                    id: '2',
+                    器材名稱: '繩索',
+                    分群組: '救援設備',
+                    圖片檔案位置: '',
+                    裝備編號: 'RES-001',
+                    型號: 'ROPE-10MM',
+                    特別位置: '工具箱A',
+                    數量: 10,
+                    說明書連結: '',
+                    目前狀態: '可用',
+                    填表人: '李四',
+                    狀態: '正常',
+                    教學影片相關: '',
+                    updated_at: new Date().toISOString()
+                }
+            ];
+        }
         function updateUserInterface() {
             document.getElementById('userName').textContent = currentUser.displayName;
             document.getElementById('userRole').textContent = currentUser.role;
