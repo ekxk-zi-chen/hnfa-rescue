@@ -665,6 +665,49 @@
             transform: scale(1.2);
         }
 
+        /* 歷史紀錄區域樣式 */
+        .history-section {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid var(--info);
+        }
+
+        .history-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-date {
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+
+        .history-content {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        .loading-history {
+            text-align: center;
+            color: var(--gray-600);
+            font-style: italic;
+        }
+
+        /* 說明書 iframe 容器 */
+        .manual-iframe-container {
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
         @keyframes pulse {
             0% {
                 opacity: 1;
@@ -1277,14 +1320,32 @@
 
         // 新增函數處理影片網址
         function getEmbedUrl(url) {
+            if (!url || url === 'null' || url === 'undefined') return '';
+
+            // 如果是 YouTube ID (11位字母數字)
+            if (url.match(/^[a-zA-Z0-9_-]{11}$/)) {
+                return `https://www.youtube.com/embed/${url}`;
+            }
+
+            // 如果是完整 YouTube 網址
             if (url.includes('youtube.com/watch?v=')) {
-                return url.replace('watch?v=', 'embed/');
+                const videoId = url.split('v=')[1]?.split('&')[0];
+                return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             }
+
             if (url.includes('youtu.be/')) {
-                return `https://www.youtube.com/embed/${url.split('youtu.be/')[1]}`;
+                const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+                return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             }
-            return url;
+
+            // 如果已經是嵌入網址，直接返回
+            if (url.includes('youtube.com/embed/')) {
+                return url;
+            }
+
+            return '';
         }
+
         async function verifyUser(sessionToken) {
             try {
                 const response = await fetch(CONFIG.API_BASE, {
@@ -1500,27 +1561,56 @@
                 <div class="equipment-details">
                     ${equipment.圖片檔案位置 ? `
                         <div class="detail-image">
-                            <iframe 
-                                src="https://drive.google.com/file/d/${equipment.圖片檔案位置}/preview"
-                                frameborder="0" allowfullscreen
-                                style="width:100%;height:200px;"></iframe>
+                            ${getImageDisplay(equipment.圖片檔案位置)}
                         </div>
                     ` : ''}
 
-                    <div class="detail-info">
-                        <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
-                        <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
-                        <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
-                        <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
-                        <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
-                        ${equipment.狀態 ? `<p><strong>狀態備註：</strong>${equipment.狀態}</p>` : ''}
+                        <div class="detail-info">
+                            <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
+                            <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
+                            <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
+                            <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
+                            <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
+                            ${equipment.狀態 ? `<p><strong>狀態備註：</strong>${equipment.狀態}</p>` : ''}
+                        </div>
+                        <!-- 說明書 iframe 區域 -->
+                        ${equipment.說明書連結 ? `
+                            <div class="manual-iframe-container" style="display: none; margin-top: 1rem;">
+                                <iframe 
+                                    src="${equipment.說明書連結}"
+                                    style="width:100%; height:400px; border: 1px solid #ddd; border-radius: 8px;"
+                                    frameborder="0">
+                                </iframe>
+                            </div>
+                        ` : ''}
+                        ${equipment.說明書連結 && equipment.說明書連結 !== 'null' ? `
+                            <button class="btn btn-secondary btn-sm toggle-manual-btn" 
+                                    onclick="toggleManual(this, '${equipment.id}')">
+                                說明書
+                            </button>
+                        ` : ''}
+                        
+                        ${equipment.教學影片相關 && getEmbedUrl(equipment.教學影片相關) ? `
+                            <button class="btn btn-secondary btn-sm" 
+                                    onclick="showVideoModal('${getEmbedUrl(equipment.教學影片相關)}')">
+                                教學影片
+                            </button>
+                        ` : ''}
+                        
+                        ${currentUser && currentUser.role !== '一般用戶' ? `
+                            <button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>
+                            <button class="btn btn-info btn-sm toggle-history-btn" 
+                                    onclick="toggleHistory(this, '${equipment.id}')">
+                                歷史紀錄
+                            </button>
+                        ` : ''}
                     </div>
 
-                    <div class="card-actions">
-                        ${equipment.說明書連結 ? `<a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">說明書</a>` : ''}
-                        ${equipment.教學影片相關 ? `<a href="${equipment.教學影片相關}" target="_blank" class="btn btn-secondary btn-sm">教學影片</a>` : ''}
-                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>` : ''}
-                        ${currentUser && currentUser.role !== '一般用戶' ? `<button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>` : ''}
+                    <!-- 歷史紀錄區域 -->
+                    <div class="history-section" id="history-${equipment.id}" style="display: none; margin-top: 1rem;">
+                        <!-- 歷史紀錄內容會動態載入 -->
+                        <div class="loading-history">載入歷史紀錄中...</div>
                     </div>
                 </div>
             `;
@@ -1546,6 +1636,83 @@
             summary.addEventListener('click', () => toggle());
 
             return wrapper;
+        }
+        
+        // 新增說明書顯示處理函數
+        function getManualDisplay(manualLink) {
+            if (!manualLink) return '';
+
+            // 如果是 Google Drive 文件，轉換為預覽模式
+            if (manualLink.includes('drive.google.com')) {
+                // 從各種格式的 Google Drive 連結中提取檔案ID
+                const match = manualLink.match(/\/d\/([^\/]+)/) ||
+                    manualLink.match(/id=([^&]+)/) ||
+                    manualLink.match(/\/([a-zA-Z0-9_-]{25,})/);
+
+                if (match && match[1]) {
+                    return `
+                <iframe 
+                    src="https://drive.google.com/file/d/${match[1]}/preview"
+                    style="width:100%; height:500px; border: none;"
+                    frameborder="0">
+                </iframe>
+            `;
+                }
+            }
+
+            // 如果是 PDF 或其他文件，直接嵌入
+            return `
+        <iframe 
+            src="${manualLink}"
+            style="width:100%; height:500px; border: none;"
+            frameborder="0">
+        </iframe>
+    `;
+        }
+        // 新增圖片顯示處理函數
+        function getImageDisplay(imagePath) {
+            if (!imagePath) return '';
+
+            // 如果是 Google Drive ID (純ID格式)
+            if (imagePath.match(/^[a-zA-Z0-9_-]{25,}$/)) {
+                return `
+            <iframe 
+                src="https://drive.google.com/file/d/${imagePath}/preview"
+                frameborder="0" 
+                allowfullscreen
+                style="width:100%;height:200px;">
+            </iframe>
+        `;
+            }
+
+            // 如果是完整 Google Drive 連結，提取 ID
+            if (imagePath.includes('drive.google.com')) {
+                // 從各種格式的 Google Drive 連結中提取檔案ID
+                const match = imagePath.match(/\/d\/([^\/]+)/) ||
+                    imagePath.match(/id=([^&]+)/) ||
+                    imagePath.match(/\/([a-zA-Z0-9_-]{25,})/);
+
+                if (match && match[1]) {
+                    return `
+                <iframe 
+                    src="https://drive.google.com/file/d/${match[1]}/preview"
+                    frameborder="0" 
+                    allowfullscreen
+                    style="width:100%;height:200px;">
+                </iframe>
+            `;
+                }
+            }
+
+            // 如果是其他圖片連結，直接顯示圖片
+            if (imagePath.match(/^https?:\/\//)) {
+                return `<img src="${imagePath}" alt="裝備圖片" style="width:100%;height:200px;object-fit:cover;" onerror="this.style.display='none'">`;
+            }
+
+            // 預設顯示
+            return `<div style="width:100%;height:200px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#666;">
+                <span>無圖片</span>
+            </div>`;
         }
         // 新增檢查函數
         function checkExpiredEquipment() {
@@ -2031,6 +2198,130 @@
             sessionStorage.removeItem('sessionToken');
             localStorage.removeItem('sessionToken');
             window.location.href = 'index.html';
+        }
+        // 切換說明書顯示
+        function toggleManual(button, equipmentId) {
+            const container = button.closest('.equipment-details').querySelector('.manual-iframe-container');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                button.textContent = '收合說明書';
+            } else {
+                container.style.display = 'none';
+                button.textContent = '說明書';
+            }
+        }
+
+        // 切換歷史紀錄顯示
+        function toggleHistory(button, equipmentId) {
+            const historySection = document.getElementById(`history-${equipmentId}`);
+
+            if (historySection.style.display === 'none') {
+                // 載入歷史紀錄
+                loadEquipmentHistory(equipmentId, historySection);
+                historySection.style.display = 'block';
+                button.textContent = '收合歷史';
+            } else {
+                historySection.style.display = 'none';
+                button.textContent = '歷史紀錄';
+            }
+        }
+
+        // 載入裝備歷史紀錄
+        async function loadEquipmentHistory(equipmentId, container) {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getEquipmentHistory',
+                        sessionToken,
+                        equipmentId
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok' && data.history) {
+                        renderHistoryList(data.history, container);
+                    } else {
+                        container.innerHTML = '<div style="color: #666; text-align: center;">無歷史紀錄</div>';
+                    }
+                } else {
+                    throw new Error('載入失敗');
+                }
+            } catch (error) {
+                console.error('載入歷史紀錄失敗:', error);
+                container.innerHTML = '<div style="color: #f44336; text-align: center;">載入失敗</div>';
+            }
+        }
+
+        // 渲染歷史紀錄列表
+        function renderHistoryList(history, container) {
+            if (!history || history.length === 0) {
+                container.innerHTML = '<div style="color: #666; text-align: center;">無歷史紀錄</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(item => `
+        <div class="history-item">
+            <div class="history-date">${formatTaiwanTime(item.timestamp)}</div>
+            <div class="history-content">
+                <strong>${item.操作類型 || '更新'}</strong> - 由 ${item.操作人員} 執行
+                ${item.操作內容 ? `<br>${item.操作內容}` : ''}
+            </div>
+        </div>
+    `).join('');
+        }
+        // 新增台灣時間格式化函數
+        function formatTaiwanTime(dateString) {
+            try {
+                const date = new Date(dateString);
+                // 轉換為台灣時間 (UTC+8)
+                return date.toLocaleString('zh-TW', {
+                    timeZone: 'Asia/Taipei',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            } catch (e) {
+                return dateString; // 如果解析失敗，返回原始字串
+            }
+        }
+        // 影片模態框
+        function showVideoModal(videoUrl) {
+            // 創建影片模態框
+            const modal = document.createElement('div');
+            modal.className = 'modal show';
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">教學影片</h3>
+                <button class="close" onclick="this.closest('.modal').remove()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <iframe 
+                    src="${videoUrl}"
+                    style="width:100%; height:400px; border: none; border-radius: 8px;"
+                    frameborder="0" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+        </div>
+    `;
+
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+
+            document.body.appendChild(modal);
         }
     </script>
 
