@@ -1393,14 +1393,15 @@
                         sessionToken
                     })
                 });
-
+                console.log('API 回應狀態:', response.status);
                 if (!response.ok) {
-                    throw new Error('載入裝備資料失敗');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
                 if (data.status === 'ok') {
                     equipmentData = data.equipment || [];
+                    console.log('成功載入裝備數量:', equipmentData.length);
                 } else {
                     throw new Error(data.message || '載入失敗');
                 }
@@ -1473,6 +1474,10 @@
         // 設置事件監聽器
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
+            if (!grid) {
+                console.error('找不到 equipmentGrid 元素');
+                return;
+            }
             grid.innerHTML = '';
 
             // 先篩選
@@ -2223,24 +2228,23 @@
 
         // 修改切換說明書顯示的函數
         function toggleManual(button, equipmentId) {
-            const container = button.closest('.equipment-details').querySelector('.manual-iframe-container');
-            const manualFrame = document.getElementById(`manual-frame-${equipmentId}`);
+            console.log('點擊說明書按鈕，equipmentId:', equipmentId);
+
+            const equipmentItem = button.closest('.equipment-item');
+            if (!equipmentItem) {
+                console.error('找不到 equipment-item');
+                return;
+            }
+
+            const container = equipmentItem.querySelector('.manual-iframe-container');
+            if (!container) {
+                console.error('找不到 manual-iframe-container');
+                return;
+            }
+
+            console.log('容器狀態:', container.style.display);
 
             if (container.style.display === 'none') {
-                // 顯示說明書，動態設定 iframe
-                const manualLink = getManualPreviewUrl(button.closest('.equipment-item').querySelector('.toggle-manual-btn').dataset.manualLink || '');
-
-                if (!manualFrame.querySelector('iframe')) {
-                    manualFrame.innerHTML = `
-                <iframe 
-                    src="${manualLink}"
-                    style="width:100%; height:100%; border: none;"
-                    frameborder="0"
-                    allow="autoplay">
-                </iframe>
-            `;
-                }
-
                 container.style.display = 'block';
                 button.textContent = '收合說明書';
             } else {
