@@ -2282,20 +2282,18 @@
         function getManualPreviewUrl(manualLink) {
             if (!manualLink) return '';
 
-            // 如果是 Google Drive 文件，轉換為預覽模式
+            // 如果是 Google Drive 文件
             if (manualLink.includes('drive.google.com')) {
-                // 從各種格式的 Google Drive 連結中提取檔案ID
                 const match = manualLink.match(/\/d\/([^\/]+)/) ||
                     manualLink.match(/id=([^&]+)/) ||
                     manualLink.match(/\/([a-zA-Z0-9_-]{25,})/);
 
                 if (match && match[1]) {
-                    // 添加這些參數來啟用縮放功能
-                    return `https://drive.google.com/file/d/${match[1]}/preview?view=fitH&embedded=true&toolbar=1&navpanes=1`;
+                    // 關鍵：使用 'preview' 而不是文件查看器
+                    return `https://drive.google.com/file/d/${match[1]}/preview?view=fitV&embedded=true&toolbar=1&navpanes=1`;
                 }
             }
 
-            // 其他類型的文件直接返回原連結
             return manualLink;
         }
 
