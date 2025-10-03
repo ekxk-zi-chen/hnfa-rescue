@@ -1637,8 +1637,9 @@
 
             return wrapper;
         }
-        
+
         // 新增說明書顯示處理函數
+
         function getManualDisplay(manualLink) {
             if (!manualLink) return '';
 
@@ -1650,23 +1651,39 @@
                     manualLink.match(/\/([a-zA-Z0-9_-]{25,})/);
 
                 if (match && match[1]) {
+                    const fileId = match[1];
                     return `
-                <iframe 
-                    src="https://drive.google.com/file/d/${match[1]}/preview"
-                    style="width:100%; height:500px; border: none;"
-                    frameborder="0">
-                </iframe>
+                <div style="width:100%; height:500px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+                    <iframe 
+                        src="https://drive.google.com/file/d/${fileId}/preview"
+                        style="width:100%; height:100%; border: none;"
+                        frameborder="0"
+                        allow="autoplay">
+                    </iframe>
+                </div>
+                <div style="margin-top: 10px; text-align: center;">
+                    <a href="${manualLink}" target="_blank" class="btn btn-secondary btn-sm">
+                        無法預覽？點此在新視窗開啟
+                    </a>
+                </div>
             `;
                 }
             }
 
             // 如果是 PDF 或其他文件，直接嵌入
             return `
-        <iframe 
-            src="${manualLink}"
-            style="width:100%; height:500px; border: none;"
-            frameborder="0">
-        </iframe>
+        <div style="width:100%; height:500px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+            <iframe 
+                src="${manualLink}"
+                style="width:100%; height:100%; border: none;"
+                frameborder="0">
+            </iframe>
+        </div>
+        <div style="margin-top: 10px; text-align: center;">
+            <a href="${manualLink}" target="_blank" class="btn btn-secondary btn-sm">
+                無法預覽？點此在新視窗開啟
+            </a>
+        </div>
     `;
         }
         // 新增圖片顯示處理函數
