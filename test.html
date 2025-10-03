@@ -1575,6 +1575,10 @@
                         </div>
                         <!-- 說明書 iframe 區域 -->
                         ${equipment.說明書連結 && equipment.說明書連結 !== 'null' ? `
+                            <button class="btn btn-secondary btn-sm toggle-manual-btn" 
+                                    onclick="toggleManual(this, '${equipment.id}')">
+                                說明書
+                            </button>
                             <div class="manual-iframe-container" style="display: none; margin-top: 1rem;">
                                 <iframe 
                                     src="${getManualPreviewUrl(equipment.說明書連結)}"
