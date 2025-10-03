@@ -958,14 +958,6 @@
 
         async function initializeApp() {
             try {
-                // 檢查 DOM 是否完全載入
-                if (document.readyState !== 'complete') {
-                    document.addEventListener('DOMContentLoaded', async () => {
-                        await initializeApp();
-                    });
-                    return;
-                }
-
                 // 檢查 Session Token
                 const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
                 if (!sessionToken) {
@@ -999,6 +991,7 @@
                 }, 2000);
             }
         }
+
         // 新增：初始化共享的 Supabase 客戶端
         async function initializeSupabaseClient() {
             if (!supabaseClient) {
@@ -1395,19 +1388,6 @@
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 console.log('載入裝備資料，sessionToken:', sessionToken);
 
-                // 確保 DOM 元素存在
-                const loadingIndicator = document.getElementById('loadingIndicator');
-                const equipmentGrid = document.getElementById('equipmentGrid');
-
-                if (!loadingIndicator || !equipmentGrid) {
-                    console.error('必要的 DOM 元素不存在');
-                    setTimeout(loadEquipmentData, 100);
-                    return;
-                }
-
-                loadingIndicator.style.display = 'flex';
-                equipmentGrid.style.display = 'none';
-
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1430,18 +1410,12 @@
                     equipmentData = data.equipment || [];
                     console.log('成功載入裝備數量:', equipmentData.length);
 
-                    // 再次檢查元素是否存在
-                    if (loadingIndicator && equipmentGrid) {
-                        loadingIndicator.style.display = 'none';
-                        equipmentGrid.style.display = 'grid';
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                    document.getElementById('equipmentGrid').style.display = 'grid';
 
-                        // 確保 renderEquipment 能正確執行
-                        setTimeout(() => {
-                            renderEquipment();
-                            updateCategoryFilter();
-                            updateExpiredWarning();
-                        }, 50);
-                    }
+                    renderEquipment();
+                    updateCategoryFilter();
+                    updateExpiredWarning();
                 } else {
                     throw new Error(data.message || '載入失敗');
                 }
@@ -1449,31 +1423,26 @@
             } catch (error) {
                 console.error('載入裝備資料失敗:', error);
 
-                // 安全的錯誤處理
-                const loadingIndicator = document.getElementById('loadingIndicator');
+                // 修正：使用安全的錯誤處理，避免 404
+                document.getElementById('loadingIndicator').style.display = 'none';
                 const equipmentGrid = document.getElementById('equipmentGrid');
+                equipmentGrid.style.display = 'block';
 
-                if (loadingIndicator) loadingIndicator.style.display = 'none';
-                if (equipmentGrid) {
-                    equipmentGrid.style.display = 'block';
-                    equipmentGrid.innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">
-                    <p>載入失敗: ${error.message}</p>
-                    <button class="btn btn-primary" onclick="loadEquipmentData()">重新載入</button>
-                </div>
-            `;
-                }
+                // 使用安全的 HTML 內容
+                equipmentGrid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">
+                <p>載入失敗: ${error.message}</p>
+                <button class="btn btn-primary" onclick="loadEquipmentData()">重新載入</button>
+            </div>
+        `;
 
                 // 使用假資料作為備用
                 equipmentData = getFallbackEquipmentData();
-
-                // 延遲執行確保 DOM 準備好
-                setTimeout(() => {
-                    renderEquipment();
-                    updateCategoryFilter();
-                }, 100);
+                renderEquipment();
+                updateCategoryFilter();
             }
         }
+
         // 新增備用資料函數
         function getFallbackEquipmentData() {
             return [
@@ -1527,35 +1496,22 @@
         // 設置事件監聽器
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
-
-            // 更嚴格的元素檢查
             if (!grid) {
-                console.error('找不到 equipmentGrid 元素，延遲執行');
-                setTimeout(renderEquipment, 100);
+                console.error('找不到 equipmentGrid 元素');
                 return;
             }
-
-            // 清空前再次檢查
             grid.innerHTML = '';
 
             // 先篩選
             const filteredData = filterEquipment();
-
             // ✅ 依照「裝備編號」文字排序（支援含字母或數字）
             filteredData.sort((a, b) => {
                 return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
             });
-
             // 再渲染
             filteredData.forEach(equipment => {
-                try {
-                    const card = createEquipmentCard(equipment);
-                    if (card && grid) {
-                        grid.appendChild(card);
-                    }
-                } catch (error) {
-                    console.error('創建設備卡片失敗:', error, equipment);
-                }
+                const card = createEquipmentCard(equipment);
+                grid.appendChild(card);
             });
 
             if (filteredData.length === 0) {
