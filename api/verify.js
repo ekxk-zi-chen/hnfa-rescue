@@ -145,7 +145,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   }
 
   // ====== 更新裝備 ======
-
   if (action === "updateEquipment") {
     if (userRole === "一般用戶") {
       return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
@@ -160,10 +159,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .eq("id", equipmentData.id)
       .single();
 
-    // 生成台灣時間
+    // 生成台灣時間 - 修正：不要手動加8小時
     const now = new Date();
-    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+    const timestamp = now.toLocaleString('zh-TW', {
       timeZone: 'Asia/Taipei',
       year: 'numeric',
       month: '2-digit',
@@ -214,7 +212,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       message: "裝備更新成功 (Realtime 已同步)",
     });
   }
-
 
   // ====== 刪除裝備 ======
   if (action === "deleteEquipment") {
