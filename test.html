@@ -1382,6 +1382,7 @@
                 throw error;
             }
         }
+        // 載入裝備資料
         async function loadEquipmentData() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -1499,23 +1500,39 @@
                 console.error('找不到 equipmentGrid 元素');
                 return;
             }
+
             grid.innerHTML = '';
 
             // 先篩選
             const filteredData = filterEquipment();
+            console.log('篩選後的裝備數量:', filteredData.length);
+
             // ✅ 依照「裝備編號」文字排序（支援含字母或數字）
             filteredData.sort((a, b) => {
                 return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
             });
+
             // 再渲染
-            filteredData.forEach(equipment => {
-                const card = createEquipmentCard(equipment);
-                grid.appendChild(card);
+            filteredData.forEach((equipment, index) => {
+                try {
+                    console.log(`創建卡片 ${index + 1}:`, equipment.器材名稱, equipment.裝備編號);
+                    const card = createEquipmentCard(equipment);
+                    if (card) {
+                        grid.appendChild(card);
+                        console.log(`卡片 ${index + 1} 創建成功`);
+                    } else {
+                        console.error(`卡片 ${index + 1} 創建失敗`);
+                    }
+                } catch (error) {
+                    console.error(`創建設備卡片失敗 (${index + 1}):`, error, equipment);
+                }
             });
 
             if (filteredData.length === 0) {
                 grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">沒有找到符合條件的裝備</div>';
             }
+
+            console.log('渲染完成，總卡片數:', grid.children.length);
         }
         // 全部展開
         function expandAll() {
@@ -1539,6 +1556,9 @@
 
 
         function createEquipmentCard(equipment) {
+            // 先檢查裝備資料
+            console.log('創建卡片，裝備資料:', equipment);
+
             // 1) 先決定狀態對應的 CSS class（跟 wrapper class）
             let statusClass = '';
             let wrapperClass = '';
@@ -1569,105 +1589,128 @@
             // 2) 建立 wrapper 並加上剛剛決定好的 class
             const wrapper = document.createElement('div');
             wrapper.className = `equipment-item ${wrapperClass}`;
-            wrapper.setAttribute('data-equipment-id', equipment.id); // 添加這個
+            wrapper.setAttribute('data-equipment-id', equipment.id);
 
-            // 3) 填入 HTML（注意：equipment-details 一定會存在，避免 null）
-            wrapper.innerHTML = `
-                <div class="equipment-summary">
-                    <div class="summary-left">
-                        <span class="equipment-name">${equipment.器材名稱}</span>
-                        <span class="equipment-number">(${equipment.裝備編號})</span>
-                    </div>
-                    <div class="summary-right">
-                        <span class="status-badge ${statusClass}">${equipment.目前狀態 || '在隊'}</span>
-                        <button class="btn btn-secondary btn-sm toggle-btn">展開</button>
-                    </div>
+            try {
+                // 3) 填入 HTML
+                wrapper.innerHTML = `
+            <div class="equipment-summary">
+                <div class="summary-left">
+                    <span class="equipment-name">${escapeHtml(equipment.器材名稱)}</span>
+                    <span class="equipment-number">(${escapeHtml(equipment.裝備編號)})</span>
                 </div>
-
-                <div class="equipment-details">
-                    ${equipment.圖片檔案位置 ? `
-                        <div class="detail-image">
-                            ${getImageDisplay(equipment.圖片檔案位置)}
-                        </div>
-                    ` : ''}
-
-                        <div class="detail-info">
-                            <p><strong>分群組：</strong>${equipment.分群組 || '未指定'}</p>
-                            <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
-                            <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
-                            <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
-                            <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
-                            ${equipment.狀態 ? `<p><strong>狀態備註：</strong>${equipment.狀態}</p>` : ''}
-                        </div>
-                        <!-- 說明書 iframe 區域 -->
-                        ${equipment.說明書連結 && equipment.說明書連結 !== 'null' ? `
-                            <button class="btn btn-secondary btn-sm toggle-manual-btn" 
-                                    onclick="toggleManual(this, '${equipment.id}')">
-                                說明書
-                            </button>
-                            <div class="manual-iframe-container" style="display: none; margin-top: 1rem;">
-                                <iframe 
-                                    src="${getManualPreviewUrl(equipment.說明書連結)}"
-                                    style="width:100%; height:500px; border: 1px solid #ddd; border-radius: 8px; border: none;"
-                                    frameborder="0"
-                                    allow="autoplay">
-                                </iframe>
-                                <div style="margin-top: 10px; text-align: center;">
-                                    <a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">
-                                        無法預覽？點此在新視窗開啟
-                                    </a>
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        ${equipment.教學影片相關 && getEmbedUrl(equipment.教學影片相關) ? `
-                            <button class="btn btn-secondary btn-sm" 
-                                    onclick="showVideoModal('${getEmbedUrl(equipment.教學影片相關)}')">
-                                教學影片
-                            </button>
-                        ` : ''}
-                        
-                        ${currentUser && currentUser.role !== '一般用戶' ? `
-                            <button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>
-                            <button class="btn btn-info btn-sm toggle-history-btn" 
-                                    onclick="toggleHistory(this, '${equipment.id}')">
-                                歷史紀錄
-                            </button>
-                        ` : ''}
-                    </div>
-
-                    <!-- 歷史紀錄區域 -->
-                    <div class="history-section" id="history-${equipment.id}" style="display: none; margin-top: 1rem;">
-                        <!-- 歷史紀錄內容會動態載入 -->
-                        <div class="loading-history">載入歷史紀錄中...</div>
-                    </div>
+                <div class="summary-right">
+                    <span class="status-badge ${statusClass}">${equipment.目前狀態 || '在隊'}</span>
+                    <button class="btn btn-secondary btn-sm toggle-btn">展開</button>
                 </div>
-            `;
+            </div>
 
-            // 4) 綁定展開/收合按鈕（並避免事件冒泡）
-            const toggleBtn = wrapper.querySelector('.toggle-btn');
-            const details = wrapper.querySelector('.equipment-details');
+            <div class="equipment-details">
+                ${equipment.圖片檔案位置 ? `
+                    <div class="detail-image">
+                        ${getImageDisplay(equipment.圖片檔案位置)}
+                    </div>
+                ` : ''}
 
-            // 若你希望點 summary 也能展開，可以同時綁定 summary 的 click（下方示範）
-            const summary = wrapper.querySelector('.equipment-summary');
+                <div class="detail-info">
+                    <p><strong>分群組：</strong>${escapeHtml(equipment.分群組 || '未指定')}</p>
+                    <p><strong>型號：</strong>${escapeHtml(equipment.型號 || '未指定')}</p>
+                    <p><strong>數量：</strong>${escapeHtml(equipment.數量 ?? '未知')}</p>
+                    <p><strong>位置：</strong>${escapeHtml(equipment.特別位置 || '未指定')}</p>
+                    <p><strong>填表人：</strong>${escapeHtml(equipment.填表人 || '未知')}</p>
+                    ${equipment.狀態 ? `<p><strong>狀態備註：</strong>${escapeHtml(equipment.狀態)}</p>` : ''}
+                </div>
+                
+                <!-- 說明書 iframe 區域 -->
+                ${equipment.說明書連結 && equipment.說明書連結 !== 'null' ? `
+                    <button class="btn btn-secondary btn-sm toggle-manual-btn" 
+                            onclick="toggleManual(this, '${equipment.id}')">
+                        說明書
+                    </button>
+                    <div class="manual-iframe-container" style="display: none; margin-top: 1rem;">
+                        <iframe 
+                            src="${getManualPreviewUrl(equipment.說明書連結)}"
+                            style="width:100%; height:500px; border: 1px solid #ddd; border-radius: 8px; border: none;"
+                            frameborder="0"
+                            allow="autoplay">
+                        </iframe>
+                        <div style="margin-top: 10px; text-align: center;">
+                            <a href="${equipment.說明書連結}" target="_blank" class="btn btn-secondary btn-sm">
+                                無法預覽？點此在新視窗開啟
+                            </a>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${equipment.教學影片相關 && getEmbedUrl(equipment.教學影片相關) ? `
+                    <button class="btn btn-secondary btn-sm" 
+                            onclick="showVideoModal('${getEmbedUrl(equipment.教學影片相關)}')">
+                        教學影片
+                    </button>
+                ` : ''}
+                
+                ${currentUser && currentUser.role !== '一般用戶' ? `
+                    <button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>
+                    <button class="btn btn-info btn-sm toggle-history-btn" 
+                            onclick="toggleHistory(this, '${equipment.id}')">
+                        歷史紀錄
+                    </button>
+                ` : ''}
+            </div>
 
-            function toggle() {
-                const isVisible = details.classList.toggle('show');
-                toggleBtn.textContent = isVisible ? '收合' : '展開';
+            <!-- 歷史紀錄區域 -->
+            <div class="history-section" id="history-${equipment.id}" style="display: none; margin-top: 1rem;">
+                <div class="loading-history">載入歷史紀錄中...</div>
+            </div>
+        `;
+
+                // 4) 綁定展開/收合按鈕
+                const toggleBtn = wrapper.querySelector('.toggle-btn');
+                const details = wrapper.querySelector('.equipment-details');
+                const summary = wrapper.querySelector('.equipment-summary');
+
+                function toggle() {
+                    const isVisible = details.classList.toggle('show');
+                    toggleBtn.textContent = isVisible ? '收合' : '展開';
+                }
+
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggle();
+                });
+
+                summary.addEventListener('click', () => toggle());
+
+                return wrapper;
+
+            } catch (error) {
+                console.error('創建卡片 HTML 失敗:', error);
+                // 返回一個簡單的錯誤卡片
+                wrapper.innerHTML = `
+            <div class="equipment-summary">
+                <div class="summary-left">
+                    <span class="equipment-name">錯誤卡片</span>
+                </div>
+                <div class="summary-right">
+                    <span class="status-badge status-in-team">錯誤</span>
+                </div>
+            </div>
+        `;
+                return wrapper;
             }
-
-            toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggle();
-            });
-
-            // 可選：點整行 summary 也展開（若不想要就把這一行移除）
-            summary.addEventListener('click', () => toggle());
-
-            return wrapper;
         }
 
+        // 新增 HTML 跳脫函數
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
         // 新增說明書顯示處理函數
 
         function getManualDisplay(manualLink) {
