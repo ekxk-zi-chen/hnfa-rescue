@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
 
-
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
   const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
@@ -114,6 +113,21 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     equipmentData.裝備編號 = `${prefix}-${newNumber.toString().padStart(3, '0')}`;
 
     equipmentData.填表人 = userData.display_name || userData.姓名;
+    // 新增初始歷史紀錄 - 使用台灣時間
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    equipmentData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
     equipmentData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase.from("equipment").insert(equipmentData).select().single();
@@ -131,6 +145,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   }
 
   // ====== 更新裝備 ======
+
   if (action === "updateEquipment") {
     if (userRole === "一般用戶") {
       return res.status(403).json({ status: "error", message: "沒有權限編輯裝備" });
@@ -145,14 +160,39 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .eq("id", equipmentData.id)
       .single();
 
-    // 生成歷史紀錄
-    const historyEntry = `[${new Date().toLocaleString('zh-TW')}] ${userData.display_name} 將狀態改為 ${equipmentData.目前狀態}`;
+    // 生成台灣時間
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    // 只記錄狀態變更
+    let historyEntry = '';
+    if (oldData.目前狀態 !== equipmentData.目前狀態) {
+      historyEntry = `[${timestamp}] ${userData.display_name} 將狀態改為 ${equipmentData.目前狀態}`;
+    }
 
     // 更新歷史紀錄（保留最新30筆）
-    const currentHistory = oldData.歷史更新紀錄 || '';
-    const newHistory = currentHistory.split('\n').slice(0, 29);
-    newHistory.unshift(historyEntry);
-    equipmentData.歷史更新紀錄 = newHistory.join('\n');
+    if (historyEntry) {
+      const currentHistory = oldData.歷史更新紀錄 || '';
+      const newHistory = currentHistory
+        ? `${historyEntry}\n${currentHistory}`
+        : historyEntry;
+
+      // 只保留最新30筆
+      const historyLines = newHistory.split('\n').slice(0, 30);
+      equipmentData.歷史更新紀錄 = historyLines.join('\n');
+    } else {
+      equipmentData.歷史更新紀錄 = oldData.歷史更新紀錄;
+    }
 
     equipmentData.填表人 = userData.display_name || userData.姓名;
     equipmentData.updated_at = new Date().toISOString();
@@ -290,9 +330,116 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: error.message });
     }
   }
+  // ====== 獲取裝備歷史紀錄 ======
+  if (action === "getEquipmentHistory") {
+    const { equipmentId } = body;
 
+    // 先獲取裝備的歷史紀錄
+    const { data: equipment, error } = await supabase
+      .from("equipment")
+      .select("歷史更新紀錄")
+      .eq("id", equipmentId)
+      .single();
+
+    if (error) {
+      console.error("獲取裝備歷史紀錄錯誤:", error);
+      return res.status(500).json({ status: "error", message: "Failed to fetch equipment history" });
+    }
+
+    // 解析歷史紀錄文字為結構化資料
+    const historyList = parseHistoryText(equipment.歷史更新紀錄 || '');
+
+    return res.status(200).json({
+      status: "ok",
+      history: historyList,
+    });
+  }
+
+  // ====== 新增裝備歷史紀錄 ======
+  if (action === "addEquipmentHistory") {
+    if (userRole === "一般用戶") {
+      return res.status(403).json({ status: "error", message: "沒有權限編輯歷史紀錄" });
+    }
+
+    const { equipmentId, historyContent } = body;
+
+    // 獲取現有歷史紀錄
+    const { data: oldData } = await supabase
+      .from("equipment")
+      .select("歷史更新紀錄")
+      .eq("id", equipmentId)
+      .single();
+
+    // 新增歷史紀錄項目
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const newEntry = `[${timestamp}] ${userData.display_name} ${historyContent}`;
+
+    const currentHistory = oldData.歷史更新紀錄 || '';
+    const newHistory = currentHistory ? `${newEntry}\n${currentHistory}` : newEntry;
+
+    // 只保留最新50筆紀錄
+    const historyLines = newHistory.split('\n').slice(0, 50);
+    const trimmedHistory = historyLines.join('\n');
+
+    // 更新到資料庫
+    const { error } = await supabase
+      .from("equipment")
+      .update({
+        歷史更新紀錄: trimmedHistory,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", equipmentId);
+
+    if (error) {
+      console.error("更新歷史紀錄錯誤:", error);
+      return res.status(500).json({ status: "error", message: "Failed to update history" });
+    }
+
+    return res.status(200).json({
+      status: "ok",
+      message: "歷史紀錄新增成功",
+    });
+  }
   // 如果沒有匹配的 action
   return res.status(400).json({ status: "error", message: "Unknown action" });
+}
+
+// 解析歷史紀錄文字為結構化資料
+function parseHistoryText(historyText) {
+  if (!historyText) return [];
+
+  return historyText.split('\n')
+    .filter(line => line.trim() && line !== 'null')
+    .map(line => {
+      // 解析格式: [時間] 人員 操作內容
+      const match = line.match(/\[([^\]]+)\]\s+([^\s]+)\s+(.+)/);
+      if (match) {
+        return {
+          timestamp: match[1],
+          操作人員: match[2],
+          操作內容: match[3],
+          原始內容: line
+        };
+      }
+      // 如果格式不符合，返回基本資訊
+      return {
+        timestamp: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+        操作人員: '系統',
+        操作內容: line,
+        原始內容: line
+      };
+    });
 }
 
 // ------------------- 主 handler -------------------
