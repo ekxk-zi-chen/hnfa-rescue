@@ -1855,6 +1855,8 @@
             const categorySelect = document.getElementById('categoryFilter');
             const existingGroupSelect = document.getElementById('existingGroup');
 
+            if (!categorySelect || !existingGroupSelect) return;
+
             // 按裝備編號排序後提取群組
             const sortedByNumber = [...equipmentData].sort((a, b) => {
                 const numA = parseInt(a.裝備編號) || 0;
@@ -1892,6 +1894,9 @@
         function onExistingGroupChange() {
             const existingGroupSelect = document.getElementById('existingGroup');
             const newGroupInput = document.getElementById('newGroup');
+
+            if (!existingGroupSelect || !newGroupInput) return;
+
             const selectedGroup = existingGroupSelect.value;
 
             if (selectedGroup) {
@@ -1901,10 +1906,14 @@
                 updateEquipmentNumberForGroup(selectedGroup);
             }
         }
+
         // 新增：當輸入新群組時的處理
         function onNewGroupInput() {
             const newGroupInput = document.getElementById('newGroup');
             const existingGroupSelect = document.getElementById('existingGroup');
+
+            if (!newGroupInput || !existingGroupSelect) return;
+
             const newGroup = newGroupInput.value.trim();
 
             if (newGroup) {
@@ -1943,22 +1952,40 @@
             });
         }
         // 新增：顯示新增裝備 Modal 並填充群組選項
+        // 修改 showAddEquipmentModal 函數
         function showAddEquipmentModal() {
-            document.getElementById('modalTitle').textContent = '新增裝備';
-            document.getElementById('equipmentForm').reset();
-            document.getElementById('equipmentId').value = '';
-
-            // 清空群組相關欄位
-            document.getElementById('existingGroup').value = '';
-            document.getElementById('newGroup').value = '';
-            document.getElementById('equipmentNumber').value = '';
-            document.getElementById('equipmentNumber').placeholder = '選擇或輸入群組後自動建議編號';
-
+            // 先顯示 modal
             showModal('equipmentModal');
+
+            // 使用 setTimeout 確保 DOM 已經渲染
+            setTimeout(() => {
+                try {
+                    document.getElementById('modalTitle').textContent = '新增裝備';
+                    document.getElementById('equipmentForm').reset();
+                    document.getElementById('equipmentId').value = '';
+
+                    // 清空群組相關欄位
+                    const existingGroupSelect = document.getElementById('existingGroup');
+                    const newGroupInput = document.getElementById('newGroup');
+                    const numberInput = document.getElementById('equipmentNumber');
+
+                    if (existingGroupSelect) existingGroupSelect.value = '';
+                    if (newGroupInput) newGroupInput.value = '';
+                    if (numberInput) {
+                        numberInput.value = '';
+                        numberInput.placeholder = '選擇或輸入群組後自動建議編號';
+                    }
+                } catch (error) {
+                    console.error('設定新增表單時發生錯誤:', error);
+                    showToast('新增表單載入失敗', 'error');
+                    closeModal('equipmentModal');
+                }
+            }, 100);
         }
-        // 新增：根據選擇的群組建議編號
+        // 修改：根據選擇的群組建議編號
         function updateEquipmentNumberForGroup(selectedGroup) {
             const numberInput = document.getElementById('equipmentNumber');
+            if (!numberInput) return;
 
             if (!selectedGroup || selectedGroup.trim() === '') {
                 numberInput.placeholder = '請選擇或輸入分群組';
@@ -1990,41 +2017,61 @@
             }
         }
         // 編輯裝備
+
         function editEquipment(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
 
-            document.getElementById('modalTitle').textContent = '編輯裝備';
-            document.getElementById('equipmentId').value = equipment.id;
-            document.getElementById('equipmentName').value = equipment.器材名稱;
-            document.getElementById('equipmentNumber').value = equipment.裝備編號;
-            document.getElementById('equipmentModel').value = equipment.型號 || '';
-            document.getElementById('equipmentLocation').value = equipment.特別位置 || '';
-            document.getElementById('equipmentQuantity').value = equipment.數量;
-            document.getElementById('equipmentImage').value = equipment.圖片檔案位置 || '';
-            document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
-            document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
-            document.getElementById('equipmentStatus').value = equipment.目前狀態;
-            document.getElementById('equipmentNote').value = equipment.狀態 || '';
-
-            // 編輯模式：根據現有裝備的群組設定選擇
-            const existingGroupSelect = document.getElementById('existingGroup');
-            const newGroupInput = document.getElementById('newGroup');
-
-            // 檢查該群組是否在既有群組中
-            const groupExists = Array.from(existingGroupSelect.options).some(option =>
-                option.value === equipment.分群組
-            );
-
-            if (groupExists) {
-                existingGroupSelect.value = equipment.分群組;
-                newGroupInput.value = '';
-            } else {
-                existingGroupSelect.value = '';
-                newGroupInput.value = equipment.分群組;
-            }
-
+            // 先顯示 modal，確保元素存在
             showModal('equipmentModal');
+
+            // 使用 setTimeout 確保 DOM 已經渲染
+            setTimeout(() => {
+                try {
+                    document.getElementById('modalTitle').textContent = '編輯裝備';
+                    document.getElementById('equipmentId').value = equipment.id;
+
+                    // 安全設定元素值
+                    const setElementValue = (id, value) => {
+                        const element = document.getElementById(id);
+                        if (element) element.value = value || '';
+                    };
+
+                    setElementValue('equipmentName', equipment.器材名稱);
+                    setElementValue('equipmentNumber', equipment.裝備編號);
+                    setElementValue('equipmentModel', equipment.型號);
+                    setElementValue('equipmentLocation', equipment.特別位置);
+                    setElementValue('equipmentQuantity', equipment.數量);
+                    setElementValue('equipmentImage', equipment.圖片檔案位置);
+                    setElementValue('equipmentManual', equipment.說明書連結);
+                    setElementValue('equipmentVideo', equipment.教學影片相關);
+                    setElementValue('equipmentStatus', equipment.目前狀態);
+                    setElementValue('equipmentNote', equipment.狀態);
+
+                    // 編輯模式：根據現有裝備的群組設定選擇
+                    const existingGroupSelect = document.getElementById('existingGroup');
+                    const newGroupInput = document.getElementById('newGroup');
+
+                    if (existingGroupSelect && newGroupInput) {
+                        // 檢查該群組是否在既有群組中
+                        const groupExists = Array.from(existingGroupSelect.options).some(option =>
+                            option.value === equipment.分群組
+                        );
+
+                        if (groupExists) {
+                            existingGroupSelect.value = equipment.分群組;
+                            newGroupInput.value = '';
+                        } else {
+                            existingGroupSelect.value = '';
+                            newGroupInput.value = equipment.分群組;
+                        }
+                    }
+                } catch (error) {
+                    console.error('設定編輯表單時發生錯誤:', error);
+                    showToast('編輯表單載入失敗', 'error');
+                    closeModal('equipmentModal');
+                }
+            }, 100);
         }
         // 提交裝備表單
         async function handleEquipmentSubmit(event) {
@@ -2308,20 +2355,31 @@
         }
 
         function clearFilters() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('categoryFilter').value = '';
-            document.getElementById('statusFilter').value = '';
+            const searchInput = document.getElementById('searchInput');
+            const categoryFilter = document.getElementById('categoryFilter');
+            const statusFilter = document.getElementById('statusFilter');
+
+            if (searchInput) searchInput.value = '';
+            if (categoryFilter) categoryFilter.value = '';
+            if (statusFilter) statusFilter.value = '';
+
             renderEquipment();
         }
 
         function showModal(modalId) {
-            document.getElementById(modalId).classList.add('show');
-            document.body.style.overflow = 'hidden';
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
-            document.body.style.overflow = 'auto';
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('show');
+                document.body.style.overflow = 'auto';
+            }
         }
 
         function showToast(message, type = 'success') {
