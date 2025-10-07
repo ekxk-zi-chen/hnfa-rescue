@@ -1504,10 +1504,14 @@
 
             // 先篩選
             const filteredData = filterEquipment();
-            // ✅ 依照「裝備編號」文字排序（支援含字母或數字）
+
+            // 按裝備編號排序（數字排序）
             filteredData.sort((a, b) => {
-                return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
+                const numA = parseInt(a.裝備編號) || 0;
+                const numB = parseInt(b.裝備編號) || 0;
+                return numA - numB;
             });
+
             // 再渲染
             filteredData.forEach(equipment => {
                 const card = createEquipmentCard(equipment);
