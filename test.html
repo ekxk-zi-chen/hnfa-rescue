@@ -1883,7 +1883,7 @@
                 }
             });
         }
-
+        // 新增：顯示新增裝備 Modal 並填充群組選項
         function showAddEquipmentModal() {
             document.getElementById('modalTitle').textContent = '新增裝備';
             document.getElementById('equipmentForm').reset();
@@ -1900,9 +1900,41 @@
                 groupSelect.appendChild(option);
             });
 
+            // 新增群組變更監聽器
+            groupSelect.addEventListener('change', function () {
+                updateEquipmentNumberForGroup(this.value);
+            });
+
             showModal('equipmentModal');
         }
+        // 新增：根據選擇的群組建議編號
+        function updateEquipmentNumberForGroup(selectedGroup) {
+            const numberInput = document.getElementById('equipmentNumber');
 
+            if (!selectedGroup) {
+                numberInput.placeholder = '請先選擇分群組';
+                return;
+            }
+
+            // 獲取該群組的最後一個裝備
+            const groupEquipments = equipmentData
+                .filter(e => e.分群組 === selectedGroup)
+                .sort((a, b) => parseInt(a.裝備編號) - parseInt(b.裝備編號));
+
+            if (groupEquipments.length > 0) {
+                // 該群組的最後一個編號
+                const lastNumber = parseInt(groupEquipments[groupEquipments.length - 1].裝備編號);
+                const suggestedNumber = lastNumber + 1;
+                numberInput.value = suggestedNumber;
+                numberInput.placeholder = `建議編號: ${suggestedNumber}`;
+            } else {
+                // 新群組，找全局最大編號+1
+                const maxNumber = Math.max(...equipmentData.map(e => parseInt(e.裝備編號) || 0));
+                const suggestedNumber = maxNumber + 1;
+                numberInput.value = suggestedNumber;
+                numberInput.placeholder = `建議編號: ${suggestedNumber}`;
+            }
+        }
         function editEquipment(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
@@ -1919,6 +1951,21 @@
             document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
             document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
             document.getElementById('equipmentStatus').value = equipment.目前狀態;
+            document.getElementById('equipmentNote').value = equipment.狀態 || '';
+
+            // 填充現有群組到選擇器
+            const groups = [...new Set(equipmentData.map(e => e.分群組))].filter(Boolean);
+            const groupSelect = document.getElementById('equipmentGroup');
+            groupSelect.innerHTML = '<option value="">選擇或輸入新群組</option>';
+            groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group;
+                option.textContent = group;
+                if (group === equipment.分群組) {
+                    option.selected = true;
+                }
+                groupSelect.appendChild(option);
+            });
 
             showModal('equipmentModal');
         }
