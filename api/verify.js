@@ -252,7 +252,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     // 先獲取要刪除的裝備資訊
     const { data: deletedEquipment, error: getError } = await supabase
       .from("equipment")
-      .select("裝備編號")
+      .select("裝備編號, 器材名稱")
       .eq("id", equipmentId)
       .single();
 
