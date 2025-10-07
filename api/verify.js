@@ -84,39 +84,68 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const { equipmentData } = body;
+    const newNumber = parseInt(equipmentData.裝備編號);
 
-    // 先獲取該群組的裝備來計算新編號
-    const { data: groupEquipments, error: groupError } = await supabase
-      .from("equipment")
-      .select("裝備編號")
-      .eq("分群組", equipmentData.分群組)
-      .order("裝備編號", { ascending: true });
-
-    if (groupError) {
-      console.error("獲取群組裝備錯誤:", groupError);
-      return res.status(500).json({ status: "error", message: "Failed to get group equipment" });
+    if (isNaN(newNumber)) {
+      return res.status(400).json({
+        status: "error",
+        message: "裝備編號必須是數字"
+      });
     }
 
-    // 計算新編號
-    let newNumber = 1;
-    if (groupEquipments && groupEquipments.length > 0) {
-      // 取得最後一個編號的數字部分
-      const lastNumber = groupEquipments[groupEquipments.length - 1].裝備編號;
-      const match = lastNumber.match(/\d+/);
-      if (match) {
-        newNumber = parseInt(match[0]) + 1;
+    // 檢查編號是否已存在
+    const { data: existingWithSameNumber, error: checkError } = await supabase
+      .from("equipment")
+      .select("id")
+      .eq("裝備編號", newNumber.toString());
+
+    if (checkError) {
+      console.error("檢查裝備編號錯誤:", checkError);
+      return res.status(500).json({ status: "error", message: "Failed to check equipment number" });
+    }
+
+    if (existingWithSameNumber && existingWithSameNumber.length > 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "該編號已存在"
+      });
+    }
+
+    // 重排編號：將 >= newNumber 的裝備編號都 +1
+    const { data: equipmentsToUpdate, error: updateCheckError } = await supabase
+      .from("equipment")
+      .select("id, 裝備編號")
+      .gte("裝備編號", newNumber.toString())
+      .order("裝備編號", { ascending: true });
+
+    if (updateCheckError) {
+      console.error("獲取需更新裝備錯誤:", updateCheckError);
+      return res.status(500).json({ status: "error", message: "Failed to get equipment for update" });
+    }
+
+    // 從大到小更新，避免重複編號
+    if (equipmentsToUpdate && equipmentsToUpdate.length > 0) {
+      for (let i = equipmentsToUpdate.length - 1; i >= 0; i--) {
+        const equipment = equipmentsToUpdate[i];
+        const currentNum = parseInt(equipment.裝備編號);
+        const newNum = currentNum + 1;
+
+        const { error: updateError } = await supabase
+          .from("equipment")
+          .update({ 裝備編號: newNum.toString() })
+          .eq("id", equipment.id);
+
+        if (updateError) {
+          console.error("更新裝備編號錯誤:", updateError);
+          return res.status(500).json({ status: "error", message: "Failed to update equipment numbers" });
+        }
       }
     }
 
-    // 生成新編號（保持原有格式，如 MED-001）
-    const prefix = equipmentData.分群組.substring(0, 3).toUpperCase() || "EQP";
-    equipmentData.裝備編號 = `${prefix}-${newNumber.toString().padStart(3, '0')}`;
-
     equipmentData.填表人 = userData.display_name || userData.姓名;
-    // 新增初始歷史紀錄 - 使用台灣時間
+    // 新增初始歷史紀錄
     const now = new Date();
-    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const timestamp = taiwanTime.toLocaleString('zh-TW', {
+    const timestamp = now.toLocaleString('zh-TW', {
       timeZone: 'Asia/Taipei',
       year: 'numeric',
       month: '2-digit',
@@ -140,10 +169,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     return res.status(200).json({
       status: "ok",
       equipmentId: data.id,
-      message: "裝備創建成功 (Realtime 已同步)",
+      message: "裝備創建成功，編號已自動調整",
     });
   }
-
   // ====== 更新裝備 ======
   if (action === "updateEquipment") {
     if (userRole === "一般用戶") {
@@ -224,7 +252,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     // 先獲取要刪除的裝備資訊
     const { data: deletedEquipment, error: getError } = await supabase
       .from("equipment")
-      .select("分群組, 裝備編號")
+      .select("裝備編號")
       .eq("id", equipmentId)
       .single();
 
@@ -232,6 +260,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       console.error("獲取裝備資訊錯誤:", getError);
       return res.status(500).json({ status: "error", message: "Failed to get equipment info" });
     }
+
+    const deletedNumber = parseInt(deletedEquipment.裝備編號);
 
     // 刪除裝備
     const { error } = await supabase.from("equipment").delete().eq("id", equipmentId);
@@ -241,9 +271,42 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: "Failed to delete equipment" });
     }
 
+    // 重排編號：將 > deletedNumber 的裝備編號都 -1
+    const { data: equipmentsToUpdate, error: updateCheckError } = await supabase
+      .from("equipment")
+      .select("id, 裝備編號")
+      .gt("裝備編號", deletedNumber.toString())
+      .order("裝備編號", { ascending: true });
+
+    if (updateCheckError) {
+      console.error("獲取需更新裝備錯誤:", updateCheckError);
+      return res.status(200).json({
+        status: "ok",
+        message: "裝備刪除成功 (編號重排失敗，但不影響使用)",
+      });
+    }
+
+    // 從小到大更新
+    if (equipmentsToUpdate && equipmentsToUpdate.length > 0) {
+      for (const equipment of equipmentsToUpdate) {
+        const currentNum = parseInt(equipment.裝備編號);
+        const newNum = currentNum - 1;
+
+        const { error: updateError } = await supabase
+          .from("equipment")
+          .update({ 裝備編號: newNum.toString() })
+          .eq("id", equipment.id);
+
+        if (updateError) {
+          console.error("更新裝備編號錯誤:", updateError);
+          break;
+        }
+      }
+    }
+
     return res.status(200).json({
       status: "ok",
-      message: "裝備刪除成功 (Realtime 已同步)",
+      message: "裝備刪除成功，編號已自動重排",
     });
   }
 
