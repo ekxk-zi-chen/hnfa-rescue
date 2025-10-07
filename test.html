@@ -850,7 +850,13 @@
                         </div>
                         <div class="form-group">
                             <label for="equipmentGroup">分群組 *</label>
-                            <input type="text" id="equipmentGroup" class="form-control" required>
+                            <!-- 改為 select -->
+                            <select id="equipmentGroup" class="form-control" required>
+                                <option value="">選擇或輸入新群組</option>
+                            </select>
+                            <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                                可選擇現有群組或輸入新群組
+                            </small>
                         </div>
                     </div>
                     <div class="form-row">
