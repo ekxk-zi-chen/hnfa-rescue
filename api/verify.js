@@ -84,6 +84,15 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const { equipmentData } = body;
+
+    // 檢查必要的欄位
+    if (!equipmentData.器材名稱 || !equipmentData.分群組 || !equipmentData.裝備編號) {
+      return res.status(400).json({
+        status: "error",
+        message: "缺少必要欄位：器材名稱、分群組、裝備編號"
+      });
+    }
+
     const newNumber = parseInt(equipmentData.裝備編號);
 
     if (isNaN(newNumber)) {
@@ -142,7 +151,24 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       }
     }
 
-    equipmentData.填表人 = userData.display_name || userData.姓名;
+    // 準備要插入的資料 - 確保資料類型正確
+    const insertData = {
+      器材名稱: equipmentData.器材名稱,
+      分群組: equipmentData.分群組,
+      裝備編號: equipmentData.裝備編號, // 保持字串格式
+      型號: equipmentData.型號 || null,
+      特別位置: equipmentData.特別位置 || null,
+      數量: equipmentData.數量 || "1", // 保持字串格式
+      圖片檔案位置: equipmentData.圖片檔案位置 || null,
+      說明書連結: equipmentData.說明書連結 || null,
+      教學影片相關: equipmentData.教學影片相關 || null,
+      目前狀態: equipmentData.目前狀態 || "在隊",
+      狀態: equipmentData.狀態 || null,
+      填表人: userData.display_name || userData.姓名,
+      歷史更新紀錄: "",
+      updated_at: new Date().toISOString()
+    };
+
     // 新增初始歷史紀錄
     const now = new Date();
     const timestamp = now.toLocaleString('zh-TW', {
@@ -156,14 +182,19 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       hour12: false
     });
 
-    equipmentData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
-    equipmentData.updated_at = new Date().toISOString();
+    insertData.歷史更新紀錄 = `[${timestamp}] ${userData.display_name} 創建了裝備`;
 
-    const { data, error } = await supabase.from("equipment").insert(equipmentData).select().single();
+    console.log("準備插入的裝備資料:", insertData);
+
+    const { data, error } = await supabase.from("equipment").insert(insertData).select().single();
 
     if (error) {
       console.error("創建裝備錯誤:", error);
-      return res.status(500).json({ status: "error", message: "Failed to create equipment" });
+      console.error("詳細錯誤資訊:", error.details, error.hint, error.message);
+      return res.status(500).json({
+        status: "error",
+        message: "Failed to create equipment: " + error.message
+      });
     }
 
     return res.status(200).json({
