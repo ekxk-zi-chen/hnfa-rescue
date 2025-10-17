@@ -1039,6 +1039,8 @@
         let onlineUsers = new Map(); // 儲存線上用戶
         let presenceChannel = null;
         let supabaseClient = null;
+        // 批量操作暫存
+        let currentBatches = {};
         // 初始化應用
         document.addEventListener('DOMContentLoaded', async function () {
             await initializeApp();
@@ -1592,10 +1594,15 @@
 
             // 先篩選
             const filteredData = filterEquipment();
-            // ✅ 依照「裝備編號」文字排序（支援含字母或數字）
+
+            // ✅ 統一排序：先按分群組，再按裝備編號
             filteredData.sort((a, b) => {
+                const groupCompare = String(a.分群組).localeCompare(String(b.分群組), 'zh-Hant');
+                if (groupCompare !== 0) return groupCompare;
+
                 return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
             });
+
             // 再渲染
             filteredData.forEach(equipment => {
                 const card = createEquipmentCard(equipment);
@@ -1931,15 +1938,15 @@
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
 
-            // 先依裝備編號排序後，再抽出群組
+            // 統一排序：先按裝備編號排序，再提取群組
             const sortedByNumber = [...equipmentData].sort((a, b) =>
                 String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
             );
 
-            // 按照排序後順序提取「分群組」(避免 Set 打亂順序)
+            // 按照排序後順序提取「分群組」
             const categories = [];
             for (const item of sortedByNumber) {
-                if (!categories.includes(item.分群組)) {
+                if (item.分群組 && !categories.includes(item.分群組)) {
                     categories.push(item.分群組);
                 }
             }
@@ -1956,15 +1963,19 @@
 
 
         function setupEventListeners() {
-            // 搜尋和篩選
+            // 現有的事件監聽器...
             document.getElementById('searchInput').addEventListener('input', renderEquipment);
             document.getElementById('categoryFilter').addEventListener('change', renderEquipment);
             document.getElementById('statusFilter').addEventListener('change', renderEquipment);
-
-            // 表單提交
             document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
 
-            // 點擊外部關閉 modal
+            // 新增批量操作表單事件監聽器
+            document.getElementById('batchForm').addEventListener('submit', handleBatchSubmit);
+            document.getElementById('batchReturnForm').addEventListener('submit', handleBatchReturnSubmit);
+
+            // 修正：使用正確的函數
+            document.getElementById('returnDateFilter').addEventListener('change', renderBatchReturnSelector);
+
             document.addEventListener('click', function (event) {
                 if (event.target.classList.contains('modal')) {
                     closeModal(event.target.id);
@@ -2512,10 +2523,10 @@
         function renderBatchEquipmentSelector() {
             const container = document.getElementById('batchEquipmentSelector');
 
-            // 按分群組分組裝備
+            // 按分群組分組裝備，並使用統一的排序
             const groupedEquipment = {};
             equipmentData.forEach(equipment => {
-                if (equipment.目前狀態 === '在隊') { // 只顯示在隊的裝備
+                if (equipment.目前狀態 === '在隊') {
                     const group = equipment.分群組 || '未分類';
                     if (!groupedEquipment[group]) {
                         groupedEquipment[group] = [];
@@ -2524,9 +2535,16 @@
                 }
             });
 
+            // 統一排序：先按分群組排序，群組內按裝備編號排序
+            const sortedGroups = Object.keys(groupedEquipment).sort();
+
             let html = '';
-            Object.keys(groupedEquipment).sort().forEach(group => {
-                const groupEquipments = groupedEquipment[group];
+            sortedGroups.forEach(group => {
+                // 群組內按裝備編號排序
+                const groupEquipments = groupedEquipment[group].sort((a, b) =>
+                    String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+                );
+
                 const groupId = `group-${group.replace(/\s+/g, '-')}`;
 
                 html += `
@@ -2563,7 +2581,6 @@
 
             container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有在隊的裝備可供操作</div>';
         }
-
         // 切換群組選擇
         function toggleGroupSelection(groupId, groupName) {
             const groupCheckbox = document.getElementById(groupId);
@@ -2698,13 +2715,16 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.status === 'ok') {
-                        renderReturnDateFilter(data.batches || {});
+                        currentBatches = data.batches || {};
+                        renderReturnDateFilter(currentBatches);
                     }
                 }
             } catch (error) {
                 console.error('載入批量記錄失敗:', error);
+                showToast('載入批量記錄失敗', 'error');
             }
         }
+
         // 渲染返隊日期篩選器（現在顯示批次資訊）
         function renderReturnDateFilter(batches) {
             const select = document.getElementById('returnDateFilter');
@@ -2729,8 +2749,9 @@
                 select.appendChild(option);
             });
         }
+
         // 渲染批量返隊選擇器
-        function renderBatchReturnSelector(batches) {
+        function renderBatchReturnSelector() {
             const container = document.getElementById('batchReturnSelector');
             const selectedBatchId = document.getElementById('returnDateFilter').value;
 
@@ -2739,7 +2760,7 @@
                 return;
             }
 
-            const selectedBatch = batches[selectedBatchId];
+            const selectedBatch = currentBatches[selectedBatchId];
             if (!selectedBatch) {
                 container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">找不到選擇的批次資料</div>';
                 return;
