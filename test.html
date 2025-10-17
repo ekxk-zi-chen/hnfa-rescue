@@ -2521,8 +2521,6 @@
             // 按分群組分組裝備
             const groupedEquipment = {};
             equipmentData.forEach(equipment => {
-                // ✅ 修正：顯示所有裝備，不只是「在隊」的
-                // 這樣即使某個裝備被借出，該分群組仍然可以顯示
                 const group = equipment.分群組 || '未分類';
                 if (!groupedEquipment[group]) {
                     groupedEquipment[group] = [];
@@ -2530,7 +2528,7 @@
                 groupedEquipment[group].push(equipment);
             });
 
-            // 使用與主畫面一致的排序
+            // ✅ 使用與主畫面一致的排序：先按裝備編號排序後提取群組
             const sortedByNumber = [...equipmentData].sort((a, b) =>
                 String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
             );
@@ -2544,7 +2542,7 @@
 
             let html = '';
             categories.forEach(group => {
-                // 群組內按裝備編號排序
+                // ✅ 群組內也按裝備編號排序
                 const groupEquipments = groupedEquipment[group].sort((a, b) =>
                     String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
                 );
@@ -2568,7 +2566,6 @@
                 </div>
                 <div id="${groupId}-items" style="display: none; margin-left: 1.5rem;">
                     ${groupEquipments.map(equipment => {
-                    // ✅ 添加狀態標示，並禁用非「在隊」的裝備
                     const isAvailable = equipment.目前狀態 === '在隊';
                     const statusText = isAvailable ? '' : ` (${equipment.目前狀態})`;
                     return `
@@ -2704,6 +2701,11 @@
 
         // 批量返隊相關函數
         function showBatchReturnModal() {
+            // ✅ 重置表單和選擇狀態
+            document.getElementById('batchReturnForm').reset();
+            document.getElementById('returnDateFilter').value = '';
+            document.getElementById('batchReturnSelector').innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
+
             loadBatchReturnRecords();
             showModal('batchReturnModal');
         }
@@ -2775,10 +2777,12 @@
                 return;
             }
 
-            // 只顯示尚未返隊的裝備
-            const availableEquipment = selectedBatch.equipment.filter(equipment =>
-                equipment.目前狀態 !== '在隊'
-            );
+            // ✅ 只顯示尚未返隊的裝備，並按裝備編號排序
+            const availableEquipment = selectedBatch.equipment
+                .filter(equipment => equipment.目前狀態 !== '在隊')
+                .sort((a, b) =>
+                    String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+                );
 
             let html = `
         <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
@@ -2792,6 +2796,7 @@
             if (availableEquipment.length === 0) {
                 html += '<div style="text-align: center; color: #666; padding: 2rem;">此批次所有裝備已返隊</div>';
             } else {
+                // ✅ 每次重新渲染時，所有勾選框都是未勾選狀態
                 availableEquipment.forEach(equipment => {
                     html += `
                 <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #ff6b35;">
