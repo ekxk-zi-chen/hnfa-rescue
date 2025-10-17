@@ -422,7 +422,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     const batchDate = new Date().toISOString();
-    const batchIdentifier = `batch_${Date.now()}`; // 唯一的批次標識
+    const batchIdentifier = `batch_${Date.now()}`;
 
     try {
       for (const equipmentId of equipmentIds) {
@@ -433,7 +433,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           .single();
 
         if (oldData) {
-          // 生成台灣時間
           const now = new Date();
           const timestamp = now.toLocaleString('zh-TW', {
             timeZone: 'Asia/Taipei',
@@ -446,7 +445,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             hour12: false
           });
 
-          // 更新歷史紀錄
           const historyEntry = `[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}`;
           const currentHistory = oldData.歷史更新紀錄 || '';
           const newHistory = currentHistory
@@ -456,18 +454,16 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           const historyLines = newHistory.split('\n').slice(0, 30);
           const trimmedHistory = historyLines.join('\n');
 
-          // 更新裝備（包含批次資訊）
+          // 使用現有的"狀態"和"填表人"欄位
           const { error } = await supabase
             .from("equipment")
             .update({
               目前狀態: operationType,
-              狀態: note || '',
+              狀態: note || '', // 使用現有"狀態"欄位
               歷史更新紀錄: trimmedHistory,
-              填表人: operator,
+              填表人: operator, // 使用現有"填表人"欄位
               updated_at: new Date().toISOString(),
               batch_date: batchDate,
-              batch_operator: operator,
-              batch_note: note || '',
               batch_identifier: batchIdentifier
             })
             .eq("id", equipmentId);
@@ -488,6 +484,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: "批量操作失敗" });
     }
   }
+
 
   // ====== 批量返隊裝備 ======
   if (action === "batchReturnEquipment") {
@@ -568,7 +565,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     // 獲取有批次日期的裝備記錄，按批次分組
     const { data: records, error } = await supabase
       .from("equipment")
-      .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態, batch_date, batch_operator, batch_note, batch_identifier, updated_at")
+      .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態, 填表人, batch_date, batch_identifier, updated_at")
       .not("batch_date", "is", null)
       .not("batch_identifier", "is", null)
       .order("updated_at", { ascending: false });
@@ -585,8 +582,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       if (!batchGroups[batchId]) {
         batchGroups[batchId] = {
           batch_date: record.batch_date,
-          batch_operator: record.batch_operator,
-          batch_note: record.batch_note,
+          batch_operator: record.填表人, // 使用填表人
+          batch_note: record.狀態, // 使用狀態欄位
           equipment: []
         };
       }
