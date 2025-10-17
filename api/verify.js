@@ -421,12 +421,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(400).json({ status: "error", message: "請選擇要操作的裝備" });
     }
 
-    const batchDate = new Date().toISOString().split('T')[0]; // 用於分組
+    const batchDate = new Date().toISOString();
+    const batchIdentifier = `batch_${Date.now()}`; // 唯一的批次標識
 
     try {
-      // 更新每個裝備的狀態
       for (const equipmentId of equipmentIds) {
-        // 獲取舊資料
         const { data: oldData } = await supabase
           .from("equipment")
           .select("*")
@@ -457,7 +456,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           const historyLines = newHistory.split('\n').slice(0, 30);
           const trimmedHistory = historyLines.join('\n');
 
-          // 更新裝備
+          // 更新裝備（包含批次資訊）
           const { error } = await supabase
             .from("equipment")
             .update({
@@ -466,7 +465,10 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               歷史更新紀錄: trimmedHistory,
               填表人: operator,
               updated_at: new Date().toISOString(),
-              batch_date: batchDate // 記錄批次日期用於返隊
+              batch_date: batchDate,
+              batch_operator: operator,
+              batch_note: note || '',
+              batch_identifier: batchIdentifier
             })
             .eq("id", equipmentId);
 
@@ -493,7 +495,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
     }
 
-    const { equipmentIds, operator } = body;
+    const { equipmentIds, operator, batchId } = body;
 
     if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
       return res.status(400).json({ status: "error", message: "請選擇要返隊的裝備" });
@@ -522,7 +524,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           });
 
           // 更新歷史紀錄
-          const historyEntry = `[${timestamp}] ${operator} 批量返隊`;
+          const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId})`;
           const currentHistory = oldData.歷史更新紀錄 || '';
           const newHistory = currentHistory
             ? `${historyEntry}\n${currentHistory}`
@@ -531,16 +533,16 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           const historyLines = newHistory.split('\n').slice(0, 30);
           const trimmedHistory = historyLines.join('\n');
 
-          // 更新裝備狀態為在隊
+          // 更新裝備狀態為在隊，但保留批次記錄用於歷史追蹤
           const { error } = await supabase
             .from("equipment")
             .update({
               目前狀態: '在隊',
-              狀態: '',
+              狀態: '已返隊',
               歷史更新紀錄: trimmedHistory,
               填表人: operator,
-              updated_at: new Date().toISOString(),
-              batch_date: null // 清除批次日期
+              updated_at: new Date().toISOString()
+              // 不清除批次資訊，以便歷史追蹤
             })
             .eq("id", equipmentId);
 
@@ -563,13 +565,12 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
   // ====== 獲取批量記錄 ======
   if (action === "getBatchRecords") {
-    const { recordType } = body;
-
-    // 獲取有批次日期的裝備記錄
+    // 獲取有批次日期的裝備記錄，按批次分組
     const { data: records, error } = await supabase
       .from("equipment")
-      .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態 as note, batch_date, updated_at")
+      .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態, batch_date, batch_operator, batch_note, batch_identifier, updated_at")
       .not("batch_date", "is", null)
+      .not("batch_identifier", "is", null)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -577,9 +578,24 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: "獲取記錄失敗" });
     }
 
+    // 按批次標識符分組
+    const batchGroups = {};
+    records.forEach(record => {
+      const batchId = record.batch_identifier;
+      if (!batchGroups[batchId]) {
+        batchGroups[batchId] = {
+          batch_date: record.batch_date,
+          batch_operator: record.batch_operator,
+          batch_note: record.batch_note,
+          equipment: []
+        };
+      }
+      batchGroups[batchId].equipment.push(record);
+    });
+
     return res.status(200).json({
       status: "ok",
-      records: records || []
+      batches: batchGroups
     });
   }
   // 如果沒有匹配的 action
