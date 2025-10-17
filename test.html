@@ -2744,13 +2744,18 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.status === 'ok') {
+                        // ✅ 確保正確保存到全域變數
                         currentBatches = data.batches || {};
+                        console.log('載入的批次資料:', currentBatches);
                         renderReturnDateFilter(currentBatches);
                     }
+                } else {
+                    throw new Error('載入失敗');
                 }
             } catch (error) {
                 console.error('載入批量記錄失敗:', error);
                 showToast('載入批量記錄失敗', 'error');
+                currentBatches = {}; // 失敗時清空
             }
         }
 
@@ -2784,7 +2789,8 @@
             const container = document.getElementById('batchReturnSelector');
             const selectedBatchId = document.getElementById('returnDateFilter').value;
 
-            console.log('渲染批次返隊選擇器:', { selectedBatchId, currentBatches });
+            console.log('當前選擇的批次ID:', selectedBatchId);
+            console.log('可用的批次:', currentBatches);
 
             if (!selectedBatchId) {
                 container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
@@ -2793,11 +2799,12 @@
 
             const selectedBatch = currentBatches[selectedBatchId];
             if (!selectedBatch) {
+                console.error('找不到批次:', selectedBatchId);
                 container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">找不到選擇的批次資料</div>';
                 return;
             }
 
-            // ✅ 只顯示尚未返隊的裝備，並按裝備編號排序
+            // 只顯示尚未返隊的裝備，並按裝備編號排序
             const availableEquipment = selectedBatch.equipment
                 .filter(equipment => equipment.目前狀態 !== '在隊')
                 .sort((a, b) =>
@@ -2816,7 +2823,6 @@
             if (availableEquipment.length === 0) {
                 html += '<div style="text-align: center; color: #666; padding: 2rem;">此批次所有裝備已返隊</div>';
             } else {
-                // ✅ 每次重新渲染時，所有勾選框都是未勾選狀態
                 availableEquipment.forEach(equipment => {
                     html += `
                 <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #ff6b35;">
@@ -2867,17 +2873,12 @@
             const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
             const selectedBatchId = document.getElementById('returnDateFilter').value;
 
-            // ✅ 修正：添加除錯資訊
-            console.log('批次返隊資訊:', {
-                selectedBatchId: selectedBatchId,
-                equipmentCount: equipmentIds.length,
-                currentBatches: currentBatches
-            });
+            console.log('提交時的批次ID:', selectedBatchId);
+            console.log('提交時的 currentBatches:', currentBatches);
 
-            // ✅ 修正：確保 batchId 不為空且存在於 currentBatches 中
-            if (!selectedBatchId || !currentBatches[selectedBatchId]) {
-                console.error('無效的批次ID:', selectedBatchId);
-                showToast('請選擇有效的借出事件', 'error');
+            // ✅ 修正：直接檢查 select 的值，不依賴 currentBatches
+            if (!selectedBatchId) {
+                showToast('請選擇借出事件', 'error');
                 return;
             }
 
@@ -2890,7 +2891,7 @@
                         action: 'batchReturnEquipment',
                         sessionToken,
                         equipmentIds,
-                        batchId: selectedBatchId, // ✅ 這裡現在一定有值
+                        batchId: selectedBatchId,
                         operator: currentUser.displayName
                     })
                 });
