@@ -2691,75 +2691,100 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'getBatchRecords',
-                        sessionToken,
-                        recordType: '借出' // 可以擴展為其他類型
+                        sessionToken
                     })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
                     if (data.status === 'ok') {
-                        renderReturnDateFilter(data.records || []);
-                        renderBatchReturnSelector(data.records || []);
+                        renderReturnDateFilter(data.batches || {});
                     }
                 }
             } catch (error) {
                 console.error('載入批量記錄失敗:', error);
             }
         }
-
-        // 渲染返隊日期篩選器
-        function renderReturnDateFilter(records) {
+        // 渲染返隊日期篩選器（現在顯示批次資訊）
+        function renderReturnDateFilter(batches) {
             const select = document.getElementById('returnDateFilter');
 
-            // 按日期分組記錄
-            const dateGroups = {};
-            records.forEach(record => {
-                if (!dateGroups[record.batch_date]) {
-                    dateGroups[record.batch_date] = [];
-                }
-                dateGroups[record.batch_date].push(record);
-            });
-
             select.innerHTML = '<option value="">請選擇借出事件</option>';
-            Object.keys(dateGroups).sort().reverse().forEach(date => {
+
+            Object.keys(batches).forEach(batchId => {
+                const batch = batches[batchId];
+                const date = new Date(batch.batch_date);
+                const formattedDate = date.toLocaleString('zh-TW', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'Asia/Taipei'
+                });
+
                 const option = document.createElement('option');
-                option.value = date;
-                option.textContent = `${date} (${dateGroups[date].length}項裝備)`;
+                option.value = batchId;
+                option.textContent = `${formattedDate} - ${batch.batch_operator} - ${batch.batch_note || '無備註'} (${batch.equipment.length}項)`;
                 select.appendChild(option);
             });
         }
-
         // 渲染批量返隊選擇器
-        function renderBatchReturnSelector(records) {
+        function renderBatchReturnSelector(batches) {
             const container = document.getElementById('batchReturnSelector');
-            const selectedDate = document.getElementById('returnDateFilter').value;
+            const selectedBatchId = document.getElementById('returnDateFilter').value;
 
-            if (!selectedDate) {
+            if (!selectedBatchId) {
                 container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
                 return;
             }
 
-            const filteredRecords = records.filter(record => record.batch_date === selectedDate && record.目前狀態 !== '在隊');
+            const selectedBatch = batches[selectedBatchId];
+            if (!selectedBatch) {
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">找不到選擇的批次資料</div>';
+                return;
+            }
 
-            let html = '';
-            filteredRecords.forEach(record => {
-                html += `
-            <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
-                <input type="checkbox" id="return-${record.equipment_id}" 
-                       name="returnEquipmentIds" value="${record.equipment_id}"
-                       style="margin-right: 0.5rem;">
-                <label for="return-${record.equipment_id}" style="cursor: pointer; margin: 0; flex: 1;">
-                    <strong>${record.器材名稱}</strong> (${record.裝備編號})<br>
-                    <small style="color: #666;">${record.分群組} • ${record.note || '無備註'}</small>
-                </label>
-            </div>
-        `;
-            });
+            // 只顯示尚未返隊的裝備
+            const availableEquipment = selectedBatch.equipment.filter(equipment =>
+                equipment.目前狀態 !== '在隊'
+            );
 
-            container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有可返隊的裝備</div>';
+            let html = `
+        <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+            <strong>批次資訊：</strong><br>
+            📅 ${new Date(selectedBatch.batch_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}<br>
+            👤 操作人員：${selectedBatch.batch_operator}<br>
+            📝 備註：${selectedBatch.batch_note || '無備註'}
+        </div>
+    `;
+
+            if (availableEquipment.length === 0) {
+                html += '<div style="text-align: center; color: #666; padding: 2rem;">此批次所有裝備已返隊</div>';
+            } else {
+                availableEquipment.forEach(equipment => {
+                    html += `
+                <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #ff6b35;">
+                    <input type="checkbox" id="return-${equipment.id}" 
+                           name="returnEquipmentIds" value="${equipment.id}"
+                           style="margin-right: 0.75rem;">
+                    <label for="return-${equipment.id}" style="cursor: pointer; margin: 0; flex: 1;">
+                        <strong>${equipment.器材名稱}</strong> 
+                        <span style="color: #666; font-size: 0.9em;">(${equipment.裝備編號})</span><br>
+                        <small style="color: #888;">
+                            📁 ${equipment.分群組} • 
+                            📊 狀態：${equipment.目前狀態} •
+                            ${equipment.狀態 ? `💬 ${equipment.狀態} •` : ''}
+                            🔄 更新：${new Date(equipment.updated_at).toLocaleDateString('zh-TW')}
+                        </small>
+                    </label>
+                </div>
+            `;
+                });
+            }
+
+            container.innerHTML = html;
         }
-
         // 全選返隊項目
         function selectAllReturnItems() {
             document.querySelectorAll('#batchReturnSelector input[name="returnEquipmentIds"]').forEach(checkbox => {
@@ -2785,6 +2810,7 @@
             }
 
             const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const selectedBatchId = document.getElementById('returnDateFilter').value;
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -2795,6 +2821,7 @@
                         action: 'batchReturnEquipment',
                         sessionToken,
                         equipmentIds,
+                        batchId: selectedBatchId, // 傳送批次ID用於記錄
                         operator: currentUser.displayName
                     })
                 });
@@ -2814,7 +2841,6 @@
                 showToast('批量返隊失敗: ' + error.message, 'error');
             }
         }
-
         // 更新表單事件監聽器
         function setupEventListeners() {
             // 現有的事件監聽器...
