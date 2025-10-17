@@ -425,59 +425,36 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
-      // ✅ 改為真正的批量更新：一次查詢所有裝備
-      const { data: oldEquipmentList, error: fetchError } = await supabase
+      const now = new Date();
+      const timestamp = now.toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      // ✅ 直接批量更新，使用 Supabase 的 raw SQL 處理歷史紀錄
+      const { data: updatedData, error: updateError } = await supabase
         .from("equipment")
-        .select("*")
-        .in("id", equipmentIds);
-
-      if (fetchError) {
-        console.error("批量查詢裝備失敗:", fetchError);
-        return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
-      }
-
-      // ✅ 準備批量更新資料
-      const updatePromises = oldEquipmentList.map(async (oldData) => {
-        const now = new Date();
-        const timestamp = now.toLocaleString('zh-TW', {
-          timeZone: 'Asia/Taipei',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        });
-
-        const historyEntry = `[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}`;
-        const currentHistory = oldData.歷史更新紀錄 || '';
-        const newHistory = currentHistory
-          ? `${historyEntry}\n${currentHistory}`
-          : historyEntry;
-
-        const historyLines = newHistory.split('\n').slice(0, 30);
-        const trimmedHistory = historyLines.join('\n');
-
-        // 返回更新資料
-        return {
-          id: oldData.id,
+        .update({
           目前狀態: operationType,
           狀態: note || '',
-          歷史更新紀錄: trimmedHistory,
+          歷史更新紀錄: supabase.raw(`
+                    CASE 
+                        WHEN 歷史更新紀錄 IS NULL THEN '[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}'
+                        ELSE '[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}\n' || 歷史更新紀錄
+                    END
+                `),
           填表人: operator,
           updated_at: new Date().toISOString(),
           batch_date: batchDate,
           batch_identifier: batchIdentifier
-        };
-      });
-
-      const updateData = await Promise.all(updatePromises);
-
-      // ✅ 真正的批量更新：一次更新所有裝備
-      const { data: updatedData, error: updateError } = await supabase
-        .from("equipment")
-        .upsert(updateData) // 使用 upsert 進行批量更新
+        })
+        .in("id", equipmentIds)
         .select();
 
       if (updateError) {
@@ -511,56 +488,35 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     try {
-      // ✅ 批量查詢裝備
-      const { data: oldEquipmentList, error: fetchError } = await supabase
-        .from("equipment")
-        .select("*")
-        .in("id", equipmentIds);
-
-      if (fetchError) {
-        console.error("批量查詢裝備失敗:", fetchError);
-        return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
-      }
-
-      // ✅ 準備批量更新資料
-      const updatePromises = oldEquipmentList.map(async (oldData) => {
-        const now = new Date();
-        const timestamp = now.toLocaleString('zh-TW', {
-          timeZone: 'Asia/Taipei',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        });
-
-        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId})`;
-        const currentHistory = oldData.歷史更新紀錄 || '';
-        const newHistory = currentHistory
-          ? `${historyEntry}\n${currentHistory}`
-          : historyEntry;
-
-        const historyLines = newHistory.split('\n').slice(0, 30);
-        const trimmedHistory = historyLines.join('\n');
-
-        return {
-          id: oldData.id,
-          目前狀態: '在隊',
-          狀態: '已返隊',
-          歷史更新紀錄: trimmedHistory,
-          填表人: operator,
-          updated_at: new Date().toISOString()
-        };
+      // ✅ 改為使用 update + in 條件進行批量更新
+      const now = new Date();
+      const timestamp = now.toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
       });
 
-      const updateData = await Promise.all(updatePromises);
-
-      // ✅ 批量更新所有裝備
+      // ✅ 直接批量更新，不需要先查詢
       const { data: updatedData, error: updateError } = await supabase
         .from("equipment")
-        .upsert(updateData)
+        .update({
+          目前狀態: '在隊',
+          狀態: '已返隊',
+          歷史更新紀錄: supabase.raw(`
+                    CASE 
+                        WHEN 歷史更新紀錄 IS NULL THEN '[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})'
+                        ELSE '[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})\n' || 歷史更新紀錄
+                    END
+                `),
+          填表人: operator,
+          updated_at: new Date().toISOString()
+        })
+        .in("id", equipmentIds)
         .select();
 
       if (updateError) {
