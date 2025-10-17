@@ -159,7 +159,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .eq("id", equipmentData.id)
       .single();
 
-    // 生成台灣時間 - 修正：不要手動加8小時
+    // 生成台灣時間
     const now = new Date();
     const timestamp = now.toLocaleString('zh-TW', {
       timeZone: 'Asia/Taipei',
@@ -176,6 +176,12 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     let historyEntry = '';
     if (oldData.目前狀態 !== equipmentData.目前狀態) {
       historyEntry = `[${timestamp}] ${userData.display_name} 將狀態改為 ${equipmentData.目前狀態}`;
+
+      // ✅ 如果是返隊操作，清理批次記錄
+      if (equipmentData.目前狀態 === '在隊' && oldData.目前狀態 !== '在隊') {
+        equipmentData.batch_date = null;
+        equipmentData.batch_identifier = null;
+      }
     }
 
     // 更新歷史紀錄（保留最新30筆）
@@ -508,7 +514,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     try {
-      // ✅ 先查詢所有要更新的裝備
+      // 先查詢所有要更新的裝備
       const { data: oldEquipmentList, error: fetchError } = await supabase
         .from("equipment")
         .select("*")
@@ -519,7 +525,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
       }
 
-      // ✅ 準備更新資料（逐個處理歷史紀錄）
+      // 準備更新資料
       const updatePromises = oldEquipmentList.map((oldData) => {
         const now = new Date();
         const timestamp = now.toLocaleString('zh-TW', {
@@ -542,7 +548,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         const historyLines = newHistory.split('\n').slice(0, 30);
         const trimmedHistory = historyLines.join('\n');
 
-        // 返回更新操作
         return supabase
           .from("equipment")
           .update({
@@ -550,15 +555,17 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             狀態: '已返隊',
             歷史更新紀錄: trimmedHistory,
             填表人: operator,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            // ✅ 清理批次記錄
+            batch_date: null,
+            batch_identifier: null
           })
           .eq("id", oldData.id);
       });
 
-      // ✅ 執行所有更新操作
+      // 執行所有更新操作
       const updateResults = await Promise.all(updatePromises);
 
-      // 檢查是否有錯誤
       const hasError = updateResults.some(result => result.error);
       if (hasError) {
         console.error("部分裝備更新失敗");
@@ -593,24 +600,37 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: "獲取記錄失敗" });
     }
 
-    // 按批次標識符分組
+    // 按批次標識符分組，並過濾掉已完全返隊的批次
     const batchGroups = {};
     records.forEach(record => {
       const batchId = record.batch_identifier;
       if (!batchGroups[batchId]) {
         batchGroups[batchId] = {
           batch_date: record.batch_date,
-          batch_operator: record.填表人, // 使用填表人
-          batch_note: record.狀態, // 使用狀態欄位
+          batch_operator: record.填表人,
+          batch_note: record.狀態,
           equipment: []
         };
       }
       batchGroups[batchId].equipment.push(record);
     });
 
+    // ✅ 過濾：只保留還有未返隊裝備的批次
+    const activeBatches = {};
+    Object.keys(batchGroups).forEach(batchId => {
+      const batch = batchGroups[batchId];
+      const hasUnreturnedEquipment = batch.equipment.some(equipment =>
+        equipment.目前狀態 !== '在隊'
+      );
+
+      if (hasUnreturnedEquipment) {
+        activeBatches[batchId] = batch;
+      }
+    });
+
     return res.status(200).json({
       status: "ok",
-      batches: batchGroups
+      batches: activeBatches  // 只返回活躍的批次
     });
   }
   // 如果沒有匹配的 action
