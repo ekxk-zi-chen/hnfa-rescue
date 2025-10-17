@@ -425,48 +425,68 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
-      const now = new Date();
-      const timestamp = now.toLocaleString('zh-TW', {
-        timeZone: 'Asia/Taipei',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-
-      // ✅ 直接批量更新，使用 Supabase 的 raw SQL 處理歷史紀錄
-      const { data: updatedData, error: updateError } = await supabase
+      // ✅ 先查詢所有要更新的裝備
+      const { data: oldEquipmentList, error: fetchError } = await supabase
         .from("equipment")
-        .update({
-          目前狀態: operationType,
-          狀態: note || '',
-          歷史更新紀錄: supabase.raw(`
-                    CASE 
-                        WHEN 歷史更新紀錄 IS NULL THEN '[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}'
-                        ELSE '[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}\n' || 歷史更新紀錄
-                    END
-                `),
-          填表人: operator,
-          updated_at: new Date().toISOString(),
-          batch_date: batchDate,
-          batch_identifier: batchIdentifier
-        })
-        .in("id", equipmentIds)
-        .select();
+        .select("*")
+        .in("id", equipmentIds);
 
-      if (updateError) {
-        console.error("批量更新裝備失敗:", updateError);
-        return res.status(500).json({ status: "error", message: "批量更新裝備失敗" });
+      if (fetchError) {
+        console.error("批量查詢裝備失敗:", fetchError);
+        return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
       }
 
-      console.log(`✅ 成功批量更新 ${updatedData.length} 個裝備`);
+      // ✅ 準備更新資料
+      const updatePromises = oldEquipmentList.map((oldData) => {
+        const now = new Date();
+        const timestamp = now.toLocaleString('zh-TW', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+
+        const historyEntry = `[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}`;
+        const currentHistory = oldData.歷史更新紀錄 || '';
+        const newHistory = currentHistory
+          ? `${historyEntry}\n${currentHistory}`
+          : historyEntry;
+
+        const historyLines = newHistory.split('\n').slice(0, 30);
+        const trimmedHistory = historyLines.join('\n');
+
+        return supabase
+          .from("equipment")
+          .update({
+            目前狀態: operationType,
+            狀態: note || '',
+            歷史更新紀錄: trimmedHistory,
+            填表人: operator,
+            updated_at: new Date().toISOString(),
+            batch_date: batchDate,
+            batch_identifier: batchIdentifier
+          })
+          .eq("id", oldData.id);
+      });
+
+      // ✅ 執行所有更新操作
+      const updateResults = await Promise.all(updatePromises);
+
+      const hasError = updateResults.some(result => result.error);
+      if (hasError) {
+        console.error("部分裝備更新失敗");
+        return res.status(500).json({ status: "error", message: "部分裝備更新失敗" });
+      }
+
+      console.log(`✅ 成功批量更新 ${updateResults.length} 個裝備`);
 
       return res.status(200).json({
         status: "ok",
-        message: `批量${operationType}操作完成 (更新了 ${updatedData.length} 個裝備)`
+        message: `批量${operationType}操作完成 (更新了 ${updateResults.length} 個裝備)`
       });
 
     } catch (error) {
@@ -488,47 +508,68 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     try {
-      // ✅ 改為使用 update + in 條件進行批量更新
-      const now = new Date();
-      const timestamp = now.toLocaleString('zh-TW', {
-        timeZone: 'Asia/Taipei',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-
-      // ✅ 直接批量更新，不需要先查詢
-      const { data: updatedData, error: updateError } = await supabase
+      // ✅ 先查詢所有要更新的裝備
+      const { data: oldEquipmentList, error: fetchError } = await supabase
         .from("equipment")
-        .update({
-          目前狀態: '在隊',
-          狀態: '已返隊',
-          歷史更新紀錄: supabase.raw(`
-                    CASE 
-                        WHEN 歷史更新紀錄 IS NULL THEN '[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})'
-                        ELSE '[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})\n' || 歷史更新紀錄
-                    END
-                `),
-          填表人: operator,
-          updated_at: new Date().toISOString()
-        })
-        .in("id", equipmentIds)
-        .select();
+        .select("*")
+        .in("id", equipmentIds);
 
-      if (updateError) {
-        console.error("批量返隊裝備失敗:", updateError);
-        return res.status(500).json({ status: "error", message: "批量返隊裝備失敗" });
+      if (fetchError) {
+        console.error("批量查詢裝備失敗:", fetchError);
+        return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
       }
 
-      console.log(`✅ 成功批量返隊 ${updatedData.length} 個裝備`);
+      // ✅ 準備更新資料（逐個處理歷史紀錄）
+      const updatePromises = oldEquipmentList.map((oldData) => {
+        const now = new Date();
+        const timestamp = now.toLocaleString('zh-TW', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})`;
+        const currentHistory = oldData.歷史更新紀錄 || '';
+        const newHistory = currentHistory
+          ? `${historyEntry}\n${currentHistory}`
+          : historyEntry;
+
+        const historyLines = newHistory.split('\n').slice(0, 30);
+        const trimmedHistory = historyLines.join('\n');
+
+        // 返回更新操作
+        return supabase
+          .from("equipment")
+          .update({
+            目前狀態: '在隊',
+            狀態: '已返隊',
+            歷史更新紀錄: trimmedHistory,
+            填表人: operator,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", oldData.id);
+      });
+
+      // ✅ 執行所有更新操作
+      const updateResults = await Promise.all(updatePromises);
+
+      // 檢查是否有錯誤
+      const hasError = updateResults.some(result => result.error);
+      if (hasError) {
+        console.error("部分裝備更新失敗");
+        return res.status(500).json({ status: "error", message: "部分裝備更新失敗" });
+      }
+
+      console.log(`✅ 成功批量返隊 ${updateResults.length} 個裝備`);
 
       return res.status(200).json({
         status: "ok",
-        message: `批量返隊操作完成 (返隊了 ${updatedData.length} 個裝備)`
+        message: `批量返隊操作完成 (返隊了 ${updateResults.length} 個裝備)`
       });
 
     } catch (error) {
