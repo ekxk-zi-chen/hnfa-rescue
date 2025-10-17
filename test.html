@@ -988,7 +988,7 @@
                 <form id="batchReturnForm">
                     <div class="form-group">
                         <label for="returnDateFilter">選擇借出日期</label>
-                        <select id="returnDateFilter" class="form-control" onchange="loadBatchReturnRecords()">
+                        <select id="returnDateFilter" class="form-control">
                             <option value="">請選擇借出事件</option>
                         </select>
                     </div>
@@ -1957,6 +1957,7 @@
             });
         }
 
+        // 修正：設置事件監聽器
         function setupEventListeners() {
             // 現有的事件監聽器...
             document.getElementById('searchInput').addEventListener('input', renderEquipment);
@@ -1968,9 +1969,10 @@
             document.getElementById('batchForm').addEventListener('submit', handleBatchSubmit);
             document.getElementById('batchReturnForm').addEventListener('submit', handleBatchReturnSubmit);
 
-            // ✅ 修正：確保使用正確的函數名稱
+            // ✅ 修正：只綁定 renderBatchReturnSelector，不要重新載入資料
             document.getElementById('returnDateFilter').addEventListener('change', function () {
-                renderBatchReturnSelector(); // 確保函數名稱正確
+                console.log('選擇了批次:', this.value);
+                renderBatchReturnSelector(); // 只渲染選擇器，不重新載入資料
             });
 
             document.addEventListener('click', function (event) {
@@ -2748,14 +2750,8 @@
                     if (data.status === 'ok') {
                         // ✅ 確保正確保存到全域變數
                         currentBatches = data.batches || {};
-                        console.log('載入的批次資料:', currentBatches);
+                        console.log('載入的批次資料:', Object.keys(currentBatches).length, '個批次');
                         renderReturnDateFilter(currentBatches);
-
-                        // ✅ 重要：如果已經有選擇的批次，重新渲染選擇器
-                        const selectedBatchId = document.getElementById('returnDateFilter').value;
-                        if (selectedBatchId && currentBatches[selectedBatchId]) {
-                            renderBatchReturnSelector();
-                        }
                     }
                 } else {
                     throw new Error('載入失敗');
@@ -2766,7 +2762,7 @@
                 currentBatches = {}; // 失敗時清空
             }
         }
-
+        
         // 渲染返隊日期篩選器（現在顯示批次資訊）
         function renderReturnDateFilter(batches) {
             const select = document.getElementById('returnDateFilter');
@@ -2797,7 +2793,7 @@
             const container = document.getElementById('batchReturnSelector');
             const selectedBatchId = document.getElementById('returnDateFilter').value;
 
-            console.log('當前選擇的批次ID:', selectedBatchId);
+            console.log('渲染批次返隊選擇器 - 選擇的批次ID:', selectedBatchId);
             console.log('可用的批次:', currentBatches);
 
             if (!selectedBatchId) {
@@ -2805,18 +2801,10 @@
                 return;
             }
 
-            // ✅ 重要：如果 currentBatches 為空，重新載入資料
-            if (Object.keys(currentBatches).length === 0) {
-                console.log('currentBatches 為空，重新載入資料...');
-                loadBatchReturnRecords();
-                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">載入中...</div>';
-                return;
-            }
-
             const selectedBatch = currentBatches[selectedBatchId];
             if (!selectedBatch) {
                 console.error('找不到批次:', selectedBatchId);
-                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">找不到選擇的批次資料</div>';
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">找不到選擇的批次資料，請重新選擇</div>';
                 return;
             }
 
@@ -2862,6 +2850,7 @@
 
             container.innerHTML = html;
         }
+
         // 全選返隊項目
         function selectAllReturnItems() {
             document.querySelectorAll('#batchReturnSelector input[name="returnEquipmentIds"]').forEach(checkbox => {
