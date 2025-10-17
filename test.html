@@ -2724,6 +2724,8 @@
             document.getElementById('returnDateFilter').value = '';
             document.getElementById('batchReturnSelector').innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
 
+            // ✅ 重置 currentBatches 並重新載入
+            currentBatches = {};
             loadBatchReturnRecords();
             showModal('batchReturnModal');
         }
@@ -2748,6 +2750,12 @@
                         currentBatches = data.batches || {};
                         console.log('載入的批次資料:', currentBatches);
                         renderReturnDateFilter(currentBatches);
+
+                        // ✅ 重要：如果已經有選擇的批次，重新渲染選擇器
+                        const selectedBatchId = document.getElementById('returnDateFilter').value;
+                        if (selectedBatchId && currentBatches[selectedBatchId]) {
+                            renderBatchReturnSelector();
+                        }
                     }
                 } else {
                     throw new Error('載入失敗');
@@ -2794,6 +2802,14 @@
 
             if (!selectedBatchId) {
                 container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
+                return;
+            }
+
+            // ✅ 重要：如果 currentBatches 為空，重新載入資料
+            if (Object.keys(currentBatches).length === 0) {
+                console.log('currentBatches 為空，重新載入資料...');
+                loadBatchReturnRecords();
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">載入中...</div>';
                 return;
             }
 
