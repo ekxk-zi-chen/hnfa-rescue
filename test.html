@@ -2521,19 +2521,19 @@
             // 按分群組分組裝備
             const groupedEquipment = {};
             equipmentData.forEach(equipment => {
-                if (equipment.目前狀態 === '在隊') {
-                    const group = equipment.分群組 || '未分類';
-                    if (!groupedEquipment[group]) {
-                        groupedEquipment[group] = [];
-                    }
-                    groupedEquipment[group].push(equipment);
+                // ✅ 修正：顯示所有裝備，不只是「在隊」的
+                // 這樣即使某個裝備被借出，該分群組仍然可以顯示
+                const group = equipment.分群組 || '未分類';
+                if (!groupedEquipment[group]) {
+                    groupedEquipment[group] = [];
                 }
+                groupedEquipment[group].push(equipment);
             });
 
-            // ✅ 使用與主畫面一致的排序：先按裝備編號排序後提取群組
-            const sortedByNumber = [...equipmentData]
-                .filter(equipment => equipment.目前狀態 === '在隊')
-                .sort((a, b) => String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true }));
+            // 使用與主畫面一致的排序
+            const sortedByNumber = [...equipmentData].sort((a, b) =>
+                String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+            );
 
             const categories = [];
             for (const item of sortedByNumber) {
@@ -2544,7 +2544,7 @@
 
             let html = '';
             categories.forEach(group => {
-                // 群組內也按裝備編號排序
+                // 群組內按裝備編號排序
                 const groupEquipments = groupedEquipment[group].sort((a, b) =>
                     String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
                 );
@@ -2567,23 +2567,28 @@
                     </button>
                 </div>
                 <div id="${groupId}-items" style="display: none; margin-left: 1.5rem;">
-                    ${groupEquipments.map(equipment => `
+                    ${groupEquipments.map(equipment => {
+                    // ✅ 添加狀態標示，並禁用非「在隊」的裝備
+                    const isAvailable = equipment.目前狀態 === '在隊';
+                    const statusText = isAvailable ? '' : ` (${equipment.目前狀態})`;
+                    return `
                         <div style="display: flex; align-items: center; margin-bottom: 0.25rem;">
                             <input type="checkbox" id="equip-${equipment.id}" 
                                    name="equipmentIds" value="${equipment.id}"
+                                   ${isAvailable ? '' : 'disabled'}
                                    onchange="updateGroupCheckbox('${groupId}', '${group}')"
                                    style="margin-right: 0.5rem;">
-                            <label for="equip-${equipment.id}" style="cursor: pointer; margin: 0; flex: 1;">
-                                ${equipment.器材名稱} (${equipment.裝備編號})
+                            <label for="equip-${equipment.id}" style="cursor: pointer; margin: 0; flex: 1; ${isAvailable ? '' : 'color: #999;'}">
+                                ${equipment.器材名稱} (${equipment.裝備編號})${statusText}
                             </label>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
         `;
             });
 
-            container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有在隊的裝備可供操作</div>';
+            container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有裝備可供操作</div>';
         }
         // 切換群組選擇
         function toggleGroupSelection(groupId, groupName) {
