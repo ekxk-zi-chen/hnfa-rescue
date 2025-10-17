@@ -815,8 +815,12 @@
                         <button class="btn btn-secondary btn-sm" id="refreshBtn" style="display: none;"
                             onclick="loadEquipmentData()">刷新資料</button>
                     </div>
+                    <!-- 在 content-header 的 adminActions 部分添加 -->
                     <div id="adminActions" style="display: none;">
                         <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
+                        <button class="btn btn-secondary" onclick="showBatchOperationModal('借出')">批量借出</button>
+                        <button class="btn btn-secondary" onclick="showBatchOperationModal('維修中')">批量維修</button>
+                        <button class="btn btn-secondary" onclick="showBatchReturnModal()">批量返隊</button>
                     </div>
                 </div>
 
@@ -929,7 +933,91 @@
             </div>
         </div>
     </div>
+    <!-- 批量操作 Modal -->
+    <div id="batchModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="batchModalTitle">批量操作</h3>
+                <button class="close" onclick="closeModal('batchModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="batchForm">
+                    <div class="form-group">
+                        <label for="batchOperationType">操作類型</label>
+                        <select id="batchOperationType" class="form-control" onchange="updateBatchForm()">
+                            <option value="借出">借出</option>
+                            <option value="維修中">維修中</option>
+                        </select>
+                    </div>
 
+                    <div class="form-group">
+                        <label>選擇裝備</label>
+                        <div style="margin-bottom: 1rem;">
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="selectAllGroups()">全選所有群組</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="deselectAll()">全部取消</button>
+                        </div>
+
+                        <div id="batchEquipmentSelector"
+                            style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
+                            <!-- 裝備選擇器將在這裡動態生成 -->
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchNote">備註說明</label>
+                        <input type="text" id="batchNote" class="form-control" placeholder="例如：借出給張三，預計3天歸還">
+                    </div>
+
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('batchModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">確認執行</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量返隊 Modal -->
+    <div id="batchReturnModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">批量返隊</h3>
+                <button class="close" onclick="closeModal('batchReturnModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="batchReturnForm">
+                    <div class="form-group">
+                        <label for="returnDateFilter">選擇借出日期</label>
+                        <select id="returnDateFilter" class="form-control" onchange="loadBatchReturnRecords()">
+                            <option value="">請選擇借出事件</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>選擇要返隊的裝備</label>
+                        <div style="margin-bottom: 1rem;">
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="selectAllReturnItems()">全選</button>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="deselectAllReturnItems()">全部取消</button>
+                        </div>
+
+                        <div id="batchReturnSelector"
+                            style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
+                            <!-- 返隊選擇器將在這裡動態生成 -->
+                        </div>
+                    </div>
+
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary"
+                            onclick="closeModal('batchReturnModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">確認返隊</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <!-- Toast 通知 -->
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
@@ -2408,6 +2496,343 @@
             });
 
             document.body.appendChild(modal);
+        }
+
+        // 顯示批量操作模態框
+        function showBatchOperationModal(operationType) {
+            document.getElementById('batchModalTitle').textContent = `批量${operationType}`;
+            document.getElementById('batchOperationType').value = operationType;
+            document.getElementById('batchForm').reset();
+
+            renderBatchEquipmentSelector();
+            showModal('batchModal');
+        }
+
+        // 渲染批量裝備選擇器
+        function renderBatchEquipmentSelector() {
+            const container = document.getElementById('batchEquipmentSelector');
+
+            // 按分群組分組裝備
+            const groupedEquipment = {};
+            equipmentData.forEach(equipment => {
+                if (equipment.目前狀態 === '在隊') { // 只顯示在隊的裝備
+                    const group = equipment.分群組 || '未分類';
+                    if (!groupedEquipment[group]) {
+                        groupedEquipment[group] = [];
+                    }
+                    groupedEquipment[group].push(equipment);
+                }
+            });
+
+            let html = '';
+            Object.keys(groupedEquipment).sort().forEach(group => {
+                const groupEquipments = groupedEquipment[group];
+                const groupId = `group-${group.replace(/\s+/g, '-')}`;
+
+                html += `
+            <div class="group-section" style="margin-bottom: 1rem; padding: 0.5rem; border: 1px solid #e9ecef; border-radius: 6px;">
+                <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                    <input type="checkbox" id="${groupId}" 
+                           onchange="toggleGroupSelection('${groupId}', '${group}')"
+                           style="margin-right: 0.5rem;">
+                    <label for="${groupId}" style="font-weight: bold; cursor: pointer; margin: 0;">
+                        ${group} (${groupEquipments.length}項)
+                    </label>
+                    <button type="button" class="btn btn-secondary btn-sm" 
+                            onclick="toggleGroupVisibility('${groupId}')"
+                            style="margin-left: auto; padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                        展開
+                    </button>
+                </div>
+                <div id="${groupId}-items" style="display: none; margin-left: 1.5rem;">
+                    ${groupEquipments.map(equipment => `
+                        <div style="display: flex; align-items: center; margin-bottom: 0.25rem;">
+                            <input type="checkbox" id="equip-${equipment.id}" 
+                                   name="equipmentIds" value="${equipment.id}"
+                                   onchange="updateGroupCheckbox('${groupId}', '${group}')"
+                                   style="margin-right: 0.5rem;">
+                            <label for="equip-${equipment.id}" style="cursor: pointer; margin: 0; flex: 1;">
+                                ${equipment.器材名稱} (${equipment.裝備編號})
+                            </label>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+            });
+
+            container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有在隊的裝備可供操作</div>';
+        }
+
+        // 切換群組選擇
+        function toggleGroupSelection(groupId, groupName) {
+            const groupCheckbox = document.getElementById(groupId);
+            const itemContainer = document.getElementById(`${groupId}-items`);
+            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]');
+
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.checked = groupCheckbox.checked;
+            });
+        }
+
+        // 更新群組複選框狀態
+        function updateGroupCheckbox(groupId, groupName) {
+            const groupCheckbox = document.getElementById(groupId);
+            const itemContainer = document.getElementById(`${groupId}-items`);
+            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]');
+
+            const checkedCount = Array.from(itemCheckboxes).filter(cb => cb.checked).length;
+            const totalCount = itemCheckboxes.length;
+
+            if (checkedCount === 0) {
+                groupCheckbox.checked = false;
+                groupCheckbox.indeterminate = false;
+            } else if (checkedCount === totalCount) {
+                groupCheckbox.checked = true;
+                groupCheckbox.indeterminate = false;
+            } else {
+                groupCheckbox.checked = false;
+                groupCheckbox.indeterminate = true;
+            }
+        }
+
+        // 切換群組可見性
+        function toggleGroupVisibility(groupId) {
+            const itemContainer = document.getElementById(`${groupId}-items`);
+            const toggleButton = itemContainer.previousElementSibling.querySelector('button');
+
+            if (itemContainer.style.display === 'none') {
+                itemContainer.style.display = 'block';
+                toggleButton.textContent = '收合';
+            } else {
+                itemContainer.style.display = 'none';
+                toggleButton.textContent = '展開';
+            }
+        }
+
+        // 全選所有群組
+        function selectAllGroups() {
+            document.querySelectorAll('#batchEquipmentSelector input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = true;
+                // 觸發change事件來更新狀態
+                const event = new Event('change');
+                checkbox.dispatchEvent(event);
+            });
+        }
+
+        // 全部取消
+        function deselectAll() {
+            document.querySelectorAll('#batchEquipmentSelector input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+                const event = new Event('change');
+                checkbox.dispatchEvent(event);
+            });
+        }
+
+        // 處理批量操作表單提交
+        async function handleBatchSubmit(event) {
+            event.preventDefault();
+
+            const selectedCheckboxes = document.querySelectorAll('#batchEquipmentSelector input[name="equipmentIds"]:checked');
+            if (selectedCheckboxes.length === 0) {
+                showToast('請選擇至少一個裝備', 'error');
+                return;
+            }
+
+            const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const operationType = document.getElementById('batchOperationType').value;
+            const note = document.getElementById('batchNote').value;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'batchUpdateEquipment',
+                        sessionToken,
+                        equipmentIds,
+                        operationType,
+                        note,
+                        operator: currentUser.displayName
+                    })
+                });
+
+                if (!response.ok) throw new Error('批量操作失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast(`成功${operationType} ${equipmentIds.length} 個裝備`, 'success');
+                    closeModal('batchModal');
+
+                    // 重新載入資料以更新狀態
+                    await loadEquipmentData();
+                } else {
+                    throw new Error(data.message || '操作失敗');
+                }
+            } catch (error) {
+                console.error('批量操作失敗:', error);
+                showToast('批量操作失敗: ' + error.message, 'error');
+            }
+        }
+
+        // 批量返隊相關函數
+        function showBatchReturnModal() {
+            loadBatchReturnRecords();
+            showModal('batchReturnModal');
+        }
+
+        // 載入批量返隊記錄
+        async function loadBatchReturnRecords() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getBatchRecords',
+                        sessionToken,
+                        recordType: '借出' // 可以擴展為其他類型
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        renderReturnDateFilter(data.records || []);
+                        renderBatchReturnSelector(data.records || []);
+                    }
+                }
+            } catch (error) {
+                console.error('載入批量記錄失敗:', error);
+            }
+        }
+
+        // 渲染返隊日期篩選器
+        function renderReturnDateFilter(records) {
+            const select = document.getElementById('returnDateFilter');
+
+            // 按日期分組記錄
+            const dateGroups = {};
+            records.forEach(record => {
+                if (!dateGroups[record.batch_date]) {
+                    dateGroups[record.batch_date] = [];
+                }
+                dateGroups[record.batch_date].push(record);
+            });
+
+            select.innerHTML = '<option value="">請選擇借出事件</option>';
+            Object.keys(dateGroups).sort().reverse().forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = `${date} (${dateGroups[date].length}項裝備)`;
+                select.appendChild(option);
+            });
+        }
+
+        // 渲染批量返隊選擇器
+        function renderBatchReturnSelector(records) {
+            const container = document.getElementById('batchReturnSelector');
+            const selectedDate = document.getElementById('returnDateFilter').value;
+
+            if (!selectedDate) {
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
+                return;
+            }
+
+            const filteredRecords = records.filter(record => record.batch_date === selectedDate && record.目前狀態 !== '在隊');
+
+            let html = '';
+            filteredRecords.forEach(record => {
+                html += `
+            <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
+                <input type="checkbox" id="return-${record.equipment_id}" 
+                       name="returnEquipmentIds" value="${record.equipment_id}"
+                       style="margin-right: 0.5rem;">
+                <label for="return-${record.equipment_id}" style="cursor: pointer; margin: 0; flex: 1;">
+                    <strong>${record.器材名稱}</strong> (${record.裝備編號})<br>
+                    <small style="color: #666;">${record.分群組} • ${record.note || '無備註'}</small>
+                </label>
+            </div>
+        `;
+            });
+
+            container.innerHTML = html || '<div style="text-align: center; color: #666; padding: 2rem;">沒有可返隊的裝備</div>';
+        }
+
+        // 全選返隊項目
+        function selectAllReturnItems() {
+            document.querySelectorAll('#batchReturnSelector input[name="returnEquipmentIds"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        }
+
+        // 取消全選返隊項目
+        function deselectAllReturnItems() {
+            document.querySelectorAll('#batchReturnSelector input[name="returnEquipmentIds"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        }
+
+        // 處理批量返隊表單提交
+        async function handleBatchReturnSubmit(event) {
+            event.preventDefault();
+
+            const selectedCheckboxes = document.querySelectorAll('#batchReturnSelector input[name="returnEquipmentIds"]:checked');
+            if (selectedCheckboxes.length === 0) {
+                showToast('請選擇至少一個要返隊的裝備', 'error');
+                return;
+            }
+
+            const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'batchReturnEquipment',
+                        sessionToken,
+                        equipmentIds,
+                        operator: currentUser.displayName
+                    })
+                });
+
+                if (!response.ok) throw new Error('批量返隊失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast(`成功返隊 ${equipmentIds.length} 個裝備`, 'success');
+                    closeModal('batchReturnModal');
+                    await loadEquipmentData();
+                } else {
+                    throw new Error(data.message || '返隊失敗');
+                }
+            } catch (error) {
+                console.error('批量返隊失敗:', error);
+                showToast('批量返隊失敗: ' + error.message, 'error');
+            }
+        }
+
+        // 更新表單事件監聽器
+        function setupEventListeners() {
+            // 現有的事件監聽器...
+            document.getElementById('searchInput').addEventListener('input', renderEquipment);
+            document.getElementById('categoryFilter').addEventListener('change', renderEquipment);
+            document.getElementById('statusFilter').addEventListener('change', renderEquipment);
+            document.getElementById('equipmentForm').addEventListener('submit', handleEquipmentSubmit);
+
+            // 新增批量操作表單事件監聽器
+            document.getElementById('batchForm').addEventListener('submit', handleBatchSubmit);
+            document.getElementById('batchReturnForm').addEventListener('submit', handleBatchReturnSubmit);
+            document.getElementById('returnDateFilter').addEventListener('change', renderBatchReturnSelector);
+
+            document.addEventListener('click', function (event) {
+                if (event.target.classList.contains('modal')) {
+                    closeModal(event.target.id);
+                }
+            });
         }
     </script>
 
