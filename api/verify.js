@@ -456,7 +456,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        const historyEntry = `[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}`;
+        // 在後端的批量返隊部分
+        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
@@ -507,7 +509,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
     }
 
-    const { equipmentIds, operator, batchId } = body;
+    const { equipmentIds, operator, batchId } = body; // 這裡的 batchId 就是 batch_identifier
 
     if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
       return res.status(400).json({ status: "error", message: "請選擇要返隊的裝備" });
@@ -539,7 +541,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原批次: ${batchId || '未知'})`;
+        // ✅ 修正：使用正確的批次資訊
+        const batchIdentifier = batchId || oldData.batch_identifier;
+        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
+
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
@@ -556,7 +562,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             歷史更新紀錄: trimmedHistory,
             填表人: operator,
             updated_at: new Date().toISOString(),
-            // ✅ 清理批次記錄
+            // 清理批次記錄
             batch_date: null,
             batch_identifier: null
           })
