@@ -2591,18 +2591,26 @@
         function toggleGroupSelection(groupId, groupName) {
             const groupCheckbox = document.getElementById(groupId);
             const itemContainer = document.getElementById(`${groupId}-items`);
-            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]');
+
+            // ✅ 修正：只選擇沒有 disabled 的 checkbox
+            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)');
 
             itemCheckboxes.forEach(checkbox => {
                 checkbox.checked = groupCheckbox.checked;
             });
+
+            // ✅ 更新群組複選框狀態
+            updateGroupCheckbox(groupId, groupName);
         }
 
         // 更新群組複選框狀態
         function updateGroupCheckbox(groupId, groupName) {
             const groupCheckbox = document.getElementById(groupId);
             const itemContainer = document.getElementById(`${groupId}-items`);
-            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]');
+
+            // ✅ 修正：只計算沒有 disabled 的 checkbox
+            const itemCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)');
+            const disabledCheckboxes = itemContainer.querySelectorAll('input[type="checkbox"]:disabled');
 
             const checkedCount = Array.from(itemCheckboxes).filter(cb => cb.checked).length;
             const totalCount = itemCheckboxes.length;
@@ -2617,8 +2625,12 @@
                 groupCheckbox.checked = false;
                 groupCheckbox.indeterminate = true;
             }
-        }
 
+            // ✅ 可選：在群組標籤顯示可用數量
+            const groupLabel = groupCheckbox.nextElementSibling;
+            const totalItems = itemCheckboxes.length + disabledCheckboxes.length;
+            groupLabel.textContent = `${groupName} (${itemCheckboxes.length}/${totalItems}項可用)`;
+        }
         // 切換群組可見性
         function toggleGroupVisibility(groupId) {
             const itemContainer = document.getElementById(`${groupId}-items`);
@@ -2636,19 +2648,24 @@
         // 全選所有群組
         function selectAllGroups() {
             document.querySelectorAll('#batchEquipmentSelector input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = true;
-                // 觸發change事件來更新狀態
-                const event = new Event('change');
-                checkbox.dispatchEvent(event);
+                // ✅ 修正：只有可用的 checkbox 才打勾
+                if (!checkbox.disabled) {
+                    checkbox.checked = true;
+                    // 觸發change事件來更新狀態
+                    const event = new Event('change');
+                    checkbox.dispatchEvent(event);
+                }
             });
         }
 
         // 全部取消
         function deselectAll() {
             document.querySelectorAll('#batchEquipmentSelector input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = false;
-                const event = new Event('change');
-                checkbox.dispatchEvent(event);
+                if (!checkbox.disabled) {
+                    checkbox.checked = false;
+                    const event = new Event('change');
+                    checkbox.dispatchEvent(event);
+                }
             });
         }
 
@@ -2847,6 +2864,12 @@
             const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
             const selectedBatchId = document.getElementById('returnDateFilter').value;
 
+            // ✅ 修正：確保 batchId 不為空
+            if (!selectedBatchId) {
+                showToast('請選擇借出事件', 'error');
+                return;
+            }
+
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
@@ -2856,7 +2879,7 @@
                         action: 'batchReturnEquipment',
                         sessionToken,
                         equipmentIds,
-                        batchId: selectedBatchId, // 傳送批次ID用於記錄
+                        batchId: selectedBatchId, // ✅ 這裡現在一定有值
                         operator: currentUser.displayName
                     })
                 });
