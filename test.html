@@ -1595,11 +1595,8 @@
             // 先篩選
             const filteredData = filterEquipment();
 
-            // ✅ 統一排序：先按分群組，再按裝備編號
+            // ✅ 恢復原本的排序：只依照「裝備編號」文字排序
             filteredData.sort((a, b) => {
-                const groupCompare = String(a.分群組).localeCompare(String(b.分群組), 'zh-Hant');
-                if (groupCompare !== 0) return groupCompare;
-
                 return String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true });
             });
 
@@ -1938,15 +1935,15 @@
         function updateCategoryFilter() {
             const categorySelect = document.getElementById('categoryFilter');
 
-            // 統一排序：先按裝備編號排序，再提取群組
+            // ✅ 恢復原本：先依裝備編號排序後，再抽出群組
             const sortedByNumber = [...equipmentData].sort((a, b) =>
                 String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
             );
 
-            // 按照排序後順序提取「分群組」
+            // 按照排序後順序提取「分群組」(避免 Set 打亂順序)
             const categories = [];
             for (const item of sortedByNumber) {
-                if (item.分群組 && !categories.includes(item.分群組)) {
+                if (!categories.includes(item.分群組)) {
                     categories.push(item.分群組);
                 }
             }
@@ -1960,7 +1957,6 @@
                 categorySelect.appendChild(option);
             });
         }
-
 
         function setupEventListeners() {
             // 現有的事件監聽器...
@@ -2523,7 +2519,7 @@
         function renderBatchEquipmentSelector() {
             const container = document.getElementById('batchEquipmentSelector');
 
-            // 按分群組分組裝備，並使用統一的排序
+            // 按分群組分組裝備
             const groupedEquipment = {};
             equipmentData.forEach(equipment => {
                 if (equipment.目前狀態 === '在隊') {
@@ -2535,12 +2531,21 @@
                 }
             });
 
-            // 統一排序：先按分群組排序，群組內按裝備編號排序
-            const sortedGroups = Object.keys(groupedEquipment).sort();
+            // ✅ 使用與主畫面一致的排序：先按裝備編號排序後提取群組
+            const sortedByNumber = [...equipmentData]
+                .filter(equipment => equipment.目前狀態 === '在隊')
+                .sort((a, b) => String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true }));
+
+            const categories = [];
+            for (const item of sortedByNumber) {
+                if (!categories.includes(item.分群組)) {
+                    categories.push(item.分群組);
+                }
+            }
 
             let html = '';
-            sortedGroups.forEach(group => {
-                // 群組內按裝備編號排序
+            categories.forEach(group => {
+                // 群組內也按裝備編號排序
                 const groupEquipments = groupedEquipment[group].sort((a, b) =>
                     String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
                 );
