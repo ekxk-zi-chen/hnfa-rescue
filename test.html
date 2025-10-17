@@ -818,9 +818,8 @@
                     <!-- 在 content-header 的 adminActions 部分添加 -->
                     <div id="adminActions" style="display: none;">
                         <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
-                        <button class="btn btn-secondary" onclick="showBatchOperationModal('借出')">批量借出</button>
-                        <button class="btn btn-secondary" onclick="showBatchOperationModal('維修中')">批量維修</button>
-                        <button class="btn btn-secondary" onclick="showBatchReturnModal()">批量返隊</button>
+                        <button class="btn btn-secondary" onclick="showBatchOperationModal()">批次操作</button>
+                        <button class="btn btn-secondary" onclick="showBatchReturnModal()">批次返隊</button>
                     </div>
                 </div>
 
@@ -2506,9 +2505,9 @@
         }
 
         // 顯示批量操作模態框
-        function showBatchOperationModal(operationType) {
-            document.getElementById('batchModalTitle').textContent = `批量${operationType}`;
-            document.getElementById('batchOperationType').value = operationType;
+        function showBatchOperationModal() {
+            document.getElementById('batchModalTitle').textContent = '批次操作';
+            document.getElementById('batchOperationType').value = '借出'; // 預設為借出
             document.getElementById('batchForm').reset();
 
             renderBatchEquipmentSelector();
