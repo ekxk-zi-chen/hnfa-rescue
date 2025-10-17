@@ -593,6 +593,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態, 填表人, batch_date, batch_identifier, updated_at")
       .not("batch_date", "is", null)
       .not("batch_identifier", "is", null)
+      .order("裝備編號", { ascending: true }) // ✅ 按裝備編號排序
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -615,7 +616,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       batchGroups[batchId].equipment.push(record);
     });
 
-    // ✅ 過濾：只保留還有未返隊裝備的批次
+    // ✅ 過濾：只保留還有未返隊裝備的批次，並確保每個批次內的裝備都排序
     const activeBatches = {};
     Object.keys(batchGroups).forEach(batchId => {
       const batch = batchGroups[batchId];
@@ -624,13 +625,17 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       );
 
       if (hasUnreturnedEquipment) {
+        // ✅ 批次內的裝備也按裝備編號排序
+        batch.equipment.sort((a, b) =>
+          String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
+        );
         activeBatches[batchId] = batch;
       }
     });
 
     return res.status(200).json({
       status: "ok",
-      batches: activeBatches  // 只返回活躍的批次
+      batches: activeBatches
     });
   }
   // 如果沒有匹配的 action
