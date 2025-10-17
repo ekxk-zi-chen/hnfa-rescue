@@ -247,7 +247,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     });
   }
 
-
+  // ====== 獲取用戶列表 ======
   if (action === 'getUsers') {
     if (userRole !== '管理') {
       return res.status(403).json({ status: "error", message: "沒有權限查看用戶列表" });
@@ -273,7 +273,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: error.message });
     }
   }
-
+  // ====== 更新用戶權限 ======
   if (action === 'updateUserPermission') {
     if (userRole !== '管理') {
       return res.status(403).json({ status: "error", message: "沒有權限更新用戶權限" });
@@ -300,7 +300,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: error.message });
     }
   }
-
+  // ====== 刪除用戶 ======
   if (action === 'deleteUser') {
     if (userRole !== '管理') {
       return res.status(403).json({ status: "error", message: "沒有權限刪除用戶" });
@@ -406,6 +406,180 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     return res.status(200).json({
       status: "ok",
       message: "歷史紀錄新增成功",
+    });
+  }
+
+  // ====== 批量更新裝備狀態 ======
+  if (action === "batchUpdateEquipment") {
+    if (userRole === "一般用戶") {
+      return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
+    }
+
+    const { equipmentIds, operationType, note, operator } = body;
+
+    if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "請選擇要操作的裝備" });
+    }
+
+    const batchDate = new Date().toISOString().split('T')[0]; // 用於分組
+
+    try {
+      // 更新每個裝備的狀態
+      for (const equipmentId of equipmentIds) {
+        // 獲取舊資料
+        const { data: oldData } = await supabase
+          .from("equipment")
+          .select("*")
+          .eq("id", equipmentId)
+          .single();
+
+        if (oldData) {
+          // 生成台灣時間
+          const now = new Date();
+          const timestamp = now.toLocaleString('zh-TW', {
+            timeZone: 'Asia/Taipei',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+
+          // 更新歷史紀錄
+          const historyEntry = `[${timestamp}] ${operator} 批量${operationType}: ${note || '無備註'}`;
+          const currentHistory = oldData.歷史更新紀錄 || '';
+          const newHistory = currentHistory
+            ? `${historyEntry}\n${currentHistory}`
+            : historyEntry;
+
+          const historyLines = newHistory.split('\n').slice(0, 30);
+          const trimmedHistory = historyLines.join('\n');
+
+          // 更新裝備
+          const { error } = await supabase
+            .from("equipment")
+            .update({
+              目前狀態: operationType,
+              狀態: note || '',
+              歷史更新紀錄: trimmedHistory,
+              填表人: operator,
+              updated_at: new Date().toISOString(),
+              batch_date: batchDate // 記錄批次日期用於返隊
+            })
+            .eq("id", equipmentId);
+
+          if (error) {
+            console.error(`更新裝備 ${equipmentId} 失敗:`, error);
+          }
+        }
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: `批量${operationType}操作完成`
+      });
+
+    } catch (error) {
+      console.error("批量操作錯誤:", error);
+      return res.status(500).json({ status: "error", message: "批量操作失敗" });
+    }
+  }
+
+  // ====== 批量返隊裝備 ======
+  if (action === "batchReturnEquipment") {
+    if (userRole === "一般用戶") {
+      return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
+    }
+
+    const { equipmentIds, operator } = body;
+
+    if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "請選擇要返隊的裝備" });
+    }
+
+    try {
+      for (const equipmentId of equipmentIds) {
+        const { data: oldData } = await supabase
+          .from("equipment")
+          .select("*")
+          .eq("id", equipmentId)
+          .single();
+
+        if (oldData) {
+          // 生成台灣時間
+          const now = new Date();
+          const timestamp = now.toLocaleString('zh-TW', {
+            timeZone: 'Asia/Taipei',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+
+          // 更新歷史紀錄
+          const historyEntry = `[${timestamp}] ${operator} 批量返隊`;
+          const currentHistory = oldData.歷史更新紀錄 || '';
+          const newHistory = currentHistory
+            ? `${historyEntry}\n${currentHistory}`
+            : historyEntry;
+
+          const historyLines = newHistory.split('\n').slice(0, 30);
+          const trimmedHistory = historyLines.join('\n');
+
+          // 更新裝備狀態為在隊
+          const { error } = await supabase
+            .from("equipment")
+            .update({
+              目前狀態: '在隊',
+              狀態: '',
+              歷史更新紀錄: trimmedHistory,
+              填表人: operator,
+              updated_at: new Date().toISOString(),
+              batch_date: null // 清除批次日期
+            })
+            .eq("id", equipmentId);
+
+          if (error) {
+            console.error(`返隊裝備 ${equipmentId} 失敗:`, error);
+          }
+        }
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "批量返隊操作完成"
+      });
+
+    } catch (error) {
+      console.error("批量返隊錯誤:", error);
+      return res.status(500).json({ status: "error", message: "批量返隊失敗" });
+    }
+  }
+
+  // ====== 獲取批量記錄 ======
+  if (action === "getBatchRecords") {
+    const { recordType } = body;
+
+    // 獲取有批次日期的裝備記錄
+    const { data: records, error } = await supabase
+      .from("equipment")
+      .select("id, 器材名稱, 裝備編號, 分群組, 目前狀態, 狀態 as note, batch_date, updated_at")
+      .not("batch_date", "is", null)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.error("獲取批量記錄錯誤:", error);
+      return res.status(500).json({ status: "error", message: "獲取記錄失敗" });
+    }
+
+    return res.status(200).json({
+      status: "ok",
+      records: records || []
     });
   }
   // 如果沒有匹配的 action
