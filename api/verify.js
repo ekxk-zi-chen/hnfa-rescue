@@ -427,11 +427,14 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(400).json({ status: "error", message: "請選擇要操作的裝備" });
     }
 
-    const batchDate = new Date().toISOString();
+    // ✅ 修正：使用台灣時間的 ISO 字符串
+    const now = new Date();
+    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const batchDate = taiwanTime.toISOString();
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
-      // ✅ 先查詢所有要更新的裝備
+      // 先查詢所有要更新的裝備
       const { data: oldEquipmentList, error: fetchError } = await supabase
         .from("equipment")
         .select("*")
@@ -442,9 +445,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
       }
 
-      // ✅ 準備更新資料
+      // 準備更新資料
       const updatePromises = oldEquipmentList.map((oldData) => {
-        const now = new Date();
         const timestamp = now.toLocaleString('zh-TW', {
           timeZone: 'Asia/Taipei',
           year: 'numeric',
@@ -456,9 +458,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        // 在後端的批量返隊部分
-        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
-        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
+        const historyEntry = `[${timestamp}] ${operator} 批量${operationType}${note ? ` (${note})` : ''}`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
@@ -475,13 +475,13 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             歷史更新紀錄: trimmedHistory,
             填表人: operator,
             updated_at: new Date().toISOString(),
-            batch_date: batchDate,
+            batch_date: batchDate, // ✅ 使用標準 ISO 字符串
             batch_identifier: batchIdentifier
           })
           .eq("id", oldData.id);
       });
 
-      // ✅ 執行所有更新操作
+      // 執行所有更新操作
       const updateResults = await Promise.all(updatePromises);
 
       const hasError = updateResults.some(result => result.error);
@@ -509,7 +509,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
     }
 
-    const { equipmentIds, operator, batchId } = body; // 這裡的 batchId 就是 batch_identifier
+    const { equipmentIds, operator, batchId } = body;
 
     if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
       return res.status(400).json({ status: "error", message: "請選擇要返隊的裝備" });
@@ -541,11 +541,25 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        // ✅ 修正：使用正確的批次資訊
-        const batchIdentifier = batchId || oldData.batch_identifier;
-        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
+        // ✅ 修正：安全的日期解析
+        let batchDateDisplay = '未知日期';
+        if (oldData.batch_date) {
+          try {
+            const batchDate = new Date(oldData.batch_date);
+            if (!isNaN(batchDate.getTime())) {
+              batchDateDisplay = batchDate.toLocaleDateString('zh-TW', {
+                timeZone: 'Asia/Taipei',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              });
+            }
+          } catch (e) {
+            console.warn('批次日期解析失敗:', oldData.batch_date);
+          }
+        }
 
-        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDateDisplay})`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
