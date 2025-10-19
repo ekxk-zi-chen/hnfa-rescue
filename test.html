@@ -1080,7 +1080,9 @@
                     <div id="qrScannerContainer" style="display: none;">
                         <div style="position: relative; width: 100%; max-width: 400px; margin: 0 auto;">
                             <video id="qrVideo" width="100%" height="300"
-                                style="border: 2px solid var(--primary); border-radius: 8px;"></video>
+                                style="border: 2px solid var(--primary); border-radius: 8px; background: #000;" autoplay
+                                muted playsinline webkit-playsinline> <!-- iOS Safari 需要這個 -->
+                            </video>
                             <canvas id="qrCanvas" style="display: none;"></canvas>
                             <div
                                 style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid red; pointer-events: none;">
@@ -1088,6 +1090,7 @@
                         </div>
                         <div style="text-align: center; margin-top: 1rem; color: var(--gray-600);">
                             <p>將 QR Code 對準框內進行掃描</p>
+                            <p style="font-size: 0.8rem; color: #999;">如果相機無法啟動，請檢查瀏覽器權限設置</p>
                         </div>
                     </div>
 
@@ -3149,17 +3152,42 @@
         // 開始 QR Code 掃描
         async function startQRScanner() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                // 先檢查是否支持相機
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showToast('您的設備不支持相機功能', 'error');
+                    return;
+                }
+
+                // iOS 特定的配置
+                const constraints = {
                     video: {
                         facingMode: "environment",
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
-                    }
-                });
+                    },
+                    audio: false
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
                 qrStream = stream;
                 const video = document.getElementById('qrVideo');
+
+                // iOS 需要設置這些屬性
+                video.setAttribute('autoplay', '');
+                video.setAttribute('muted', '');
+                video.setAttribute('playsinline', ''); // 這行很重要，避免 iOS 全屏
                 video.srcObject = stream;
+
+                // 等待視頻準備好
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve).catch(e => {
+                            console.error('視頻播放失敗:', e);
+                            resolve();
+                        });
+                    };
+                });
 
                 document.getElementById('qrScannerContainer').style.display = 'block';
                 qrScanning = true;
@@ -3169,7 +3197,17 @@
 
             } catch (error) {
                 console.error('無法訪問相機:', error);
-                showToast('無法訪問相機，請確保已授予相機權限', 'error');
+
+                let errorMessage = '無法訪問相機';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = '相機權限被拒絕，請在瀏覽器設置中允許相機權限';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = '找不到相機設備';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = '您的瀏覽器不支持相機功能';
+                }
+
+                showToast(errorMessage, 'error');
             }
         }
 
@@ -3178,14 +3216,66 @@
             qrScanning = false;
 
             if (qrStream) {
-                qrStream.getTracks().forEach(track => track.stop());
+                qrStream.getTracks().forEach(track => {
+                    track.stop();
+                });
                 qrStream = null;
+            }
+
+            const video = document.getElementById('qrVideo');
+            if (video) {
+                video.srcObject = null;
             }
 
             document.getElementById('qrScannerContainer').style.display = 'none';
             document.getElementById('qrScanResult').style.display = 'none';
         }
+        // 添加相機狀態檢查
+        function checkCameraPermission() {
+            return new Promise((resolve) => {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    resolve(false);
+                    return;
+                }
 
+                // 檢查是否有相機設備
+                navigator.mediaDevices.enumerateDevices()
+                    .then(devices => {
+                        const hasCamera = devices.some(device => device.kind === 'videoinput');
+                        resolve(hasCamera);
+                    })
+                    .catch(() => resolve(false));
+            });
+        }
+        // 在顯示 QR 模式時檢查相機權限
+        async function showQRModeModal() {
+            // 先檢查相機支持
+            const hasCamera = await checkCameraPermission();
+            if (!hasCamera) {
+                showToast('您的設備沒有相機或不支持相機功能', 'error');
+                return;
+            }
+
+            // 載入用戶資料用於借用人選擇
+            loadAllUsers();
+
+            // 重置狀態
+            qrScannedEquipment.clear();
+            selectedBorrower = null;
+            document.getElementById('qrOperationType').value = '借出';
+            document.getElementById('qrNote').value = '';
+            document.getElementById('qrBorrowerSearch').value = '';
+            document.getElementById('selectedBorrower').style.display = 'none';
+            document.getElementById('qrScannedList').style.display = 'none';
+            document.getElementById('qrScannerContainer').style.display = 'none';
+            document.getElementById('qrScanResult').style.display = 'none';
+
+            // 更新顯示
+            onQROperationTypeChange();
+            updateQRScannedList();
+
+            showModal('qrModeModal');
+        }
         // QR Code 掃描循環
         function scanQRCode() {
             if (!qrScanning) return;
@@ -3194,7 +3284,8 @@
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            // 檢查視頻是否已經有數據
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -3203,10 +3294,21 @@
 
                 // 使用 jsQR 庫進行解碼
                 if (window.jsQR) {
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    try {
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
 
-                    if (code) {
-                        handleQRCodeScanned(code.data);
+                        if (code) {
+                            handleQRCodeScanned(code.data);
+                            // 掃到後暫停一下避免重複掃描
+                            setTimeout(() => {
+                                if (qrScanning) scanQRCode();
+                            }, 1000);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('QR 解碼錯誤:', e);
                     }
                 }
             }
@@ -3214,7 +3316,6 @@
             // 繼續下一幀掃描
             requestAnimationFrame(scanQRCode);
         }
-
         // 處理掃描到的 QR Code
         async function handleQRCodeScanned(qrData) {
             console.log('掃描到 QR Code:', qrData);
