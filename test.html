@@ -3199,13 +3199,16 @@
         // 開始 QR Code 掃描
         async function startQRScanner() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                const constraints = {
                     video: {
                         facingMode: "environment",
                         width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        height: { ideal: 720 },
+                        // 添加這些設置來減少螢幕閃爍
+                        frameRate: { ideal: 30, max: 30 } // 固定幀率
                     }
-                });
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
                 qrStream = stream;
                 const video = document.getElementById('qrVideo');
