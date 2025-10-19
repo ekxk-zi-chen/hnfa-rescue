@@ -3132,6 +3132,8 @@
         // 在變數區添加掃描時間控制
         let lastScanTime = 0;
         const SCAN_COOLDOWN = 300; // 0.3秒冷卻時間
+        let currentQRCode = ''; // 當前在鏡頭前的 QR Code
+
 
         // 在 adminActions 中新增 QR Code 按鈕
         document.addEventListener('DOMContentLoaded', function () {
@@ -3330,20 +3332,12 @@
         function scanQRCode() {
             if (!qrScanning) return;
 
-            const now = Date.now();
-            // 檢查是否還在冷卻時間內
-            if (now - lastScanTime < SCAN_COOLDOWN) {
-                requestAnimationFrame(scanQRCode);
-                return;
-            }
-
             const video = document.getElementById('qrVideo');
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 try {
-                    // 使用原始視頻尺寸，不要縮放！
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -3351,19 +3345,21 @@
                     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
                     if (window.jsQR) {
-                        // 使用最簡單的設置，移除所有複雜處理
                         const code = jsQR(imageData.data, canvas.width, canvas.height, {
-                            inversionAttempts: "dontInvert", // 改回預設
+                            inversionAttempts: "dontInvert",
                         });
 
                         if (code) {
-                            console.log('掃描成功:', code.data);
-                            lastScanTime = now; // 更新最後掃描時間
-                            handleQRCodeScanned(code.data);
-
-                            // 掃描成功後直接返回，避免連續掃描
-                            requestAnimationFrame(scanQRCode);
-                            return;
+                            // 如果是新的 QR Code，或是同一個但之前已經處理過了
+                            if (code.data !== currentQRCode) {
+                                console.log('掃描到新的 QR Code:', code.data);
+                                currentQRCode = code.data; // 更新當前 QR Code
+                                handleQRCodeScanned(code.data);
+                            }
+                            // 如果是同一個 QR Code，就什麼都不做
+                        } else {
+                            // 沒有掃到 QR Code，重置狀態
+                            currentQRCode = '';
                         }
                     }
                 } catch (e) {
