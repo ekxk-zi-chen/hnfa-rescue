@@ -3128,8 +3128,7 @@
         let selectedBorrower = null;
         let allUsers = [];
         let isScanning = false;
-        let lastScanTime = 0;
-        const SCAN_INTERVAL = 100; // 從300ms改為100ms，提高靈敏度
+
 
         // 在 adminActions 中新增 QR Code 按鈕
         document.addEventListener('DOMContentLoaded', function () {
@@ -3318,27 +3317,25 @@
 
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 try {
-                    // 方法1：全畫面掃描（最靈敏）
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // 使用適當的解析度平衡性能和準確性
+                    const targetWidth = 640; // 固定寬度，提高性能
+                    const targetHeight = (video.videoHeight / video.videoWidth) * targetWidth;
 
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    context.drawImage(video, 0, 0, targetWidth, targetHeight);
+
+                    const imageData = context.getImageData(0, 0, targetWidth, targetHeight);
 
                     if (window.jsQR) {
-                        const code = jsQR(imageData.data, canvas.width, canvas.height, {
-                            inversionAttempts: "attemptBoth",
+                        const code = jsQR(imageData.data, targetWidth, targetHeight, {
+                            inversionAttempts: "dontInvert", // 改回預設值
                         });
 
                         if (code) {
                             console.log('掃描成功:', code.data);
                             handleQRCodeScanned(code.data);
-
-                            // 成功後暫停一下
-                            setTimeout(() => {
-                                if (qrScanning) requestAnimationFrame(scanQRCode);
-                            }, 500);
-                            return;
+                            // 重要：不要暫停，繼續掃描！
                         }
                     }
                 } catch (e) {
@@ -3346,7 +3343,7 @@
                 }
             }
 
-            // 使用 requestAnimationFrame 保持最高幀率
+            // 直接繼續掃描，不要暫停
             if (qrScanning) {
                 requestAnimationFrame(scanQRCode);
             }
