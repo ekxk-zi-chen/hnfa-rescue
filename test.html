@@ -3129,6 +3129,9 @@
         let allUsers = [];
         let isScanning = false;
         let debugMode = true; // 設為 true 來啟用調試
+        // 在變數區添加掃描時間控制
+        let lastScanTime = 0;
+        const SCAN_COOLDOWN = 300; // 0.3秒冷卻時間
 
         // 在 adminActions 中新增 QR Code 按鈕
         document.addEventListener('DOMContentLoaded', function () {
@@ -3327,13 +3330,20 @@
         function scanQRCode() {
             if (!qrScanning) return;
 
+            const now = Date.now();
+            // 檢查是否還在冷卻時間內
+            if (now - lastScanTime < SCAN_COOLDOWN) {
+                requestAnimationFrame(scanQRCode);
+                return;
+            }
+
             const video = document.getElementById('qrVideo');
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 try {
-                    // 保持原始尺寸
+                    // 使用原始視頻尺寸，不要縮放！
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -3341,27 +3351,19 @@
                     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
                     if (window.jsQR) {
+                        // 使用最簡單的設置，移除所有複雜處理
                         const code = jsQR(imageData.data, canvas.width, canvas.height, {
-                            inversionAttempts: "dontInvert",
+                            inversionAttempts: "dontInvert", // 改回預設
                         });
 
                         if (code) {
-                            console.log('✅ 掃描成功:', code.data);
-                            if (debugMode) {
-                                console.log('QR Code 位置:', code.location);
-                                // 在畫布上標記掃描到的 QR Code
-                                drawQRCodeLocation(context, code.location);
-                            }
+                            console.log('掃描成功:', code.data);
+                            lastScanTime = now; // 更新最後掃描時間
                             handleQRCodeScanned(code.data);
-                        } else if (debugMode) {
-                            // 每5秒輸出一次調試信息
-                            if (Math.random() < 0.05) {
-                                console.log('🔍 掃描中...', {
-                                    解析度: `${canvas.width}x${canvas.height}`,
-                                    視頻狀態: video.readyState,
-                                    亮度: calculateImageBrightness(imageData)
-                                });
-                            }
+
+                            // 掃描成功後直接返回，避免連續掃描
+                            requestAnimationFrame(scanQRCode);
+                            return;
                         }
                     }
                 } catch (e) {
