@@ -3128,7 +3128,7 @@
         let selectedBorrower = null;
         let allUsers = [];
         let isScanning = false;
-
+        let debugMode = true; // 設為 true 來啟用調試
 
         // 在 adminActions 中新增 QR Code 按鈕
         document.addEventListener('DOMContentLoaded', function () {
@@ -3199,28 +3199,42 @@
         // 開始 QR Code 掃描
         async function startQRScanner() {
             try {
+                // 使用更適合掃描的相機設置
                 const constraints = {
                     video: {
                         facingMode: "environment",
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        // 添加這些設置來減少螢幕閃爍
-                        frameRate: { ideal: 30, max: 30 } // 固定幀率
+                        // 移除固定解析度，讓瀏覽器自動選擇最佳設置
+                        width: { ideal: 1920 }, // 提高解析度
+                        height: { ideal: 1080 },
+                        aspectRatio: { ideal: 1.7777777778 }, // 16:9
+                        // 優化對焦和曝光
+                        focusMode: "continuous",
+                        exposureMode: "continuous"
                     }
                 };
+
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
                 qrStream = stream;
                 const video = document.getElementById('qrVideo');
 
-                // iOS 需要這些屬性
+                // iOS 屬性
                 video.setAttribute('autoplay', '');
                 video.setAttribute('muted', '');
                 video.setAttribute('playsinline', '');
                 video.srcObject = stream;
 
+                // 等待視頻真正開始播放
+                await new Promise((resolve) => {
+                    video.onplaying = resolve;
+                });
+
                 document.getElementById('qrScannerContainer').style.display = 'block';
+                // 顯示掃描提示
+                showScanningTips();
                 qrScanning = true;
+
+                console.log('相機啟動成功，解析度:', video.videoWidth, 'x', video.videoHeight);
 
                 // 開始掃描循環
                 scanQRCode();
@@ -3230,7 +3244,6 @@
                 showToast('無法訪問相機，請確保已授予相機權限', 'error');
             }
         }
-
         // 停止 QR Code 掃描
         function stopQRScanner() {
             console.log('停止 QR 掃描器');
@@ -3318,25 +3331,37 @@
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 try {
-                    // 使用較高解析度來捕捉更多細節
-                    canvas.width = 800;
-                    canvas.height = 600;
-                    context.drawImage(video, 0, 0, 800, 600);
+                    // 保持原始尺寸
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                    // 對圖像進行預處理來減少螢幕影響
-                    const imageData = context.getImageData(0, 0, 800, 600);
-                    const processedImage = preprocessImageForScreen(imageData);
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
                     if (window.jsQR) {
-                        const code = jsQR(processedImage.data, 800, 600, {
-                            inversionAttempts: "attemptBoth", // 嘗試正反兩種
+                        const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                            inversionAttempts: "dontInvert",
                         });
 
                         if (code) {
-                            console.log('掃描成功:', code.data);
+                            console.log('✅ 掃描成功:', code.data);
+                            if (debugMode) {
+                                console.log('QR Code 位置:', code.location);
+                                // 在畫布上標記掃描到的 QR Code
+                                drawQRCodeLocation(context, code.location);
+                            }
                             handleQRCodeScanned(code.data);
+                        } else if (debugMode) {
+                            // 每5秒輸出一次調試信息
+                            if (Math.random() < 0.05) {
+                                console.log('🔍 掃描中...', {
+                                    解析度: `${canvas.width}x${canvas.height}`,
+                                    視頻狀態: video.readyState,
+                                    亮度: calculateImageBrightness(imageData)
+                                });
+                            }
                         }
                     }
                 } catch (e) {
@@ -3346,24 +3371,55 @@
 
             requestAnimationFrame(scanQRCode);
         }
-        function preprocessImageForScreen(imageData) {
+        // 計算圖像平均亮度（調試用）
+        function calculateImageBrightness(imageData) {
+            let total = 0;
             const data = imageData.data;
-
-            // 簡單的對比度增強
             for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i + 1];
-                const b = data[i + 2];
-
-                // 轉為灰度並增強對比度
-                const gray = (r + g + b) / 3;
-                const contrast = gray < 128 ? gray * 0.8 : gray * 1.2;
-
-                data[i] = data[i + 1] = data[i + 2] = Math.min(255, Math.max(0, contrast));
+                total += (data[i] + data[i + 1] + data[i + 2]) / 3;
             }
-
-            return imageData;
+            return Math.round(total / (data.length / 4));
         }
+
+        // 在畫布上標記 QR Code 位置（調試用）
+        function drawQRCodeLocation(context, location) {
+            context.strokeStyle = '#00ff00';
+            context.lineWidth = 2;
+            context.strokeRect(
+                location.topLeftCorner.x,
+                location.topLeftCorner.y,
+                location.bottomRightCorner.x - location.topLeftCorner.x,
+                location.bottomRightCorner.y - location.topLeftCorner.y
+            );
+        }
+        // 在掃描界面顯示實時提示
+        function showScanningTips() {
+            const tipsDiv = document.createElement('div');
+            tipsDiv.id = 'scanningTips';
+            tipsDiv.style.cssText = `
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        z-index: 100;
+    `;
+            tipsDiv.innerHTML = `
+        <strong>掃描提示：</strong>
+        <div>• 距離螢幕 15-25 公分</div>
+        <div>• 對準紅色框線</div>
+        <div>• 保持手機穩定</div>
+        <div id="debugInfo"></div>
+    `;
+
+            document.getElementById('qrScannerContainer').appendChild(tipsDiv);
+        }
+
+
         // 處理掃描到的 QR Code
         async function handleQRCodeScanned(qrData) {
             console.log('掃描到 QR Code:', qrData);
