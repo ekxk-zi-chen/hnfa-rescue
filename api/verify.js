@@ -658,6 +658,59 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       batches: activeBatches
     });
   }
+  // ====== 處理 QR Code 掃描 ======
+  if (action === "processQRCode") {
+    const { tableName, uuid } = body;
+
+    console.log(`[QR Code] 處理請求: ${tableName}_${uuid}`);
+
+    if (tableName !== 'equipment') {
+      return res.status(400).json({
+        status: "error",
+        message: `不支援的資料表: ${tableName}`
+      });
+    }
+
+    try {
+      // 根據 UUID 查找裝備
+      // 這裡假設 UUID 是裝備的 id，您可以根據實際情況調整
+      const { data: equipment, error } = await supabase
+        .from("equipment")
+        .select("*")
+        .eq("id", uuid)
+        .single();
+
+      if (error) {
+        console.error("QR Code 查詢裝備錯誤:", error);
+        return res.status(404).json({
+          status: "error",
+          message: "裝備不存在"
+        });
+      }
+
+      if (!equipment) {
+        return res.status(404).json({
+          status: "error",
+          message: "裝備不存在"
+        });
+      }
+
+      console.log(`[QR Code] 找到裝備: ${equipment.器材名稱}`);
+
+      return res.status(200).json({
+        status: "ok",
+        equipment: equipment,
+        message: "掃描成功"
+      });
+
+    } catch (error) {
+      console.error("QR Code 處理錯誤:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "QR Code 處理失敗"
+      });
+    }
+  }
   // 如果沒有匹配的 action
   return res.status(400).json({ status: "error", message: "Unknown action" });
 }
