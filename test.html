@@ -3128,6 +3128,8 @@
         let selectedBorrower = null;
         let allUsers = [];
         let isScanning = false;
+        let lastScanTime = 0;
+        const SCAN_INTERVAL = 100; // 從300ms改為100ms，提高靈敏度
 
         // 在 adminActions 中新增 QR Code 按鈕
         document.addEventListener('DOMContentLoaded', function () {
@@ -3308,41 +3310,58 @@
         }
         // QR Code 掃描循環
         function scanQRCode() {
-            if (!qrScanning || isScanning) return;
+            if (!qrScanning) return;
 
-            isScanning = true;
+            const now = Date.now();
+            if (now - lastScanTime < SCAN_INTERVAL) {
+                requestAnimationFrame(scanQRCode);
+                return;
+            }
 
             const video = document.getElementById('qrVideo');
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                try {
+                    // 優化：只掃描中心區域，提高性能
+                    const scanSize = Math.min(video.videoWidth, video.videoHeight) * 0.7;
+                    const x = (video.videoWidth - scanSize) / 2;
+                    const y = (video.videoHeight - scanSize) / 2;
 
-                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    canvas.width = scanSize;
+                    canvas.height = scanSize;
+                    context.drawImage(video, x, y, scanSize, scanSize, 0, 0, scanSize, scanSize);
 
-                if (window.jsQR) {
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "dontInvert",
-                    });
+                    const imageData = context.getImageData(0, 0, scanSize, scanSize);
 
-                    if (code) {
-                        handleQRCodeScanned(code.data);
-                        isScanning = false;
-                        return;
+                    if (window.jsQR) {
+                        const code = jsQR(imageData.data, scanSize, scanSize, {
+                            inversionAttempts: "attemptBoth", // 嘗試兩種反轉模式
+                        });
+
+                        if (code) {
+                            console.log('掃描成功:', code.data);
+                            handleQRCodeScanned(code.data);
+
+                            // 掃到後暫停掃描1秒，避免重複掃描
+                            setTimeout(() => {
+                                if (qrScanning) {
+                                    lastScanTime = Date.now();
+                                    requestAnimationFrame(scanQRCode);
+                                }
+                            }, 1000);
+                            return;
+                        }
                     }
+                } catch (e) {
+                    console.error('掃描錯誤:', e);
                 }
             }
 
-            isScanning = false;
-
-            if (qrScanning) {
-                setTimeout(scanQRCode, 300);
-            }
+            lastScanTime = now;
+            requestAnimationFrame(scanQRCode);
         }
-
         // 處理掃描到的 QR Code
         async function handleQRCodeScanned(qrData) {
             console.log('掃描到 QR Code:', qrData);
