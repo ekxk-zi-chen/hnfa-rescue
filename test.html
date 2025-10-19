@@ -3312,45 +3312,32 @@
         function scanQRCode() {
             if (!qrScanning) return;
 
-            const now = Date.now();
-            if (now - lastScanTime < SCAN_INTERVAL) {
-                requestAnimationFrame(scanQRCode);
-                return;
-            }
-
             const video = document.getElementById('qrVideo');
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
             if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                 try {
-                    // 優化：只掃描中心區域，提高性能
-                    const scanSize = Math.min(video.videoWidth, video.videoHeight) * 0.7;
-                    const x = (video.videoWidth - scanSize) / 2;
-                    const y = (video.videoHeight - scanSize) / 2;
+                    // 方法1：全畫面掃描（最靈敏）
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                    canvas.width = scanSize;
-                    canvas.height = scanSize;
-                    context.drawImage(video, x, y, scanSize, scanSize, 0, 0, scanSize, scanSize);
-
-                    const imageData = context.getImageData(0, 0, scanSize, scanSize);
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
                     if (window.jsQR) {
-                        const code = jsQR(imageData.data, scanSize, scanSize, {
-                            inversionAttempts: "attemptBoth", // 嘗試兩種反轉模式
+                        const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                            inversionAttempts: "attemptBoth",
                         });
 
                         if (code) {
                             console.log('掃描成功:', code.data);
                             handleQRCodeScanned(code.data);
 
-                            // 掃到後暫停掃描1秒，避免重複掃描
+                            // 成功後暫停一下
                             setTimeout(() => {
-                                if (qrScanning) {
-                                    lastScanTime = Date.now();
-                                    requestAnimationFrame(scanQRCode);
-                                }
-                            }, 1000);
+                                if (qrScanning) requestAnimationFrame(scanQRCode);
+                            }, 500);
                             return;
                         }
                     }
@@ -3359,8 +3346,10 @@
                 }
             }
 
-            lastScanTime = now;
-            requestAnimationFrame(scanQRCode);
+            // 使用 requestAnimationFrame 保持最高幀率
+            if (qrScanning) {
+                requestAnimationFrame(scanQRCode);
+            }
         }
         // 處理掃描到的 QR Code
         async function handleQRCodeScanned(qrData) {
