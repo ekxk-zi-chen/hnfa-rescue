@@ -3318,27 +3318,25 @@
             const canvas = document.getElementById('qrCanvas');
             const context = canvas.getContext('2d');
 
-            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 try {
-                    // 使用適當的解析度平衡性能和準確性
-                    const targetWidth = 640; // 固定寬度，提高性能
-                    const targetHeight = (video.videoHeight / video.videoWidth) * targetWidth;
+                    // 使用較高解析度來捕捉更多細節
+                    canvas.width = 800;
+                    canvas.height = 600;
+                    context.drawImage(video, 0, 0, 800, 600);
 
-                    canvas.width = targetWidth;
-                    canvas.height = targetHeight;
-                    context.drawImage(video, 0, 0, targetWidth, targetHeight);
-
-                    const imageData = context.getImageData(0, 0, targetWidth, targetHeight);
+                    // 對圖像進行預處理來減少螢幕影響
+                    const imageData = context.getImageData(0, 0, 800, 600);
+                    const processedImage = preprocessImageForScreen(imageData);
 
                     if (window.jsQR) {
-                        const code = jsQR(imageData.data, targetWidth, targetHeight, {
-                            inversionAttempts: "dontInvert", // 改回預設值
+                        const code = jsQR(processedImage.data, 800, 600, {
+                            inversionAttempts: "attemptBoth", // 嘗試正反兩種
                         });
 
                         if (code) {
                             console.log('掃描成功:', code.data);
                             handleQRCodeScanned(code.data);
-                            // 重要：不要暫停，繼續掃描！
                         }
                     }
                 } catch (e) {
@@ -3346,10 +3344,25 @@
                 }
             }
 
-            // 直接繼續掃描，不要暫停
-            if (qrScanning) {
-                requestAnimationFrame(scanQRCode);
+            requestAnimationFrame(scanQRCode);
+        }
+        function preprocessImageForScreen(imageData) {
+            const data = imageData.data;
+
+            // 簡單的對比度增強
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                // 轉為灰度並增強對比度
+                const gray = (r + g + b) / 3;
+                const contrast = gray < 128 ? gray * 0.8 : gray * 1.2;
+
+                data[i] = data[i + 1] = data[i + 2] = Math.min(255, Math.max(0, contrast));
             }
+
+            return imageData;
         }
         // 處理掃描到的 QR Code
         async function handleQRCodeScanned(qrData) {
