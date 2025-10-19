@@ -760,6 +760,44 @@
             position: relative;
         }
 
+        /* 添加 iOS 特定的視頻樣式 */
+        #qrVideo {
+            background: #000;
+            object-fit: cover;
+            /* 確保視頻填滿容器 */
+        }
+
+        /* 掃描區域響應式設計 */
+        @media (max-width: 768px) {
+            #qrScannerContainer {
+                max-width: 100%;
+            }
+
+            #qrVideo {
+                height: 250px;
+                /* 在手機上調整高度 */
+            }
+        }
+
+        /* 加載指示器 */
+        .scanner-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .scanner-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
         /* 掃描框動畫 */
         @keyframes scanLine {
             0% {
@@ -1075,6 +1113,10 @@
                     <div style="text-align: center; margin-bottom: 1rem;">
                         <button class="btn btn-primary" onclick="startQRScanner()">開始掃描</button>
                         <button class="btn btn-secondary" onclick="stopQRScanner()">停止掃描</button>
+                        <button class="btn btn-secondary btn-sm" onclick="showCameraHelp()"
+                            style="margin-left: 0.5rem; font-size: 0.8rem;">
+                            權限幫助
+                        </button>
                     </div>
 
                     <div id="qrScannerContainer" style="display: none;">
@@ -3148,17 +3190,36 @@
             // 停止之前的掃描
             stopQRScanner();
         }
-
+        // 檢測 iOS 設備
+        function isIOS() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        }
         // 開始 QR Code 掃描
         async function startQRScanner() {
             try {
+                // iOS 提示
+                if (isIOS()) {
+                    const confirmed = confirm('在 iOS 上，請確保：\n1. 已允許相機權限\n2. 使用 Safari 瀏覽器\n3. 沒有其他應用正在使用相機\n\n確定要開始掃描嗎？');
+                    if (!confirmed) return;
+                }
+
                 // 先檢查是否支持相機
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     showToast('您的設備不支持相機功能', 'error');
                     return;
                 }
 
-                // iOS 特定的配置
+                // 顯示加載狀態
+                const videoContainer = document.getElementById('qrScannerContainer');
+                videoContainer.innerHTML = `
+            <div class="scanner-loading" style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                <div class="spinner"></div>
+                <span>正在啟動相機...</span>
+            </div>
+        `;
+                videoContainer.style.display = 'block';
+
+                // 相機配置
                 const constraints = {
                     video: {
                         facingMode: "environment",
@@ -3171,25 +3232,44 @@
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
                 qrStream = stream;
-                const video = document.getElementById('qrVideo');
 
-                // iOS 需要設置這些屬性
-                video.setAttribute('autoplay', '');
-                video.setAttribute('muted', '');
-                video.setAttribute('playsinline', ''); // 這行很重要，避免 iOS 全屏
+                // 恢復視頻顯示
+                videoContainer.innerHTML = `
+            <div style="position: relative; width: 100%; max-width: 400px; margin: 0 auto;">
+                <video id="qrVideo" 
+                       width="100%" 
+                       height="300" 
+                       style="border: 2px solid var(--primary); border-radius: 8px; background: #000;"
+                       autoplay 
+                       muted 
+                       playsinline 
+                       webkit-playsinline>
+                </video>
+                <canvas id="qrCanvas" style="display: none;"></canvas>
+                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid red; pointer-events: none;"></div>
+            </div>
+            <div style="text-align: center; margin-top: 1rem; color: var(--gray-600);">
+                <p>將 QR Code 對準框內進行掃描</p>
+            </div>
+        `;
+
+                const video = document.getElementById('qrVideo');
                 video.srcObject = stream;
 
                 // 等待視頻準備好
-                await new Promise((resolve) => {
+                await new Promise((resolve, reject) => {
+                    const timer = setTimeout(() => {
+                        reject(new Error('相機啟動超時'));
+                    }, 5000);
+
                     video.onloadedmetadata = () => {
-                        video.play().then(resolve).catch(e => {
-                            console.error('視頻播放失敗:', e);
-                            resolve();
-                        });
+                        clearTimeout(timer);
+                        video.play().then(resolve).catch(reject);
                     };
+
+                    video.onerror = reject;
                 });
 
-                document.getElementById('qrScannerContainer').style.display = 'block';
                 qrScanning = true;
 
                 // 開始掃描循環
@@ -3200,17 +3280,19 @@
 
                 let errorMessage = '無法訪問相機';
                 if (error.name === 'NotAllowedError') {
-                    errorMessage = '相機權限被拒絕，請在瀏覽器設置中允許相機權限';
+                    errorMessage = '相機權限被拒絕，請在瀏覽器設置中允許相機權限，或點擊"權限幫助"查看詳細說明';
                 } else if (error.name === 'NotFoundError') {
                     errorMessage = '找不到相機設備';
                 } else if (error.name === 'NotSupportedError') {
                     errorMessage = '您的瀏覽器不支持相機功能';
+                } else if (error.message === '相機啟動超時') {
+                    errorMessage = '相機啟動超時，請重試';
                 }
 
                 showToast(errorMessage, 'error');
+                document.getElementById('qrScannerContainer').style.display = 'none';
             }
         }
-
         // 停止 QR Code 掃描
         function stopQRScanner() {
             qrScanning = false;
@@ -3230,6 +3312,14 @@
             document.getElementById('qrScannerContainer').style.display = 'none';
             document.getElementById('qrScanResult').style.display = 'none';
         }
+        // 添加權限幫助函數
+        function showCameraHelp() {
+            const helpText = isIOS() ?
+                'iOS 相機權限設置：\n1. 打開"設置"應用\n2. 找到"Safari"\n3. 點擊"相機"\n4. 選擇"允許"' :
+                'Android/其他設備：\n1. 點擊地址欄左側的鎖形圖標或信息圖標\n2. 找到"相機"權限\n3. 選擇"允許"';
+
+            alert(helpText);
+        }
         // 添加相機狀態檢查
         function checkCameraPermission() {
             return new Promise((resolve) => {
@@ -3247,6 +3337,7 @@
                     .catch(() => resolve(false));
             });
         }
+
         // 在顯示 QR 模式時檢查相機權限
         async function showQRModeModal() {
             // 先檢查相機支持
