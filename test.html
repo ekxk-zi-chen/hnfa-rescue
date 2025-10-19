@@ -746,6 +746,41 @@
                 opacity: 0.3;
             }
         }
+
+        /* QR Code 掃描樣式 */
+        .suggestion-item:hover {
+            background-color: var(--gray-200);
+        }
+
+        #qrScannedList {
+            transition: all 0.3s ease;
+        }
+
+        #qrScannerContainer {
+            position: relative;
+        }
+
+        /* 掃描框動畫 */
+        @keyframes scanLine {
+            0% {
+                top: 0;
+            }
+
+            100% {
+                top: 100%;
+            }
+        }
+
+        #qrScannerContainer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(to right, transparent, var(--primary), transparent);
+            animation: scanLine 2s linear infinite;
+        }
     </style>
 </head>
 
