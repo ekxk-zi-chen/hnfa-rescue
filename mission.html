@@ -1067,7 +1067,7 @@
                         ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
                             <button class="btn btn-danger btn-sm" onclick="cancelJoin('${mission.id}')">取消報名</button>
                         ` : ''}
-                        // 如果你被指派，卡片上會有「回報進度」按鈕
+                        <!-- 如果你被指派，卡片上會有「回報進度」按鈕 -->
                         ${myParticipation && myParticipation.is_assigned && !isCompleted ? `
                             <button class="btn btn-primary btn-sm" onclick="showProgressModal('${mission.id}')">
                                 回報進度
