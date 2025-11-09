@@ -649,22 +649,20 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   // ====== 取得所有任務 ======
   if (action === 'getMissions') {
     try {
+      // 先取得任務和參與者
       const { data: missions, error } = await supabase
         .from('missions')
         .select(`
           *,
           participants:mission_participants(
+            id,
             user_id,
             display_name,
             is_assigned,
             assigned_by,
             assigned_at,
             joined_at,
-            progress_history:mission_progress(
-              status,
-              note,
-              timestamp
-            )
+            completed_at
           )
         `)
         .order('created_at', { ascending: false });
@@ -672,6 +670,28 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       if (error) {
         console.error('取得任務錯誤:', error);
         return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
+      }
+
+      // 為每個任務的參與者加載進度記錄
+      if (missions && missions.length > 0) {
+        for (const mission of missions) {
+          if (mission.participants && mission.participants.length > 0) {
+            // 一次性取得這個任務的所有進度
+            const { data: allProgress } = await supabase
+              .from('mission_progress')
+              .select('*')
+              .eq('mission_id', mission.id)
+              .order('timestamp', { ascending: false });
+
+            // 將進度分配給對應的參與者
+            mission.participants = mission.participants.map(participant => ({
+              ...participant,
+              progress_history: allProgress 
+                ? allProgress.filter(p => p.user_id === participant.user_id)
+                : []
+            }));
+          }
+        }
       }
 
       return res.status(200).json({
