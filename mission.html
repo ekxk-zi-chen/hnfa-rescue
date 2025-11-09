@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>花蓮特搜任務派遣系統</title>
+    <style>
+        :root {
+            --primary: #00C300;
+            --primary-dark: #009900;
+            --secondary: #0084ff;
+            --accent: #ff6b35;
+            --danger: #f44336;
+            --warning: #ff9800;
+            --success: #4caf50;
+            --info: #2196f3;
+            --dark: #1a1a1a;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-600: #6c757d;
+            --gray-800: #343a40;
+            --gray-900: #212529;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--gray-900);
+            padding-bottom: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .back-btn {
+            background: var(--gray-200);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: var(--gray-300);
+            transform: translateX(-4px);
+        }
+
+        .header h1 {
+            color: var(--primary-dark);
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .user-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 195, 0, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-700);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-300);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        .tabs {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 0.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 0.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: transparent;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--gray-600);
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .mission-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary);
+        }
+
+        .mission-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .mission-card.urgent {
+            border-left-color: var(--danger);
+        }
+
+        .mission-card.completed {
+            opacity: 0.7;
+            border-left-color: var(--gray-600);
+        }
+
+        .mission-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .mission-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            flex: 1;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-active {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-recruiting {
+            background: #2196f3;
+            color: white;
+        }
+
+        .status-completed {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .status-urgent {
+            background: #f44336;
+            color: white;
+            animation: blink 1.5s infinite;
+        }
+
+        .mission-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+
+        .info-icon {
+            font-size: 1.1rem;
+        }
+
+        .participant-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .participant-chip {
+            background: var(--gray-100);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .participant-chip.assigned {
+            background: rgba(0, 195, 0, 0.1);
+            color: var(--primary-dark);
+            border: 1px solid var(--primary);
+        }
+
+        .mission-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalShow 0.3s ease;
+        }
+
+        @keyframes modalShow {
+            from {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-600);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--gray-300);
+            border-radius: 8px;
+            transition: border-color 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .member-selector {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .member-item {
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .member-item:hover {
+            background: var(--gray-100);
+        }
+
+        .member-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+
+        .progress-section {
+            background: var(--gray-100);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .progress-item {
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--info);
+        }
+
+        .progress-item.completed {
+            border-left-color: var(--success);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-time {
+            font-size: 0.75rem;
+            color: var(--gray-600);
+        }
+
+        .progress-content {
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--gray-600);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--gray-600);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--gray-200);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast-success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast-error {
+            border-left: 4px solid var(--danger);
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-left {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .mission-info {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <button class="back-btn" onclick="goBack()">←</button>
+                <h1>📋 任務派遣系統</h1>
+            </div>
+            <div class="user-info">
+                <div class="user-badge" id="userRole">載入中...</div>
+                <span id="userName">載入中...</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('active')">進行中任務</button>
+            <button class="tab-btn" onclick="switchTab('recruiting')">報名中案件</button>
+            <button class="tab-btn" onclick="switchTab('history')">歷史記錄</button>
+            <button class="tab-btn" onclick="switchTab('personal')">我的任務</button>
+        </div>
+
+        <div id="adminActions" style="margin-bottom: 1.5rem; display: none;">
+            <button class="btn btn-primary" onclick="showCreateMissionModal()">+ 建立新案件</button>
+            <button class="btn btn-secondary" onclick="showMemberStatsModal()">成員統計</button>
+        </div>
+
+        <div id="activeTab" class="tab-content active">
+            <div id="activeMissions"></div>
+        </div>
+
+        <div id="recruitingTab" class="tab-content">
+            <div id="recruitingMissions"></div>
+        </div>
+
+        <div id="historyTab" class="tab-content">
+            <div id="historyMissions"></div>
+        </div>
+
+        <div id="personalTab" class="tab-content">
+            <div id="personalMissions"></div>
+        </div>
+    </div>
+
+    <!-- 建立任務 Modal -->
+    <div id="createMissionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">建立新案件</h3>
+                <button class="close" onclick="closeModal('createMissionModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createMissionForm">
+                    <div class="form-group">
+                        <label for="missionTitle">案件名稱 *</label>
+                        <input type="text" id="missionTitle" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="missionType">任務類型 *</label>
+                        <select id="missionType" class="form-control" required>
+                            <option value="訓練">訓練</option>
+                            <option value="勤務">勤務</option>
+                            <option value="救援">救援</option>
+                            <option value="演習">演習</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="missionDescription">任務描述</label>
+                        <textarea id="missionDescription" class="form-control"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="missionDate">任務日期 *</label>
+                        <input type="datetime-local" id="missionDate" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="recruitmentDeadline">報名截止時間</label>
+                        <input type="datetime-local" id="recruitmentDeadline" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="isUrgent"> 緊急任務
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="allowRecruitment"> 開放報名
+                        </label>
+                    </div>
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('createMissionModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">建立</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 指派人員 Modal -->
+    <div id="assignModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">指派人員</h3>
+                <button class="close" onclick="closeModal('assignModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>選擇成員</label>
+                    <div id="memberSelector" class="member-selector"></div>
+                </div>
+                <div class="form-group">
+                    <label for="assignNote">指派說明</label>
+                    <textarea id="assignNote" class="form-control"></textarea>
+                </div>
+                <div style="text-align: right; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('assignModal')">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmAssign()" style="margin-left: 0.5rem;">確認指派</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 回報進度 Modal -->
+    <div id="progressModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">回報任務進度</h3>
+                <button class="close" onclick="closeModal('progressModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="progressStatus">任務狀態 *</label>
+                    <select id="progressStatus" class="form-control" required>
+                        <option value="進行中">進行中</option>
+                        <option value="已完成">已完成</option>
+                        <option value="遇到困難">遇到困難</option>
+                        <option value="需要支援">需要支援</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="progressNote">進度說明 *</label>
+                    <textarea id="progressNote" class="form-control" required></textarea>
+                </div>
+                <div style="text-align: right; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('progressModal')">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="submitProgress()" style="margin-left: 0.5rem;">提交</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast">
+        <div id="toastMessage"></div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
+            SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
+        };
+
+        let currentUser = null;
+        let allMissions = [];
+        let allMembers = [];
+        let currentMissionId = null;
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            await initializeApp();
+        });
+
+        async function initializeApp() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                if (!sessionToken) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                await verifyUser(sessionToken);
+                await loadMissions();
+                await loadMembers();
+
+                setupEventListeners();
+
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showToast('系統載入失敗', 'error');
+                setTimeout(() => window.location.href = 'index.html', 2000);
+            }
+        }
+
+        async function verifyUser(sessionToken) {
+            const response = await fetch(CONFIG.API_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionToken })
+            });
+
+            if (!response.ok) throw new Error('驗證失敗');
+
+            const data = await response.json();
+            if (data.status !== 'ok') throw new Error('用戶驗證失敗');
+
+            currentUser = {
+                userId: data.userId,
+                displayName: data.displayName,
+                role: data.role || '一般用戶'
+            };
+
+            document.getElementById('userName').textContent = currentUser.displayName;
+            document.getElementById('userRole').textContent = currentUser.role;
+
+            if (currentUser.role === '管理') {
+                document.getElementById('adminActions').style.display = 'block';
+            }
+        }
+
+        async function loadMissions() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMissions',
+                        sessionToken
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        allMissions = data.missions || [];
+                        console.log('成功載入任務:', allMissions.length);
+                        renderMissions();
+                    }
+                } else {
+                    throw new Error('載入任務失敗');
+                }
+            } catch (error) {
+                console.error('載入任務失敗:', error);
+                showToast('載入任務失敗', 'error');
+            }
+        }
+
+        async function loadMembers() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMembers',
+                        sessionToken
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        allMembers = data.members || [];
+                    }
+                }
+            } catch (error) {
+                console.error('載入成員失敗:', error);
+            }
+        }
+
+        function renderMissions() {
+            const activeMissions = allMissions.filter(m => m.status === 'active');
+            const recruitingMissions = allMissions.filter(m => m.allow_recruitment && !m.recruitment_closed);
+            const historyMissions = allMissions.filter(m => m.status === 'completed');
+            const personalMissions = allMissions.filter(m => 
+                m.participants?.some(p => p.user_id === currentUser.userId)
+            );
+
+            renderMissionList('activeMissions', activeMissions);
+            renderMissionList('recruitingMissions', recruitingMissions);
+            renderMissionList('historyMissions', historyMissions);
+            renderMissionList('personalMissions', personalMissions);
+        }
+
+        function renderMissionList(containerId, missions) {
+            const container = document.getElementById(containerId);
+            
+            if (missions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>目前沒有任務</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = missions.map(mission => createMissionCard(mission)).join('');
+        }
+
+        function createMissionCard(mission) {
+            const isUrgent = mission.is_urgent;
+            const statusClass = mission.status === 'completed' ? 'completed' : (isUrgent ? 'urgent' : '');
+            const statusBadge = mission.status === 'completed' ? 'status-completed' : 
+                               (mission.allow_recruitment ? 'status-recruiting' : 'status-active');
+            const statusText = mission.status === 'completed' ? '已完成' :
+                              (mission.allow_recruitment ? '報名中' : '進行中');
+
+            const participants = mission.participants || [];
+            const myParticipation = participants.find(p => p.user_id === currentUser.userId);
+            
+            return `
+                <div class="mission-card ${statusClass}">
+                    <div class="mission-header">
+                        <div class="mission-title">${mission.mission_title}</div>
+                        <div>
+                            <span class="status-badge ${statusBadge} ${isUrgent ? 'status-urgent' : ''}">${statusText}</span>
+                        </div>
+                    </div>
+                    <div class="mission-info">
+                        <div class="info-item">
+                            <span class="info-icon">📅</span>
+                            ${new Date(mission.mission_date).toLocaleString('zh-TW')}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-icon">📝</span>
+                            ${mission.mission_type}
+                        </div>
+                        <div class="info-item">
+                            <span class="info-icon">👤</span>
+                            發起人: ${mission.created_by}
+                        </div>
+                        ${mission.recruitment_deadline ? `
+                            <div class="info-item">
+                                <span class="info-icon">⏰</span>
+                                截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${mission.mission_description ? `
+                        <div style="margin: 1rem 0; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">
+                            ${mission.mission_description}
+                        </div>
+                    ` : ''}
+                    ${participants.length > 0 ? `
+                        <div class="participant-list">
+                            ${participants.map(p => `
+                                <div class="participant-chip ${p.is_assigned ? 'assigned' : ''}">
+                                    ${p.display_name} ${p.is_assigned ? '(指派)' : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    ${myParticipation && myParticipation.progress_history ? `
+                        <div class="progress-section">
+                            <strong>任務進度</strong>
+                            ${myParticipation.progress_history.map(p => `
+                                <div class="progress-item ${p.status === '已完成' ? 'completed' : ''}">
+                                    <div class="progress-header">
+                                        <span><strong>${p.status}</strong></span>
+                                        <span class="progress-time">${new Date(p.timestamp).toLocaleString('zh-TW')}</span>
+                                    </div>
+                                    <div class="progress-content">${p.note}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    <div class="mission-actions">
+                        ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation ? `
+                            <button class="btn btn-primary btn-sm" onclick="joinMission('${mission.id}')">我要報名</button>
+                        ` : ''}
+                        ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed ? `
+                            <button class="btn btn-danger btn-sm" onclick="cancelJoin('${mission.id}')">取消報名</button>
+                        ` : ''}
+                        ${myParticipation && myParticipation.is_assigned && mission.status !== 'completed' ? `
+                            <button class="btn btn-primary btn-sm" onclick="showProgressModal('${mission.id}')">回報進度</button>
+                        ` : ''}
+                        ${currentUser.role === '管理' ? `
+                            <button class="btn btn-secondary btn-sm" onclick="showAssignModal('${mission.id}')">指派人員</button>
+                            <button class="btn btn-secondary btn-sm" onclick="editMission('${mission.id}')">編輯</button>
+                            ${mission.allow_recruitment && !mission.recruitment_closed ? `
+                                <button class="btn btn-warning btn-sm" onclick="closeRecruitment('${mission.id}')">關閉報名</button>
+                            ` : ''}
+                            ${mission.status !== 'completed' ? `
+                                <button class="btn btn-success btn-sm" onclick="completeMission('${mission.id}')">結案</button>
+                            ` : ''}
+                            <button class="btn btn-danger btn-sm" onclick="deleteMission('${mission.id}')">刪除</button>
+                        ` : ''}
+                        <button class="btn btn-secondary btn-sm" onclick="viewMissionDetail('${mission.id}')">查看詳情</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupEventListeners() {
+            document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
+        }
+
+        async function handleCreateMission(event) {
+            event.preventDefault();
+
+            const formData = {
+                mission_title: document.getElementById('missionTitle').value,
+                mission_type: document.getElementById('missionType').value,
+                mission_description: document.getElementById('missionDescription').value,
+                mission_date: document.getElementById('missionDate').value,
+                recruitment_deadline: document.getElementById('recruitmentDeadline').value || null,
+                is_urgent: document.getElementById('isUrgent').checked,
+                allow_recruitment: document.getElementById('allowRecruitment').checked,
+                created_by: currentUser.displayName,
+                status: 'active'
+            };
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'createMission',
+                        sessionToken,
+                        missionData: formData
+                    })
+                });
+
+                if (!response.ok) throw new Error('建立失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('案件建立成功', 'success');
+                    closeModal('createMissionModal');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '建立失敗');
+                }
+            } catch (error) {
+                console.error('建立案件失敗:', error);
+                showToast('建立案件失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function joinMission(missionId) {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'joinMission',
+                        sessionToken,
+                        missionId,
+                        userId: currentUser.userId,
+                        displayName: currentUser.displayName
+                    })
+                });
+
+                if (!response.ok) throw new Error('報名失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('報名成功', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '報名失敗');
+                }
+            } catch (error) {
+                console.error('報名失敗:', error);
+                showToast('報名失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function cancelJoin(missionId) {
+            if (!confirm('確定要取消報名嗎?')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'cancelJoin',
+                        sessionToken,
+                        missionId,
+                        userId: currentUser.userId
+                    })
+                });
+
+                if (!response.ok) throw new Error('取消失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('已取消報名', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '取消失敗');
+                }
+            } catch (error) {
+                console.error('取消報名失敗:', error);
+                showToast('取消報名失敗: ' + error.message, 'error');
+            }
+        }
+
+        function showAssignModal(missionId) {
+            currentMissionId = missionId;
+            const mission = allMissions.find(m => m.id === missionId);
+            
+            const memberSelector = document.getElementById('memberSelector');
+            memberSelector.innerHTML = allMembers.map(member => {
+                const isAssigned = mission.participants?.some(p => p.user_id === member.user_id && p.is_assigned);
+                return `
+                    <div class="member-item">
+                        <input type="checkbox" id="member-${member.user_id}" value="${member.user_id}" ${isAssigned ? 'checked' : ''}>
+                        <label for="member-${member.user_id}">${member.display_name} (${member.role})</label>
+                    </div>
+                `;
+            }).join('');
+
+            showModal('assignModal');
+        }
+
+        async function confirmAssign() {
+            const selectedMembers = Array.from(document.querySelectorAll('#memberSelector input:checked'))
+                .map(cb => {
+                    const member = allMembers.find(m => m.user_id === cb.value);
+                    return {
+                        user_id: cb.value,
+                        display_name: member.display_name
+                    };
+                });
+
+            if (selectedMembers.length === 0) {
+                showToast('請選擇至少一名成員', 'error');
+                return;
+            }
+
+            const note = document.getElementById('assignNote').value;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'assignMembers',
+                        sessionToken,
+                        missionId: currentMissionId,
+                        members: selectedMembers,
+                        note,
+                        assignedBy: currentUser.displayName
+                    })
+                });
+
+                if (!response.ok) throw new Error('指派失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('指派成功', 'success');
+                    closeModal('assignModal');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '指派失敗');
+                }
+            } catch (error) {
+                console.error('指派失敗:', error);
+                showToast('指派失敗: ' + error.message, 'error');
+            }
+        }
+
+        function showProgressModal(missionId) {
+            currentMissionId = missionId;
+            document.getElementById('progressNote').value = '';
+            showModal('progressModal');
+        }
+
+        async function submitProgress() {
+            const status = document.getElementById('progressStatus').value;
+            const note = document.getElementById('progressNote').value;
+
+            if (!note) {
+                showToast('請填寫進度說明', 'error');
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'submitProgress',
+                        sessionToken,
+                        missionId: currentMissionId,
+                        userId: currentUser.userId,
+                        status,
+                        note,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) throw new Error('提交失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('進度已提交', 'success');
+                    closeModal('progressModal');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '提交失敗');
+                }
+            } catch (error) {
+                console.error('提交進度失敗:', error);
+                showToast('提交進度失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function closeRecruitment(missionId) {
+            if (!confirm('確定要關閉報名嗎?')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'closeRecruitment',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('操作失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('報名已關閉', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '操作失敗');
+                }
+            } catch (error) {
+                console.error('關閉報名失敗:', error);
+                showToast('關閉報名失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function completeMission(missionId) {
+            if (!confirm('確定要結案嗎?')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'completeMission',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('操作失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('任務已結案', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '操作失敗');
+                }
+            } catch (error) {
+                console.error('結案失敗:', error);
+                showToast('結案失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteMission(missionId) {
+            if (!confirm('確定要刪除此任務嗎? 此操作無法復原!')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'deleteMission',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('刪除失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('任務已刪除', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '刪除失敗');
+                }
+            } catch (error) {
+                console.error('刪除任務失敗:', error);
+                showToast('刪除任務失敗: ' + error.message, 'error');
+            }
+        }
+
+        function viewMissionDetail(missionId) {
+            // 這裡可以實作詳細頁面或展開顯示
+            const mission = allMissions.find(m => m.id === missionId);
+            alert(`任務詳情:\n\n${JSON.stringify(mission, null, 2)}`);
+        }
+
+        function editMission(missionId) {
+            // 實作編輯功能
+            showToast('編輯功能開發中', 'info');
+        }
+
+        function showMemberStatsModal() {
+            // 實作成員統計功能
+            showToast('成員統計功能開發中', 'info');
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        function showCreateMissionModal() {
+            document.getElementById('createMissionForm').reset();
+            showModal('createMissionModal');
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toastMessage.textContent = message;
+            toast.className = `toast toast-${type}`;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function goBack() {
+            window.location.href = 'navigation.html';
+        }
+
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('modal')) {
+                closeModal(event.target.id);
+            }
+        });
+    </script>
+</body>
+</html>
