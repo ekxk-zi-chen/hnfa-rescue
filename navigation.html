@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>花蓮特搜系統</title>
+    <style>
+        :root {
+            --primary: #00C300;
+            --primary-dark: #009900;
+            --secondary: #0084ff;
+            --accent: #ff6b35;
+            --danger: #f44336;
+            --dark: #1a1a1a;
+            --gray-100: #f8f9fa;
+            --gray-600: #6c757d;
+            --gray-900: #212529;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            animation: fadeIn 0.6s ease 0.2s both;
+        }
+
+        .user-info h3 {
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-badge {
+            background: var(--primary);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .system-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 640px) {
+            .system-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .system-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            animation: fadeInUp 0.6s ease both;
+        }
+
+        .system-card:nth-child(1) {
+            animation-delay: 0.3s;
+        }
+
+        .system-card:nth-child(2) {
+            animation-delay: 0.4s;
+        }
+
+        .system-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .system-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .system-card:hover .system-icon {
+            transform: scale(1.1);
+        }
+
+        .system-card.mission .system-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .system-card.equipment .system-icon {
+            background: linear-gradient(135deg, #00C300 0%, #009900 100%);
+        }
+
+        .system-card h2 {
+            color: var(--gray-900);
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .system-card p {
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--danger);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            animation: pulse 2s infinite;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            color: var(--gray-600);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            animation: fadeIn 0.6s ease 0.5s both;
+        }
+
+        .logout-btn:hover {
+            background: white;
+            color: var(--danger);
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 50vh;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .system-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 2rem;
+            }
+
+            .system-card h2 {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="loadingIndicator" class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">載入中...</div>
+        </div>
+
+        <div id="mainContent" style="display: none;">
+            <div class="header">
+                <h1>🚒 花蓮特搜系統</h1>
+                <p>歡迎回來</p>
+            </div>
+
+            <div class="user-info">
+                <h3>
+                    <span id="userName">載入中...</span>
+                    <span class="user-badge" id="userRole">載入中...</span>
+                </h3>
+            </div>
+
+            <div class="system-grid">
+                <a href="mission.html" class="system-card mission">
+                    <div class="system-icon" style="position: relative;">
+                        📋
+                        <span class="notification-badge" id="missionNotification" style="display: none;">0</span>
+                    </div>
+                    <h2>任務派遣系統</h2>
+                    <p>案件管理、人員派遣、進度追蹤</p>
+                </a>
+
+                <a href="test.html" class="system-card equipment">
+                    <div class="system-icon">
+                        🎒
+                    </div>
+                    <h2>裝備管理系統</h2>
+                    <p>器材登記、借出歸還、狀態追蹤</p>
+                </a>
+            </div>
+
+            <button class="logout-btn" onclick="logout()">登出系統</button>
+        </div>
+    </div>
+
+    <script>
+        const CONFIG = {
+            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
+            SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
+        };
+
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            await initializeApp();
+        });
+
+        async function initializeApp() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
+                if (!sessionToken) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                await verifyUser(sessionToken);
+                await checkActiveMissions();
+
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                alert('系統載入失敗,請重新登入');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
+        }
+
+        async function verifyUser(sessionToken) {
+            try {
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken })
+                });
+
+                if (!response.ok) throw new Error('驗證失敗');
+
+                const data = await response.json();
+                if (data.status !== 'ok') throw new Error('用戶驗證失敗');
+
+                currentUser = {
+                    userId: data.userId,
+                    displayName: data.displayName,
+                    role: data.role || '一般用戶'
+                };
+
+                document.getElementById('userName').textContent = currentUser.displayName;
+                document.getElementById('userRole').textContent = currentUser.role;
+
+                sessionStorage.setItem('sessionToken', sessionToken);
+
+            } catch (error) {
+                console.error('用戶驗證錯誤:', error);
+                throw error;
+            }
+        }
+
+        async function checkActiveMissions() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getActiveMissions',
+                        sessionToken
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok' && data.count > 0) {
+                        const badge = document.getElementById('missionNotification');
+                        badge.textContent = data.count;
+                        badge.style.display = 'flex';
+                    }
+                }
+            } catch (error) {
+                console.error('檢查任務失敗:', error);
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('sessionToken');
+            localStorage.removeItem('sessionToken');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
