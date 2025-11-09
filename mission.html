@@ -1061,6 +1061,11 @@
             const content = document.getElementById(`group-${groupId}`);
             const icon = element.querySelector('.toggle-icon');
             
+            if (!content) {
+                console.error('找不到分組內容:', `group-${groupId}`);
+                return;
+            }
+            
             if (content.classList.contains('show')) {
                 content.classList.remove('show');
                 icon.textContent = '▼';
@@ -1068,6 +1073,44 @@
                 content.classList.add('show');
                 icon.textContent = '▲';
             }
+        }
+        // ✅ 新增：全部展開
+        function expandAll() {
+            // 展開所有分組
+            document.querySelectorAll('.group-content').forEach(content => {
+                content.classList.add('show');
+            });
+            
+            // 展開所有卡片
+            document.querySelectorAll('.mission-card-content').forEach(content => {
+                content.style.display = 'block';
+            });
+            
+            // 更新所有圖標
+            document.querySelectorAll('.toggle-icon').forEach(icon => {
+                icon.textContent = '▲';
+            });
+            
+            showToast('已展開所有內容', 'success');
+        }
+        // ✅ 新增：收合功能
+        function collapseAll() {
+            // 收合所有分組
+            document.querySelectorAll('.group-content').forEach(content => {
+                content.classList.remove('show');
+            });
+            
+            // 收合所有卡片
+            document.querySelectorAll('.mission-card-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // 更新所有圖標
+            document.querySelectorAll('.toggle-icon').forEach(icon => {
+                icon.textContent = '▼';
+            });
+            
+            showToast('已收合所有內容', 'success');
         }
         // 建立任務卡片 HTML
         function createMissionCard(mission) {
@@ -1090,8 +1133,8 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
             
-            // ✅ 修正：確保卡片 ID 是唯一的
-            const cardId = `mission-${mission.id}-${Math.random().toString(36).substr(2, 9)}`;
+            // ✅ 修正：使用更簡單且唯一的卡片 ID
+            const cardId = `mission-${mission.id}`;
             
             return `
                 <div class="mission-card ${statusClass}" style="margin-bottom: 1rem;">
@@ -1109,29 +1152,42 @@
                         </div>
                     </div>
                     
-                    <!-- ✅ 可折疊的內容區 - 只調用一次 createMissionCardContent -->
+                    <!-- ✅ 可折疊的內容區 -->
                     <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
                         ${createMissionCardContent(mission, myParticipation)}
                     </div>
                 </div>
             `;
         }
+
         // ✅ 新增：切換任務卡片
         function toggleMissionCard(cardId) {
+            console.log('嘗試切換卡片:', cardId); // 除錯用
+            
             const content = document.getElementById(cardId);
             const icon = document.getElementById(`${cardId}-icon`);
             
-            if (!content || !icon) {
-                console.error('找不到卡片元素:', cardId);
+            if (!content) {
+                console.error('找不到卡片內容:', cardId);
+                // 嘗試重新查找
+                const allContents = document.querySelectorAll('[id^="mission-"]');
+                console.log('所有任務卡片:', allContents);
                 return;
             }
             
-            if (content.style.display === 'none') {
+            if (!icon) {
+                console.error('找不到卡片圖標:', `${cardId}-icon`);
+                return;
+            }
+            
+            if (content.style.display === 'none' || !content.style.display) {
                 content.style.display = 'block';
                 icon.textContent = '▲';
+                console.log('展開卡片:', cardId);
             } else {
                 content.style.display = 'none';
                 icon.textContent = '▼';
+                console.log('收合卡片:', cardId);
             }
         }
         // ✅ 新增：將卡片內容提取為獨立函數，避免程式碼重複
