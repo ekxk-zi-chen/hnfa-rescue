@@ -1005,18 +1005,18 @@
                 
                 html += `
                     <div class="mission-group">
-                        <div class="group-header" onclick="toggleGroup(this, '${yearMonth}')">
+                        <div class="group-header" onclick="toggleGroup('${yearMonth}')" style="cursor: pointer;">
                             <h3>📅 ${yearMonth} (${monthMissions.length})</h3>
-                            <span class="toggle-icon">▼</span>
+                            <span class="toggle-icon" onclick="toggleGroup('${yearMonth}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
                         </div>
                         <div class="group-content" id="group-${yearMonth}">
                             ${Object.keys(dateGroups).sort().reverse().map(day => {
                                 const dayMissions = dateGroups[day];
                                 return `
                                     <div class="mission-group" style="margin-left: 1rem;">
-                                        <div class="group-header" onclick="toggleGroup(this, '${yearMonth}-${day}')">
+                                        <div class="group-header" onclick="toggleGroup('${yearMonth}-${day}')" style="cursor: pointer;">
                                             <h3 style="font-size: 1rem;">📆 ${day} (${dayMissions.length})</h3>
-                                            <span class="toggle-icon">▼</span>
+                                            <span class="toggle-icon" onclick="toggleGroup('${yearMonth}-${day}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
                                         </div>
                                         <div class="group-content" id="group-${yearMonth}-${day}">
                                             ${dayMissions.map(mission => createMissionCard(mission)).join('')}
@@ -1057,21 +1057,26 @@
         }
 
         // 切換分組顯示
-        function toggleGroup(element, groupId) {
-            const content = document.getElementById(`group-${groupId}`);
-            const icon = element.querySelector('.toggle-icon');
+        function toggleGroup(groupId) {
+            console.log('切換分組:', groupId);
             
-            if (!content) {
-                console.error('找不到分組內容:', `group-${groupId}`);
+            const content = document.getElementById(`group-${groupId}`);
+            const groupHeaders = document.querySelectorAll(`[onclick="toggleGroup('${groupId}')"]`);
+            
+            if (!content || groupHeaders.length === 0) {
+                console.error('找不到分組元素:', groupId);
                 return;
             }
             
+            // 找到對應的圖標
+            const icon = groupHeaders[0].querySelector('.toggle-icon');
+            
             if (content.classList.contains('show')) {
                 content.classList.remove('show');
-                icon.textContent = '▼';
+                if (icon) icon.textContent = '▼';
             } else {
                 content.classList.add('show');
-                icon.textContent = '▲';
+                if (icon) icon.textContent = '▲';
             }
         }
         // ✅ 新增：全部展開
@@ -1133,21 +1138,22 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
             
-            // ✅ 修正：使用更簡單且唯一的卡片 ID
-            const cardId = `mission-${mission.id}`;
+            // ✅ 修正：確保卡片 ID 是唯一的
+            const cardId = `mission-${mission.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             
             return `
                 <div class="mission-card ${statusClass}" style="margin-bottom: 1rem;">
-                    <!-- ✅ 可折疊的標題列 -->
+                    <!-- ✅ 可折疊的標題列 - 整個區域都可點擊 -->
                     <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;" onclick="toggleMissionCard('${cardId}')">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <div style="flex: 1;">
                                 <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
                                 <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 1rem;">
                                 <span class="status-badge ${statusBadge} ${isUrgent && !isCompleted ? 'status-urgent' : ''}">${statusText}</span>
-                                <span class="toggle-icon" id="${cardId}-icon">▼</span>
+                                <!-- ✅ 三角形圖標也設置點擊事件 -->
+                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
                             </div>
                         </div>
                     </div>
@@ -1159,35 +1165,24 @@
                 </div>
             `;
         }
-
         // ✅ 新增：切換任務卡片
         function toggleMissionCard(cardId) {
-            console.log('嘗試切換卡片:', cardId); // 除錯用
+            console.log('切換卡片:', cardId);
             
             const content = document.getElementById(cardId);
             const icon = document.getElementById(`${cardId}-icon`);
             
-            if (!content) {
-                console.error('找不到卡片內容:', cardId);
-                // 嘗試重新查找
-                const allContents = document.querySelectorAll('[id^="mission-"]');
-                console.log('所有任務卡片:', allContents);
-                return;
-            }
-            
-            if (!icon) {
-                console.error('找不到卡片圖標:', `${cardId}-icon`);
+            if (!content || !icon) {
+                console.error('找不到卡片元素:', cardId);
                 return;
             }
             
             if (content.style.display === 'none' || !content.style.display) {
                 content.style.display = 'block';
                 icon.textContent = '▲';
-                console.log('展開卡片:', cardId);
             } else {
                 content.style.display = 'none';
                 icon.textContent = '▼';
-                console.log('收合卡片:', cardId);
             }
         }
         // ✅ 新增：將卡片內容提取為獨立函數，避免程式碼重複
