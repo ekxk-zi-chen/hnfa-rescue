@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>花蓮特搜任務派遣系統</title>
@@ -500,7 +501,40 @@
             animation: spin 1s linear infinite;
             margin-right: 1rem;
         }
+        /* 任務分組容器 */
+        .mission-group {
+            margin-bottom: 1.5rem;
+        }
 
+        .group-header {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .group-header:hover {
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .group-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+        }
+
+        .group-content {
+            display: none;
+        }
+
+        .group-content.show {
+            display: block;
+        }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -707,7 +741,20 @@
             </div>
         </div>
     </div>
-
+    <!-- 任務詳情 Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 class="modal-title">任務詳情</h3>
+                <button class="close" onclick="closeModal('detailModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="missionDetailContent">
+                    <!-- 動態載入任務詳情 -->
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Toast 通知 -->
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
@@ -829,10 +876,12 @@
 
         function renderMissions() {
             const activeMissions = allMissions.filter(m => m.status === 'active');
-            const recruitingMissions = allMissions.filter(m => m.allow_recruitment && !m.recruitment_closed);
+            // 我的任務 = 被指派且未結案
+            const recruitingMissions = allMissions.filter(m => m.allow_recruitment && !m.recruitment_closed && m.status === 'active');
+            // 歷史記錄 = 所有已結案
             const historyMissions = allMissions.filter(m => m.status === 'completed');
             const personalMissions = allMissions.filter(m => 
-                m.participants?.some(p => p.user_id === currentUser.userId)
+                m.participants?.some(p => p.user_id === currentUser.userId) && m.status === 'active'
             );
 
             renderMissionList('activeMissions', activeMissions);
@@ -840,7 +889,7 @@
             renderMissionList('historyMissions', historyMissions);
             renderMissionList('personalMissions', personalMissions);
         }
-
+        // 渲染任務列表，按年月日分組
         function renderMissionList(containerId, missions) {
             const container = document.getElementById(containerId);
             
@@ -854,16 +903,103 @@
                 return;
             }
 
-            container.innerHTML = missions.map(mission => createMissionCard(mission)).join('');
+            // ✅ 如果是「我的任務」且有未完成的，全部展開
+            const isPersonalTab = containerId === 'personalMissions';
+            const hasIncomplete = missions.some(m => {
+                const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
+                const latestProgress = myParticipation?.progress_history?.[0];
+                return latestProgress?.status !== '已完成';
+            });
+
+            if (isPersonalTab && hasIncomplete) {
+                // 我的任務 - 未完成的全部展開，不分組
+                container.innerHTML = missions.map(mission => createMissionCard(mission)).join('');
+                return;
+            }
+
+            // ✅ 其他情況：按年月日分組
+            const grouped = groupMissionsByDate(missions);
+            
+            let html = '';
+            Object.keys(grouped).sort().reverse().forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const dateGroups = groupMissionsByDay(monthMissions);
+                
+                html += `
+                    <div class="mission-group">
+                        <div class="group-header" onclick="toggleGroup(this, '${yearMonth}')">
+                            <h3>📅 ${yearMonth}</h3>
+                            <span class="toggle-icon">▼</span>
+                        </div>
+                        <div class="group-content" id="group-${yearMonth}">
+                            ${Object.keys(dateGroups).sort().reverse().map(day => {
+                                const dayMissions = dateGroups[day];
+                                return `
+                                    <div class="mission-group" style="margin-left: 1rem;">
+                                        <div class="group-header" onclick="toggleGroup(this, '${yearMonth}-${day}')">
+                                            <h3 style="font-size: 1rem;">📆 ${day}</h3>
+                                            <span class="toggle-icon">▼</span>
+                                        </div>
+                                        <div class="group-content" id="group-${yearMonth}-${day}">
+                                            ${dayMissions.map(mission => createMissionCard(mission)).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
         }
 
+        // 按年月分組
+        function groupMissionsByDate(missions) {
+            const grouped = {};
+            missions.forEach(mission => {
+                const date = new Date(mission.mission_date);
+                const yearMonth = `${date.getFullYear()}年 ${date.getMonth() + 1}月`;
+                if (!grouped[yearMonth]) grouped[yearMonth] = [];
+                grouped[yearMonth].push(mission);
+            });
+            return grouped;
+        }
+
+        // 按日分組
+        function groupMissionsByDay(missions) {
+            const grouped = {};
+            missions.forEach(mission => {
+                const date = new Date(mission.mission_date);
+                const day = `${date.getDate()}日`;
+                if (!grouped[day]) grouped[day] = [];
+                grouped[day].push(mission);
+            });
+            return grouped;
+        }
+
+        // 切換分組顯示
+        function toggleGroup(element, groupId) {
+            const content = document.getElementById(`group-${groupId}`);
+            const icon = element.querySelector('.toggle-icon');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                icon.textContent = '▼';
+            } else {
+                content.classList.add('show');
+                icon.textContent = '▲';
+            }
+        }
+        // 建立任務卡片 HTML
         function createMissionCard(mission) {
             const isUrgent = mission.is_urgent;
-            const statusClass = mission.status === 'completed' ? 'completed' : (isUrgent ? 'urgent' : '');
-            const statusBadge = mission.status === 'completed' ? 'status-completed' : 
-                               (mission.allow_recruitment ? 'status-recruiting' : 'status-active');
-            const statusText = mission.status === 'completed' ? '已完成' :
-                              (mission.allow_recruitment ? '報名中' : '進行中');
+            const isCompleted = mission.status === 'completed';
+            const statusClass = isCompleted ? 'completed' : (isUrgent ? 'urgent' : '');
+            const statusBadge = isCompleted ? 'status-completed' : 
+                            (mission.allow_recruitment ? 'status-recruiting' : 'status-active');
+            const statusText = isCompleted ? '已完成' :
+                            (mission.allow_recruitment ? '報名中' : '進行中');
 
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
@@ -925,36 +1061,38 @@
                         </div>
                     ` : ''}
                     <div class="mission-actions">
-                        ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation ? `
+                        ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
                             <button class="btn btn-primary btn-sm" onclick="joinMission('${mission.id}')">我要報名</button>
                         ` : ''}
-                        ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed ? `
+                        ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
                             <button class="btn btn-danger btn-sm" onclick="cancelJoin('${mission.id}')">取消報名</button>
                         ` : ''}
-                        ${myParticipation && myParticipation.is_assigned && mission.status !== 'completed' ? `
+                        ${myParticipation && myParticipation.is_assigned && !isCompleted ? `
                             <button class="btn btn-primary btn-sm" onclick="showProgressModal('${mission.id}')">回報進度</button>
                         ` : ''}
-                        ${currentUser.role === '管理' ? `
+                        
+                        <!-- ✅ 管理員功能 - 只有未結案才顯示編輯/刪除 -->
+                        ${currentUser.role === '管理' && !isCompleted ? `
                             <button class="btn btn-secondary btn-sm" onclick="showAssignModal('${mission.id}')">指派人員</button>
                             <button class="btn btn-secondary btn-sm" onclick="editMission('${mission.id}')">編輯</button>
                             ${mission.allow_recruitment && !mission.recruitment_closed ? `
                                 <button class="btn btn-warning btn-sm" onclick="closeRecruitment('${mission.id}')">關閉報名</button>
                             ` : ''}
-                            ${mission.status !== 'completed' ? `
-                                <button class="btn btn-success btn-sm" onclick="completeMission('${mission.id}')">結案</button>
-                            ` : ''}
+                            <button class="btn btn-success btn-sm" onclick="completeMission('${mission.id}')">結案</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteMission('${mission.id}')">刪除</button>
                         ` : ''}
+                        
+                        <!-- ✅ 查看詳情 - 所有人都可以看 -->
                         <button class="btn btn-secondary btn-sm" onclick="viewMissionDetail('${mission.id}')">查看詳情</button>
                     </div>
                 </div>
             `;
         }
-
+        // 設置事件監聽器
         function setupEventListeners() {
             document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
         }
-
+        // 處理建立任務表單提交
         async function handleCreateMission(event) {
             event.preventDefault();
 
@@ -972,32 +1110,36 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
+                const isEdit = !!currentMissionId;
+                
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'createMission',
+                        action: isEdit ? 'editMission' : 'createMission',
                         sessionToken,
+                        missionId: currentMissionId,
                         missionData: formData
                     })
                 });
 
-                if (!response.ok) throw new Error('建立失敗');
+                if (!response.ok) throw new Error(isEdit ? '更新失敗' : '建立失敗');
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    showToast('案件建立成功', 'success');
+                    showToast(isEdit ? '任務更新成功' : '案件建立成功', 'success');
                     closeModal('createMissionModal');
+                    currentMissionId = null;
                     await loadMissions();
                 } else {
-                    throw new Error(data.message || '建立失敗');
+                    throw new Error(data.message || '操作失敗');
                 }
             } catch (error) {
-                console.error('建立案件失敗:', error);
-                showToast('建立案件失敗: ' + error.message, 'error');
+                console.error('操作失敗:', error);
+                showToast('操作失敗: ' + error.message, 'error');
             }
         }
-
+        // 報名任務
         async function joinMission(missionId) {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -1027,7 +1169,7 @@
                 showToast('報名失敗: ' + error.message, 'error');
             }
         }
-
+        // 取消報名任務
         async function cancelJoin(missionId) {
             if (!confirm('確定要取消報名嗎?')) return;
 
@@ -1058,7 +1200,7 @@
                 showToast('取消報名失敗: ' + error.message, 'error');
             }
         }
-
+        // 指派人員 Modal
         function showAssignModal(missionId) {
             currentMissionId = missionId;
             const mission = allMissions.find(m => m.id === missionId);
@@ -1076,7 +1218,7 @@
 
             showModal('assignModal');
         }
-
+        // 確認指派人員
         async function confirmAssign() {
             const selectedMembers = Array.from(document.querySelectorAll('#memberSelector input:checked'))
                 .map(cb => {
@@ -1124,13 +1266,13 @@
                 showToast('指派失敗: ' + error.message, 'error');
             }
         }
-
+        // 回報進度 Modal
         function showProgressModal(missionId) {
             currentMissionId = missionId;
             document.getElementById('progressNote').value = '';
             showModal('progressModal');
         }
-
+        // 提交進度回報
         async function submitProgress() {
             const status = document.getElementById('progressStatus').value;
             const note = document.getElementById('progressNote').value;
@@ -1138,6 +1280,12 @@
             if (!note) {
                 showToast('請填寫進度說明', 'error');
                 return;
+            }
+
+            // ✅ 檢查是否選擇"已完成"
+            if (status === '已完成') {
+                const confirmComplete = confirm('確認要標記「我的個人任務」為已完成嗎？\n\n注意：這只會標記您個人的任務完成狀態，不會結案整個任務。');
+                if (!confirmComplete) return;
             }
 
             try {
@@ -1160,7 +1308,7 @@
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    showToast('進度已提交', 'success');
+                    showToast(status === '已完成' ? '已標記個人任務完成！' : '進度已提交', 'success');
                     closeModal('progressModal');
                     await loadMissions();
                 } else {
@@ -1171,7 +1319,7 @@
                 showToast('提交進度失敗: ' + error.message, 'error');
             }
         }
-
+        // 關閉報名
         async function closeRecruitment(missionId) {
             if (!confirm('確定要關閉報名嗎?')) return;
 
@@ -1201,7 +1349,7 @@
                 showToast('關閉報名失敗: ' + error.message, 'error');
             }
         }
-
+        // 結案任務
         async function completeMission(missionId) {
             if (!confirm('確定要結案嗎?')) return;
 
@@ -1231,7 +1379,7 @@
                 showToast('結案失敗: ' + error.message, 'error');
             }
         }
-
+        // 刪除任務
         async function deleteMission(missionId) {
             if (!confirm('確定要刪除此任務嗎? 此操作無法復原!')) return;
 
@@ -1261,16 +1409,113 @@
                 showToast('刪除任務失敗: ' + error.message, 'error');
             }
         }
-
+        // 查看任務詳情
         function viewMissionDetail(missionId) {
-            // 這裡可以實作詳細頁面或展開顯示
             const mission = allMissions.find(m => m.id === missionId);
-            alert(`任務詳情:\n\n${JSON.stringify(mission, null, 2)}`);
-        }
+            if (!mission) return;
 
+            const participants = mission.participants || [];
+            const myParticipation = participants.find(p => p.user_id === currentUser.userId);
+
+            let detailHTML = `
+                <div style="margin-bottom: 2rem;">
+                    <h2 style="margin-bottom: 1rem;">${mission.mission_title}</h2>
+                    <div class="mission-info" style="display: grid; gap: 1rem; margin-bottom: 1.5rem;">
+                        <div><strong>📝 任務類型：</strong>${mission.mission_type}</div>
+                        <div><strong>📅 任務日期：</strong>${new Date(mission.mission_date).toLocaleString('zh-TW')}</div>
+                        <div><strong>👤 發起人：</strong>${mission.created_by}</div>
+                        <div><strong>📊 狀態：</strong>
+                            <span class="status-badge ${mission.status === 'completed' ? 'status-completed' : 'status-active'}">
+                                ${mission.status === 'completed' ? '已完成' : '進行中'}
+                            </span>
+                        </div>
+                        ${mission.mission_description ? `
+                            <div style="grid-column: 1/-1;">
+                                <strong>📋 任務描述：</strong><br>
+                                <div style="background: var(--gray-100); padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
+                                    ${mission.mission_description}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- 參與人員列表 -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">👥 參與人員 (${participants.length}人)</h3>
+                    ${participants.length === 0 ? '<p style="color: #666;">尚無人員參與</p>' : 
+                        participants.map(p => {
+                            const progressHistory = p.progress_history || [];
+                            const latestProgress = progressHistory[0];
+                            const isCompleted = latestProgress?.status === '已完成';
+                            
+                            return `
+                                <div style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${isCompleted ? 'rgba(76, 175, 80, 0.05)' : 'white'};">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                        <div>
+                                            <strong>${p.display_name}</strong>
+                                            ${p.is_assigned ? '<span class="status-badge" style="background: var(--primary); margin-left: 0.5rem;">已指派</span>' : ''}
+                                            ${isCompleted ? '<span class="status-badge" style="background: var(--success); margin-left: 0.5rem;">✓ 已完成</span>' : ''}
+                                        </div>
+                                        <div style="font-size: 0.875rem; color: #666;">
+                                            ${p.is_assigned ? `指派時間: ${new Date(p.assigned_at).toLocaleString('zh-TW')}` : `報名時間: ${new Date(p.joined_at).toLocaleString('zh-TW')}`}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 進度記錄 -->
+                                    ${progressHistory.length > 0 ? `
+                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+                                            <strong style="font-size: 0.875rem; color: #666;">📈 執行進度:</strong>
+                                            ${progressHistory.map(prog => `
+                                                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--gray-100); border-radius: 6px;">
+                                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                                        <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">${prog.status}</span>
+                                                        <span style="font-size: 0.75rem; color: #666;">${new Date(prog.timestamp).toLocaleString('zh-TW')}</span>
+                                                    </div>
+                                                    <div style="font-size: 0.875rem;">${prog.note}</div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    ` : '<div style="color: #999; font-size: 0.875rem; margin-top: 0.5rem;">尚無進度回報</div>'}
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+
+                <!-- 我的操作區 (只有被指派的人且任務未結案才顯示) -->
+                ${myParticipation && myParticipation.is_assigned && mission.status !== 'completed' ? `
+                    <div style="background: rgba(0, 195, 0, 0.05); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--primary);">
+                        <h3 style="margin-bottom: 1rem;">✍️ 我的任務回報</h3>
+                        <button class="btn btn-primary" onclick="closeModal('detailModal'); showProgressModal('${missionId}')">
+                            回報任務進度
+                        </button>
+                    </div>
+                ` : ''}
+            `;
+
+            document.getElementById('missionDetailContent').innerHTML = detailHTML;
+            showModal('detailModal');
+        }
+        // 編輯任務
         function editMission(missionId) {
-            // 實作編輯功能
-            showToast('編輯功能開發中', 'info');
+            const mission = allMissions.find(m => m.id === missionId);
+            if (!mission) return;
+
+            // 填充表單
+            document.getElementById('modalTitle').textContent = '編輯任務';
+            document.getElementById('missionTitle').value = mission.mission_title;
+            document.getElementById('missionType').value = mission.mission_type;
+            document.getElementById('missionDescription').value = mission.mission_description || '';
+            document.getElementById('missionDate').value = new Date(mission.mission_date).toISOString().slice(0, 16);
+            document.getElementById('recruitmentDeadline').value = mission.recruitment_deadline ? new Date(mission.recruitment_deadline).toISOString().slice(0, 16) : '';
+            document.getElementById('isUrgent').checked = mission.is_urgent;
+            document.getElementById('allowRecruitment').checked = mission.allow_recruitment;
+
+            // 儲存任務 ID
+            currentMissionId = missionId;
+
+            showModal('createMissionModal');
         }
 
         function showMemberStatsModal() {
