@@ -1090,8 +1090,8 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
             
-            // ✅ 新增：唯一的卡片ID
-            const cardId = `mission-${mission.id}`;
+            // ✅ 修正：確保卡片 ID 是唯一的
+            const cardId = `mission-${mission.id}-${Math.random().toString(36).substr(2, 9)}`;
             
             return `
                 <div class="mission-card ${statusClass}" style="margin-bottom: 1rem;">
@@ -1109,105 +1109,9 @@
                         </div>
                     </div>
                     
-                    <!-- ✅ 可折疊的內容區 -->
+                    <!-- ✅ 可折疊的內容區 - 只調用一次 createMissionCardContent -->
                     <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
-                        <div class="mission-info">
-                            <div class="info-item">
-                                <span class="info-icon">📅</span>
-                                ${new Date(mission.mission_date).toLocaleString('zh-TW')}
-                            </div>
-                            <div class="info-item">
-                                <span class="info-icon">👤</span>
-                                發起人: ${mission.created_by}
-                            </div>
-                            ${mission.recruitment_deadline ? `
-                                <div class="info-item">
-                                    <span class="info-icon">⏰</span>
-                                    截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        
-                        ${mission.mission_description ? `
-                            <div style="margin: 1rem 0; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">
-                                ${mission.mission_description}
-                            </div>
-                        ` : ''}
-                        
-                        ${participants.length > 0 ? `
-                            <div class="participant-list">
-                                <strong style="display: block; margin-bottom: 0.5rem;">參與人員:</strong>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                                    ${participants.map(p => {
-                                        const hasCompleted = p.progress_history?.some(prog => prog.status === '已完成');
-                                        return `
-                                            <div class="participant-chip ${p.is_assigned ? 'assigned' : ''}">
-                                                ${p.display_name} ${p.is_assigned ? '(指派)' : ''}
-                                                ${hasCompleted ? ' ✓' : ''}
-                                            </div>
-                                        `;
-                                    }).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        <!-- ✅ 我的進度摘要 (如果有的話) -->
-                        ${myParticipation && myParticipation.progress_history?.length > 0 ? `
-                            <div class="progress-section" style="margin-top: 1rem;">
-                                <strong style="display: block; margin-bottom: 0.5rem;">我的最新進度:</strong>
-                                ${(() => {
-                                    const latest = myParticipation.progress_history[0];
-                                    return `
-                                        <div class="progress-item ${latest.status === '已完成' ? 'completed' : ''}">
-                                            <div class="progress-header">
-                                                <span><strong>${latest.status}</strong></span>
-                                                <span class="progress-time">${new Date(latest.timestamp).toLocaleString('zh-TW')}</span>
-                                            </div>
-                                            <div class="progress-content">${latest.note}</div>
-                                        </div>
-                                    `;
-                                })()}
-                            </div>
-                        ` : ''}
-                        
-                        <div class="mission-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
-                            ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
-                                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); joinMission('${mission.id}')">我要報名</button>
-                            ` : ''}
-                            ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
-                                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
-                            ` : ''}
-                            
-                            <!-- ✅ 問題 8 & 11: 只有被指派且未完成個人任務才能回報 -->
-                            ${myParticipation && myParticipation.is_assigned && !isCompleted && 
-                            !myParticipation.progress_history?.some(p => p.status === '已完成') ? `
-                                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
-                            ` : ''}
-                            
-                            <!-- ✅ 問題 9: 管理員報名也可以回報 -->
-                            ${(() => {
-                                // 檢查是否有權限回報
-                                const canReport = myParticipation && !isCompleted && 
-                                                !myParticipation.progress_history?.some(p => p.status === '已完成') &&
-                                                (myParticipation.is_assigned || currentUser.role === '管理');
-                                
-                                return canReport ? `
-                                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
-                                ` : '';
-                            })()}
-
-                            ${currentUser.role === '管理' && !isCompleted ? `
-                                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
-                                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
-                                ${mission.allow_recruitment && !mission.recruitment_closed ? `
-                                    <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
-                                ` : ''}
-                                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
-                                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
-                            ` : ''}
-                            
-                            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
-                        </div>
+                        ${createMissionCardContent(mission, myParticipation)}
                     </div>
                 </div>
             `;
@@ -1217,6 +1121,11 @@
             const content = document.getElementById(cardId);
             const icon = document.getElementById(`${cardId}-icon`);
             
+            if (!content || !icon) {
+                console.error('找不到卡片元素:', cardId);
+                return;
+            }
+            
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 icon.textContent = '▲';
@@ -1225,7 +1134,111 @@
                 icon.textContent = '▼';
             }
         }
-        
+        // ✅ 新增：將卡片內容提取為獨立函數，避免程式碼重複
+        function createMissionCardContent(mission, myParticipation) {
+            const participants = mission.participants || [];
+            const isCompleted = mission.status === 'completed';
+            
+            return `
+                <div class="mission-info">
+                    <div class="info-item">
+                        <span class="info-icon">📅</span>
+                        ${new Date(mission.mission_date).toLocaleString('zh-TW')}
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">👤</span>
+                        發起人: ${mission.created_by}
+                    </div>
+                    ${mission.recruitment_deadline ? `
+                        <div class="info-item">
+                            <span class="info-icon">⏰</span>
+                            截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${mission.mission_description ? `
+                    <div style="margin: 1rem 0; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">
+                        ${mission.mission_description}
+                    </div>
+                ` : ''}
+                
+                ${participants.length > 0 ? `
+                    <div class="participant-list">
+                        <strong style="display: block; margin-bottom: 0.5rem;">參與人員:</strong>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${participants.map(p => {
+                                const hasCompleted = p.progress_history?.some(prog => prog.status === '已完成');
+                                return `
+                                    <div class="participant-chip ${p.is_assigned ? 'assigned' : ''}">
+                                        ${p.display_name} ${p.is_assigned ? '(指派)' : ''}
+                                        ${hasCompleted ? ' ✓' : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- ✅ 我的進度摘要 (如果有的話) -->
+                ${myParticipation && myParticipation.progress_history?.length > 0 ? `
+                    <div class="progress-section" style="margin-top: 1rem;">
+                        <strong style="display: block; margin-bottom: 0.5rem;">我的最新進度:</strong>
+                        ${(() => {
+                            const latest = myParticipation.progress_history[0];
+                            return `
+                                <div class="progress-item ${latest.status === '已完成' ? 'completed' : ''}">
+                                    <div class="progress-header">
+                                        <span><strong>${latest.status}</strong></span>
+                                        <span class="progress-time">${new Date(latest.timestamp).toLocaleString('zh-TW')}</span>
+                                    </div>
+                                    <div class="progress-content">${latest.note}</div>
+                                </div>
+                            `;
+                        })()}
+                    </div>
+                ` : ''}
+                
+                <div class="mission-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+                    ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); joinMission('${mission.id}')">我要報名</button>
+                    ` : ''}
+                    ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
+                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
+                    ` : ''}
+                    
+                    <!-- ✅ 問題 8 & 11: 只有被指派且未完成個人任務才能回報 -->
+                    ${myParticipation && myParticipation.is_assigned && !isCompleted && 
+                    !myParticipation.progress_history?.some(p => p.status === '已完成') ? `
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
+                    ` : ''}
+                    
+                    <!-- ✅ 問題 9: 管理員報名也可以回報 -->
+                    ${(() => {
+                        // 檢查是否有權限回報
+                        const canReport = myParticipation && !isCompleted && 
+                                        !myParticipation.progress_history?.some(p => p.status === '已完成') &&
+                                        (myParticipation.is_assigned || currentUser.role === '管理');
+                        
+                        return canReport ? `
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
+                        ` : '';
+                    })()}
+
+                    ${currentUser.role === '管理' && !isCompleted ? `
+                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
+                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
+                        ${mission.allow_recruitment && !mission.recruitment_closed ? `
+                            <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
+                        ` : ''}
+                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
+                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
+                    ` : ''}
+                    
+                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
+                </div>
+            `;
+        }
         // 設置事件監聽器
         function setupEventListeners() {
             document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
