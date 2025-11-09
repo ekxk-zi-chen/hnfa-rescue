@@ -427,14 +427,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(400).json({ status: "error", message: "請選擇要操作的裝備" });
     }
 
-    // ✅ 修正：使用台灣時間的 ISO 字符串
-    const now = new Date();
-    const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const batchDate = taiwanTime.toISOString();
+    const batchDate = new Date().toISOString();
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
-      // 先查詢所有要更新的裝備
+      // ✅ 先查詢所有要更新的裝備
       const { data: oldEquipmentList, error: fetchError } = await supabase
         .from("equipment")
         .select("*")
@@ -445,8 +442,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
       }
 
-      // 準備更新資料
+      // ✅ 準備更新資料
       const updatePromises = oldEquipmentList.map((oldData) => {
+        const now = new Date();
         const timestamp = now.toLocaleString('zh-TW', {
           timeZone: 'Asia/Taipei',
           year: 'numeric',
@@ -458,7 +456,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        const historyEntry = `[${timestamp}] ${operator} 批量${operationType}${note ? ` (${note})` : ''}`;
+        // 在後端的批量返隊部分
+        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
@@ -475,13 +475,13 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             歷史更新紀錄: trimmedHistory,
             填表人: operator,
             updated_at: new Date().toISOString(),
-            batch_date: batchDate, // ✅ 使用標準 ISO 字符串
+            batch_date: batchDate,
             batch_identifier: batchIdentifier
           })
           .eq("id", oldData.id);
       });
 
-      // 執行所有更新操作
+      // ✅ 執行所有更新操作
       const updateResults = await Promise.all(updatePromises);
 
       const hasError = updateResults.some(result => result.error);
@@ -509,7 +509,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
     }
 
-    const { equipmentIds, operator, batchId } = body;
+    const { equipmentIds, operator, batchId } = body; // 這裡的 batchId 就是 batch_identifier
 
     if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
       return res.status(400).json({ status: "error", message: "請選擇要返隊的裝備" });
@@ -541,25 +541,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           hour12: false
         });
 
-        // ✅ 修正：安全的日期解析
-        let batchDateDisplay = '未知日期';
-        if (oldData.batch_date) {
-          try {
-            const batchDate = new Date(oldData.batch_date);
-            if (!isNaN(batchDate.getTime())) {
-              batchDateDisplay = batchDate.toLocaleDateString('zh-TW', {
-                timeZone: 'Asia/Taipei',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-              });
-            }
-          } catch (e) {
-            console.warn('批次日期解析失敗:', oldData.batch_date);
-          }
-        }
+        // ✅ 修正：使用正確的批次資訊
+        const batchIdentifier = batchId || oldData.batch_identifier;
+        const batchDate = oldData.batch_date ? new Date(oldData.batch_date).toLocaleDateString('zh-TW') : '未知日期';
 
-        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDateDisplay})`;
+        const historyEntry = `[${timestamp}] ${operator} 批量返隊 (原操作: ${batchDate})`;
         const currentHistory = oldData.歷史更新紀錄 || '';
         const newHistory = currentHistory
           ? `${historyEntry}\n${currentHistory}`
@@ -658,57 +644,512 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       batches: activeBatches
     });
   }
-  // ====== 處理 QR Code 掃描 ======
-  if (action === "processQRCode") {
-    const { tableName, uuid } = body;
+  // ====== 在 handleAction 函數中新增以下 actions ======
 
-    console.log(`[QR Code] 處理請求: ${tableName}_${uuid}`);
-
-    if (tableName !== 'equipment') {
-      return res.status(400).json({
-        status: "error",
-        message: `不支援的資料表: ${tableName}`
-      });
-    }
-
+  // ====== 取得所有任務 ======
+  if (action === 'getMissions') {
     try {
-      // 根據 UUID 查找裝備
-      // 這裡假設 UUID 是裝備的 id，您可以根據實際情況調整
-      const { data: equipment, error } = await supabase
-        .from("equipment")
-        .select("*")
-        .eq("id", uuid)
-        .single();
+      const { data: missions, error } = await supabase
+        .from('missions')
+        .select(`
+          *,
+          participants:mission_participants(
+            user_id,
+            display_name,
+            is_assigned,
+            assigned_by,
+            assigned_at,
+            joined_at,
+            progress_history:mission_progress(
+              status,
+              note,
+              timestamp
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error("QR Code 查詢裝備錯誤:", error);
-        return res.status(404).json({
-          status: "error",
-          message: "裝備不存在"
-        });
+        console.error('取得任務錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
       }
-
-      if (!equipment) {
-        return res.status(404).json({
-          status: "error",
-          message: "裝備不存在"
-        });
-      }
-
-      console.log(`[QR Code] 找到裝備: ${equipment.器材名稱}`);
 
       return res.status(200).json({
         status: "ok",
-        equipment: equipment,
-        message: "掃描成功"
+        missions: missions || []
+      });
+    } catch (error) {
+      console.error('getMissions 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 取得進行中任務數量 ======
+  if (action === 'getActiveMissions') {
+    try {
+      const { data: missions, error } = await supabase
+        .from('missions')
+        .select('id')
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('取得任務數量錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to fetch active missions" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        count: missions?.length || 0
+      });
+    } catch (error) {
+      console.error('getActiveMissions 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 建立新任務 ======
+  if (action === 'createMission') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限建立任務" });
+    }
+
+    try {
+      const { missionData } = body;
+      
+      const insertData = {
+        ...missionData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('missions')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('建立任務錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to create mission" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        missionId: data.id,
+        message: "任務建立成功"
+      });
+    } catch (error) {
+      console.error('createMission 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 報名任務 ======
+  if (action === 'joinMission') {
+    try {
+      const { missionId, userId, displayName } = body;
+
+      // 檢查是否已經報名
+      const { data: existing } = await supabase
+        .from('mission_participants')
+        .select('id')
+        .eq('mission_id', missionId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existing) {
+        return res.status(400).json({ status: "error", message: "已經報名過此任務" });
+      }
+
+      // 新增參與者
+      const { error } = await supabase
+        .from('mission_participants')
+        .insert({
+          mission_id: missionId,
+          user_id: userId,
+          display_name: displayName,
+          is_assigned: false,
+          joined_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('報名任務錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to join mission" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "報名成功"
+      });
+    } catch (error) {
+      console.error('joinMission 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 取消報名 ======
+  if (action === 'cancelJoin') {
+    try {
+      const { missionId, userId } = body;
+
+      // 檢查是否為指派狀態
+      const { data: participant } = await supabase
+        .from('mission_participants')
+        .select('is_assigned')
+        .eq('mission_id', missionId)
+        .eq('user_id', userId)
+        .single();
+
+      if (participant?.is_assigned) {
+        return res.status(403).json({ status: "error", message: "已被指派，無法取消報名" });
+      }
+
+      // 刪除參與記錄
+      const { error } = await supabase
+        .from('mission_participants')
+        .delete()
+        .eq('mission_id', missionId)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('取消報名錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to cancel join" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "已取消報名"
+      });
+    } catch (error) {
+      console.error('cancelJoin 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 指派成員 ======
+  if (action === 'assignMembers') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限指派成員" });
+    }
+
+    try {
+      const { missionId, members, note, assignedBy } = body;
+      const assignedAt = new Date().toISOString();
+
+      // 先取消所有人的指派狀態
+      await supabase
+        .from('mission_participants')
+        .update({ is_assigned: false })
+        .eq('mission_id', missionId);
+
+      // 處理每個被選中的成員
+      for (const member of members) {
+        // 檢查是否已存在
+        const { data: existing } = await supabase
+          .from('mission_participants')
+          .select('id')
+          .eq('mission_id', missionId)
+          .eq('user_id', member.user_id)
+          .single();
+
+        if (existing) {
+          // 更新為指派狀態
+          await supabase
+            .from('mission_participants')
+            .update({
+              is_assigned: true,
+              assigned_by: assignedBy,
+              assigned_at: assignedAt
+            })
+            .eq('id', existing.id);
+        } else {
+          // 新增並指派
+          await supabase
+            .from('mission_participants')
+            .insert({
+              mission_id: missionId,
+              user_id: member.user_id,
+              display_name: member.display_name,
+              is_assigned: true,
+              assigned_by: assignedBy,
+              assigned_at: assignedAt,
+              joined_at: assignedAt
+            });
+        }
+
+        // 記錄指派歷史
+        if (note) {
+          await supabase
+            .from('mission_progress')
+            .insert({
+              mission_id: missionId,
+              user_id: member.user_id,
+              status: '已指派',
+              note: `${assignedBy} 指派: ${note}`,
+              timestamp: assignedAt
+            });
+        }
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "指派成功"
+      });
+    } catch (error) {
+      console.error('assignMembers 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 提交任務進度 ======
+  if (action === 'submitProgress') {
+    try {
+      const { missionId, userId, status, note, timestamp } = body;
+
+      // 新增進度記錄
+      const { error } = await supabase
+        .from('mission_progress')
+        .insert({
+          mission_id: missionId,
+          user_id: userId,
+          status: status,
+          note: note,
+          timestamp: timestamp || new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('提交進度錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to submit progress" });
+      }
+
+      // 如果狀態是已完成，更新參與者狀態
+      if (status === '已完成') {
+        await supabase
+          .from('mission_participants')
+          .update({ completed_at: new Date().toISOString() })
+          .eq('mission_id', missionId)
+          .eq('user_id', userId);
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "進度已提交"
+      });
+    } catch (error) {
+      console.error('submitProgress 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 關閉報名 ======
+  if (action === 'closeRecruitment') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限關閉報名" });
+    }
+
+    try {
+      const { missionId } = body;
+
+      const { error } = await supabase
+        .from('missions')
+        .update({ 
+          recruitment_closed: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', missionId);
+
+      if (error) {
+        console.error('關閉報名錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to close recruitment" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "報名已關閉"
+      });
+    } catch (error) {
+      console.error('closeRecruitment 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 結案 ======
+  if (action === 'completeMission') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限結案" });
+    }
+
+    try {
+      const { missionId } = body;
+
+      const { error } = await supabase
+        .from('missions')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', missionId);
+
+      if (error) {
+        console.error('結案錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to complete mission" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "任務已結案"
+      });
+    } catch (error) {
+      console.error('completeMission 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 刪除任務 ======
+  if (action === 'deleteMission') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限刪除任務" });
+    }
+
+    try {
+      const { missionId } = body;
+
+      // 因為有 CASCADE，刪除 mission 會自動刪除相關的 participants 和 progress
+      const { error } = await supabase
+        .from('missions')
+        .delete()
+        .eq('id', missionId);
+
+      if (error) {
+        console.error('刪除任務錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to delete mission" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "任務已刪除"
+      });
+    } catch (error) {
+      console.error('deleteMission 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 取得成員列表 ======
+  if (action === 'getMembers') {
+    try {
+      const { data: members, error } = await supabase
+        .from('users')
+        .select('user_id, display_name, 姓名, 管理員')
+        .order('display_name', { ascending: true });
+
+      if (error) {
+        console.error('取得成員錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to fetch members" });
+      }
+
+      // 格式化資料
+      const formattedMembers = members.map(m => ({
+        user_id: m.user_id,
+        display_name: m.display_name || m.姓名,
+        role: m.管理員 || '一般用戶'
+      }));
+
+      return res.status(200).json({
+        status: "ok",
+        members: formattedMembers
+      });
+    } catch (error) {
+      console.error('getMembers 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 編輯任務 ======
+  if (action === 'editMission') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限編輯任務" });
+    }
+
+    try {
+      const { missionId, missionData } = body;
+
+      const { error } = await supabase
+        .from('missions')
+        .update({
+          ...missionData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', missionId);
+
+      if (error) {
+        console.error('編輯任務錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to edit mission" });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: "任務更新成功"
+      });
+    } catch (error) {
+      console.error('editMission 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
+    }
+  }
+
+  // ====== 取得成員任務統計 ======
+  if (action === 'getMemberStats') {
+    if (userRole !== '管理') {
+      return res.status(403).json({ status: "error", message: "沒有權限查看統計" });
+    }
+
+    try {
+      const { data: stats, error } = await supabase
+        .from('mission_participants')
+        .select(`
+          user_id,
+          display_name,
+          mission_id,
+          is_assigned,
+          missions!inner(mission_type, status, mission_date)
+        `);
+
+      if (error) {
+        console.error('取得統計錯誤:', error);
+        return res.status(500).json({ status: "error", message: "Failed to fetch stats" });
+      }
+
+      // 整理統計資料
+      const memberStats = {};
+      stats.forEach(record => {
+        if (!memberStats[record.user_id]) {
+          memberStats[record.user_id] = {
+            user_id: record.user_id,
+            display_name: record.display_name,
+            total_missions: 0,
+            assigned_missions: 0,
+            completed_missions: 0,
+            mission_types: {}
+          };
+        }
+
+        memberStats[record.user_id].total_missions++;
+        if (record.is_assigned) memberStats[record.user_id].assigned_missions++;
+        if (record.missions.status === 'completed') memberStats[record.user_id].completed_missions++;
+
+        const type = record.missions.mission_type;
+        memberStats[record.user_id].mission_types[type] = 
+          (memberStats[record.user_id].mission_types[type] || 0) + 1;
       });
 
-    } catch (error) {
-      console.error("QR Code 處理錯誤:", error);
-      return res.status(500).json({
-        status: "error",
-        message: "QR Code 處理失敗"
+      return res.status(200).json({
+        status: "ok",
+        stats: Object.values(memberStats)
       });
+    } catch (error) {
+      console.error('getMemberStats 錯誤:', error);
+      return res.status(500).json({ status: "error", message: error.message });
     }
   }
   // 如果沒有匹配的 action
