@@ -988,11 +988,10 @@
                 return;
             }
 
-            // ✅ 如果是「我的任務」
             const isPersonalTab = containerId === 'personalMissions';
             
             if (isPersonalTab) {
-                // 分為未完成和已完成
+                // ✅ 修正：未完成任務也使用分組結構
                 const incompleteMissions = missions.filter(m => {
                     const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
                     return !myParticipation?.progress_history?.some(p => p.status === '已完成') && m.status !== 'completed';
@@ -1005,30 +1004,28 @@
 
                 let html = '';
                 
-                // ✅ 未完成的任務 - 全部展開
                 if (incompleteMissions.length > 0) {
+                    const groupId = 'personal-incomplete';
                     html += `
-                        <div style="margin-bottom: 2rem;">
-                            <h3 style="background: rgba(255, 107, 53, 0.1); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
-                                🔥 進行中的任務 (${incompleteMissions.length})
-                            </h3>
-                            <div style="margin-top: 1rem;">
+                        <div class="mission-group">
+                            <div class="group-header" style="background: rgba(255, 107, 53, 0.1); border-left: 4px solid var(--accent);">
+                                <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">
+                                    🔥 進行中的任務 (${incompleteMissions.length})
+                                </h3>
+                                <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▲</span>
+                            </div>
+                            <div class="group-content show" id="group-${groupId}">
                                 ${incompleteMissions.map(mission => createMissionCard(mission)).join('')}
                             </div>
                         </div>
                     `;
                 }
                 
-                // ✅ 已完成的任務 - 按年月日分組折疊
                 if (completedMissions.length > 0) {
                     html += `
-                        <div style="margin-bottom: 2rem;">
-                            <h3 style="background: rgba(76, 175, 80, 0.1); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--success);">
-                                ✓ 已完成的任務 (${completedMissions.length})
-                            </h3>
-                            <div style="margin-top: 1rem;">
-                                ${renderGroupedMissions(completedMissions)}
-                            </div>
+                        <div style="background: rgba(76, 175, 80, 0.1); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--success); margin-bottom: 1rem;">
+                            <h3 style="margin-bottom: 1rem;">✓ 已完成的任務 (${completedMissions.length})</h3>
+                            ${renderGroupedMissions(completedMissions)}
                         </div>
                     `;
                 }
@@ -1037,7 +1034,6 @@
                 return;
             }
 
-            // ✅ 其他分頁：按年月日分組
             container.innerHTML = renderGroupedMissions(missions);
         }
         // ✅ 新增：渲染分組任務
@@ -1258,8 +1254,12 @@
             const participants = mission.participants || [];
             const isCompleted = mission.status === 'completed';
             
-            // ✅ 檢查用戶是否已完成個人任務
-            const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => p.status === '已完成');
+            // ✅ 修正問題 3: 更精確的完成狀態檢查
+            const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => 
+                p.status === '已完成' && 
+                // 確保這個完成記錄是在最近一次指派之後
+                new Date(p.timestamp) >= new Date(myParticipation.assigned_at || myParticipation.joined_at)
+            );
             
             return `
                 <div class="mission-info">
@@ -1328,14 +1328,11 @@
                         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
                     ` : ''}
                     
-                    <!-- ✅ 修正 4 & 8: 統一回報按鈕邏輯 + 改名 -->
                     ${(() => {
-                        // 只有參與且未完成才顯示
                         if (!myParticipation || isCompleted || hasCompletedPersonalTask) {
                             return '';
                         }
                         
-                        // 根據身份決定按鈕文字
                         let buttonText = '個人進度回報';
                         if (myParticipation.is_assigned) {
                             const assignerName = mission.created_by || '指派人';
@@ -1713,6 +1710,12 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
 
+            // ✅ 修正問題 3: 更精確的檢查
+            const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => 
+                p.status === '已完成' && 
+                new Date(p.timestamp) >= new Date(myParticipation.assigned_at || myParticipation.joined_at)
+            );
+
             let detailHTML = `
                 <div style="margin-bottom: 2rem;">
                     <h2 style="margin-bottom: 1rem;">${mission.mission_title}</h2>
@@ -1780,8 +1783,7 @@
                                                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--gray-100); border-radius: 6px; ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : ''}">
                                                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
                                                         <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
-                                                            ${prog.status}
-                                                            ${prog.status === '已完成' ? ' ✓' : ''}
+                                                            ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
                                                         </span>
                                                         <span style="font-size: 0.75rem; color: #666;">${new Date(prog.timestamp).toLocaleString('zh-TW')}</span>
                                                     </div>
@@ -1798,7 +1800,6 @@
                 </div>
 
                 ${(() => {
-                    const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => p.status === '已完成');
                     const canReport = myParticipation && 
                                     mission.status !== 'completed' && 
                                     !hasCompletedPersonalTask;
@@ -1994,71 +1995,103 @@
         }
         // 保存 UI 狀態
         function saveUIState() {
-            console.log('💾 保存 UI 狀態...');
+            console.log('💾 [狀態保存] 開始...');
             
             uiState.scrollPosition = window.scrollY;
+            uiState.groups.clear();
+            uiState.cards.clear();
             
+            // 保存分組狀態
             document.querySelectorAll('.group-content').forEach(content => {
                 const groupId = content.id.replace('group-', '');
                 const isExpanded = content.classList.contains('show');
                 uiState.groups.set(groupId, isExpanded);
+                console.log(`  📁 分組 [${groupId}]: ${isExpanded ? '展開' : '收合'}`);
             });
             
-            document.querySelectorAll('.mission-card-content').forEach(content => {
-                const cardId = content.id;
-                const missionId = cardId.split('-')[1];
-                const isExpanded = content.style.display === 'block';
-                if (missionId && !isNaN(missionId)) {
-                    uiState.cards.set(missionId, isExpanded);
+            // 保存卡片狀態 - 使用更精確的選擇器
+            document.querySelectorAll('[id^="mission-"]').forEach(content => {
+                if (content.classList.contains('mission-card-content')) {
+                    const cardId = content.id;
+                    const missionId = cardId.split('-')[1];
+                    const isExpanded = content.style.display === 'block';
+                    
+                    if (missionId && !isNaN(missionId)) {
+                        uiState.cards.set(missionId, isExpanded);
+                        console.log(`  📄 卡片 [${missionId}]: ${isExpanded ? '展開' : '收合'}`);
+                    }
                 }
             });
             
-            console.log('✅ 狀態已保存:', {
+            console.log('✅ [狀態保存] 完成:', {
                 groups: uiState.groups.size,
                 cards: uiState.cards.size,
-                scroll: uiState.scrollPosition
+                scroll: Math.round(uiState.scrollPosition)
             });
         }
         // 恢復 UI 狀態
         function restoreUIState() {
-            console.log('📥 恢復 UI 狀態...');
+            console.log('📥 [狀態恢復] 開始...');
             
+            // 使用雙重 requestAnimationFrame 確保 DOM 完全更新
             requestAnimationFrame(() => {
-                uiState.groups.forEach((isExpanded, groupId) => {
-                    const content = document.getElementById(`group-${groupId}`);
-                    const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+                requestAnimationFrame(() => {
+                    let groupsRestored = 0;
+                    let cardsRestored = 0;
                     
-                    if (content) {
-                        if (isExpanded) {
-                            content.classList.add('show');
-                            if (icon) icon.textContent = '▲';
-                        } else {
-                            content.classList.remove('show');
-                            if (icon) icon.textContent = '▼';
+                    // 恢復分組展開狀態
+                    uiState.groups.forEach((isExpanded, groupId) => {
+                        const content = document.getElementById(`group-${groupId}`);
+                        const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+                        
+                        if (content && icon) {
+                            if (isExpanded) {
+                                content.classList.add('show');
+                                icon.textContent = '▲';
+                            } else {
+                                content.classList.remove('show');
+                                icon.textContent = '▼';
+                            }
+                            groupsRestored++;
                         }
-                    }
-                });
-                
-                document.querySelectorAll('.mission-card-content').forEach(content => {
-                    const cardId = content.id;
-                    const missionId = cardId.split('-')[1];
-                    const icon = document.getElementById(`${cardId}-icon`);
+                    });
                     
-                    if (missionId && uiState.cards.has(missionId)) {
-                        const shouldExpand = uiState.cards.get(missionId);
-                        if (shouldExpand) {
-                            content.style.display = 'block';
-                            if (icon) icon.textContent = '▲';
-                        } else {
-                            content.style.display = 'none';
-                            if (icon) icon.textContent = '▼';
-                        }
-                    }
+                    // 恢復卡片展開狀態
+                    uiState.cards.forEach((shouldExpand, missionId) => {
+                        // 找到所有包含這個 missionId 的卡片
+                        const cards = document.querySelectorAll(`[id^="mission-${missionId}-"]`);
+                        
+                        cards.forEach(content => {
+                            if (content.classList.contains('mission-card-content')) {
+                                const cardId = content.id;
+                                const icon = document.getElementById(`${cardId}-icon`);
+                                
+                                if (icon) {
+                                    if (shouldExpand) {
+                                        content.style.display = 'block';
+                                        icon.textContent = '▲';
+                                    } else {
+                                        content.style.display = 'none';
+                                        icon.textContent = '▼';
+                                    }
+                                    cardsRestored++;
+                                }
+                            }
+                        });
+                    });
+                    
+                    // 恢復滾動位置
+                    window.scrollTo({
+                        top: uiState.scrollPosition,
+                        behavior: 'instant'
+                    });
+                    
+                    console.log('✅ [狀態恢復] 完成:', {
+                        groups: groupsRestored,
+                        cards: cardsRestored,
+                        scroll: Math.round(uiState.scrollPosition)
+                    });
                 });
-                
-                window.scrollTo(0, uiState.scrollPosition);
-                
-                console.log('✅ UI 狀態已恢復');
             });
         }
         // 返回導航頁面
