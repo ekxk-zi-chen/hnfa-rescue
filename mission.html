@@ -805,6 +805,13 @@
         let allMissions = [];
         let allMembers = [];
         let currentMissionId = null;
+        // 全局狀態管理
+        const expandState = {
+            history: new Map(), // 儲存歷史任務的展開狀態
+            my: new Map(),      // 儲存我的任務的展開狀態
+        };
+        let isRendering = false;
+        let renderTimer = null;
 
         document.addEventListener('DOMContentLoaded', async function() {
             await initializeApp();
@@ -857,7 +864,27 @@
             }
         }
         // 載入任務資料
+        // ✅ 包裝 loadMissions,防抖處理
         async function loadMissions() {
+            // 清除之前的計時器
+            if (renderTimer) {
+                clearTimeout(renderTimer);
+            }
+            
+            // 延遲 300ms 再渲染,避免頻繁更新
+            renderTimer = setTimeout(async () => {
+                await _loadMissionsInternal();
+            }, 300);
+        }
+        // ✅ 內部實際載入函數
+        async function _loadMissionsInternal() {
+            if (isRendering) {
+                console.log('正在渲染中,跳過本次更新');
+                return;
+            }
+            
+            isRendering = true;
+            
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
@@ -872,10 +899,17 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.status === 'ok') {
-                        allMissions = data.missions || [];
-                        console.log('成功載入任務:', allMissions.length);
-                        renderMissions();
-                        loadHistoryMemberOptions(); // ✅ 新增這行
+                        const newMissions = data.missions || [];
+                        
+                        // ✅ 只有真的有變化才重新渲染
+                        if (JSON.stringify(allMissions) !== JSON.stringify(newMissions)) {
+                            console.log('任務資料已更新,重新渲染');
+                            allMissions = newMissions;
+                            renderMissions();
+                            loadHistoryMemberOptions();
+                        } else {
+                            console.log('任務資料無變化,跳過渲染');
+                        }
                     }
                 } else {
                     throw new Error('載入任務失敗');
@@ -884,8 +918,11 @@
             } catch (error) {
                 console.error('載入任務失敗:', error);
                 showToast('載入任務失敗', 'error');
+            } finally {
+                isRendering = false;
             }
         }
+
         // 載入任務資料
         async function loadMembers() {
             try {
@@ -1002,23 +1039,28 @@
             Object.keys(grouped).sort().reverse().forEach(yearMonth => {
                 const monthMissions = grouped[yearMonth];
                 const dateGroups = groupMissionsByDay(monthMissions);
+                const groupId = yearMonth.replace(/\s+/g, '-'); // 移除空格
                 
                 html += `
                     <div class="mission-group">
-                        <div class="group-header" onclick="toggleGroup('${yearMonth}')" style="cursor: pointer;">
-                            <h3>📅 ${yearMonth} (${monthMissions.length})</h3>
-                            <span class="toggle-icon" onclick="toggleGroup('${yearMonth}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
+                        <!-- ✅ 修正: 移除 onclick,只在三角形上綁定 -->
+                        <div class="group-header" style="cursor: pointer;">
+                            <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                            <!-- ✅ 修正: 使用 data 屬性標記,移除重複的 toggleGroup 呼叫 -->
+                            <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
                         </div>
-                        <div class="group-content" id="group-${yearMonth}">
+                        <div class="group-content" id="group-${groupId}">
                             ${Object.keys(dateGroups).sort().reverse().map(day => {
                                 const dayMissions = dateGroups[day];
+                                const dayGroupId = `${groupId}-${day}`;
+                                
                                 return `
                                     <div class="mission-group" style="margin-left: 1rem;">
-                                        <div class="group-header" onclick="toggleGroup('${yearMonth}-${day}')" style="cursor: pointer;">
-                                            <h3 style="font-size: 1rem;">📆 ${day} (${dayMissions.length})</h3>
-                                            <span class="toggle-icon" onclick="toggleGroup('${yearMonth}-${day}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
+                                        <div class="group-header" style="cursor: pointer;">
+                                            <h3 style="font-size: 1rem; flex: 1;" onclick="toggleGroup('${dayGroupId}', event)">📆 ${day} (${dayMissions.length})</h3>
+                                            <span class="toggle-icon" data-group-id="${dayGroupId}" onclick="toggleGroup('${dayGroupId}', event)">▼</span>
                                         </div>
-                                        <div class="group-content" id="group-${yearMonth}-${day}">
+                                        <div class="group-content" id="group-${dayGroupId}">
                                             ${dayMissions.map(mission => createMissionCard(mission)).join('')}
                                         </div>
                                     </div>
@@ -1057,19 +1099,22 @@
         }
 
         // 切換分組顯示
-        function toggleGroup(groupId) {
+        // ✅ 修正 toggleGroup - 移除重複呼叫
+        function toggleGroup(groupId, event) {
+            // ✅ 防止事件冒泡
+            if (event) {
+                event.stopPropagation();
+            }
+            
             console.log('切換分組:', groupId);
             
             const content = document.getElementById(`group-${groupId}`);
-            const groupHeaders = document.querySelectorAll(`[onclick="toggleGroup('${groupId}')"]`);
+            const icon = document.querySelector(`[data-group-id="${groupId}"]`);
             
-            if (!content || groupHeaders.length === 0) {
+            if (!content) {
                 console.error('找不到分組元素:', groupId);
                 return;
             }
-            
-            // 找到對應的圖標
-            const icon = groupHeaders[0].querySelector('.toggle-icon');
             
             if (content.classList.contains('show')) {
                 content.classList.remove('show');
@@ -1079,19 +1124,17 @@
                 if (icon) icon.textContent = '▲';
             }
         }
+
         // ✅ 新增：全部展開
         function expandAll() {
-            // 展開所有分組
             document.querySelectorAll('.group-content').forEach(content => {
                 content.classList.add('show');
             });
             
-            // 展開所有卡片
             document.querySelectorAll('.mission-card-content').forEach(content => {
                 content.style.display = 'block';
             });
             
-            // 更新所有圖標
             document.querySelectorAll('.toggle-icon').forEach(icon => {
                 icon.textContent = '▲';
             });
@@ -1100,17 +1143,14 @@
         }
         // ✅ 新增：收合功能
         function collapseAll() {
-            // 收合所有分組
             document.querySelectorAll('.group-content').forEach(content => {
                 content.classList.remove('show');
             });
             
-            // 收合所有卡片
             document.querySelectorAll('.mission-card-content').forEach(content => {
                 content.style.display = 'none';
             });
             
-            // 更新所有圖標
             document.querySelectorAll('.toggle-icon').forEach(icon => {
                 icon.textContent = '▼';
             });
@@ -1138,27 +1178,26 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
             
-            // ✅ 修正：確保卡片 ID 是唯一的
             const cardId = `mission-${mission.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             
             return `
                 <div class="mission-card ${statusClass}" style="margin-bottom: 1rem;">
-                    <!-- ✅ 可折疊的標題列 - 整個區域都可點擊 -->
-                    <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;" onclick="toggleMissionCard('${cardId}')">
+                    <!-- ✅ 修正: 移除整個區域的 onclick,只在標題和三角形綁定 -->
+                    <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <div style="flex: 1;">
+                            <!-- ✅ 修正: 標題可點擊 -->
+                            <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
                                 <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
                                 <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 1rem;">
                                 <span class="status-badge ${statusBadge} ${isUrgent && !isCompleted ? 'status-urgent' : ''}">${statusText}</span>
-                                <!-- ✅ 三角形圖標也設置點擊事件 -->
-                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}'); event.stopPropagation()" style="cursor: pointer; padding: 5px;">▼</span>
+                                <!-- ✅ 修正: 三角形獨立點擊 -->
+                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">▼</span>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- ✅ 可折疊的內容區 -->
                     <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
                         ${createMissionCardContent(mission, myParticipation)}
                     </div>
@@ -1166,7 +1205,13 @@
             `;
         }
         // ✅ 新增：切換任務卡片
-        function toggleMissionCard(cardId) {
+        // ✅ 修正 toggleMissionCard
+        function toggleMissionCard(cardId, event) {
+            // ✅ 防止事件冒泡
+            if (event) {
+                event.stopPropagation();
+            }
+            
             console.log('切換卡片:', cardId);
             
             const content = document.getElementById(cardId);
@@ -1189,6 +1234,9 @@
         function createMissionCardContent(mission, myParticipation) {
             const participants = mission.participants || [];
             const isCompleted = mission.status === 'completed';
+            
+            // ✅ 檢查用戶是否已完成個人任務
+            const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => p.status === '已完成');
             
             return `
                 <div class="mission-info">
@@ -1231,7 +1279,6 @@
                     </div>
                 ` : ''}
                 
-                <!-- ✅ 我的進度摘要 (如果有的話) -->
                 ${myParticipation && myParticipation.progress_history?.length > 0 ? `
                     <div class="progress-section" style="margin-top: 1rem;">
                         <strong style="display: block; margin-bottom: 0.5rem;">我的最新進度:</strong>
@@ -1258,22 +1305,25 @@
                         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
                     ` : ''}
                     
-                    <!-- ✅ 問題 8 & 11: 只有被指派且未完成個人任務才能回報 -->
-                    ${myParticipation && myParticipation.is_assigned && !isCompleted && 
-                    !myParticipation.progress_history?.some(p => p.status === '已完成') ? `
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
-                    ` : ''}
-                    
-                    <!-- ✅ 問題 9: 管理員報名也可以回報 -->
+                    <!-- ✅ 修正 4 & 8: 統一回報按鈕邏輯 + 改名 -->
                     ${(() => {
-                        // 檢查是否有權限回報
-                        const canReport = myParticipation && !isCompleted && 
-                                        !myParticipation.progress_history?.some(p => p.status === '已完成') &&
-                                        (myParticipation.is_assigned || currentUser.role === '管理');
+                        // 只有參與且未完成才顯示
+                        if (!myParticipation || isCompleted || hasCompletedPersonalTask) {
+                            return '';
+                        }
                         
-                        return canReport ? `
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">回報進度</button>
-                        ` : '';
+                        // 根據身份決定按鈕文字
+                        let buttonText = '個人進度回報';
+                        if (myParticipation.is_assigned) {
+                            const assignerName = mission.created_by || '指派人';
+                            buttonText = `(${assignerName})組的回報`;
+                        }
+                        
+                        return `
+                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">
+                                ${buttonText}
+                            </button>
+                        `;
                     })()}
 
                     ${currentUser.role === '管理' && !isCompleted ? `
@@ -1290,6 +1340,7 @@
                 </div>
             `;
         }
+
         // 設置事件監聽器
         function setupEventListeners() {
             document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
