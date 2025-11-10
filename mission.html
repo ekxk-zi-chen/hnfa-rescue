@@ -1003,7 +1003,7 @@
             const isPersonalTab = containerId === 'personalMissions';
             
             if (isPersonalTab) {
-                // ✅ 修正：未完成任務也使用分組結構
+                // ✅ 修正：未完成任务也使用分组结构
                 const incompleteMissions = missions.filter(m => {
                     const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
                     return !myParticipation?.progress_history?.some(p => p.status === '已完成') && m.status !== 'completed';
@@ -1022,22 +1022,30 @@
                         <div class="mission-group">
                             <div class="group-header" style="background: rgba(255, 107, 53, 0.1); border-left: 4px solid var(--accent);">
                                 <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">
-                                    🔥 進行中的任務 (${incompleteMissions.length})
+                                    🔥 进行中的任务 (${incompleteMissions.length})
                                 </h3>
                                 <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▲</span>
                             </div>
                             <div class="group-content show" id="group-${groupId}">
-                                ${incompleteMissions.map(mission => createMissionCard(mission)).join('')}
+                                ${renderGroupedMissions(incompleteMissions)}
                             </div>
                         </div>
                     `;
                 }
                 
                 if (completedMissions.length > 0) {
+                    const groupId = 'personal-completed';
                     html += `
-                        <div style="background: rgba(76, 175, 80, 0.1); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--success); margin-bottom: 1rem;">
-                            <h3 style="margin-bottom: 1rem;">✓ 已完成的任務 (${completedMissions.length})</h3>
-                            ${renderGroupedMissions(completedMissions)}
+                        <div class="mission-group">
+                            <div class="group-header" style="background: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--success);">
+                                <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">
+                                    ✓ 已完成的任务 (${completedMissions.length})
+                                </h3>
+                                <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
+                            </div>
+                            <div class="group-content" id="group-${groupId}">
+                                ${renderGroupedMissions(completedMissions)}
+                            </div>
                         </div>
                     `;
                 }
