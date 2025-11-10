@@ -853,10 +853,12 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     try {
-      const { missionId, members, note, assignedBy } = body;
+      const { missionId, members, note, assignedBy, allowReassign } = body;
       const assignedAt = new Date().toISOString();
 
-      // 先取消所有人的指派狀態
+      console.log('[指派成員] 開始處理:', { missionId, members, allowReassign });
+
+      // ✅ 先取消所有人的指派狀態
       await supabase
         .from('mission_participants')
         .update({ is_assigned: false })
@@ -867,22 +869,34 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         // 檢查是否已存在
         const { data: existing } = await supabase
           .from('mission_participants')
-          .select('id')
+          .select('id, progress_history, completed_at')
           .eq('mission_id', missionId)
           .eq('user_id', member.user_id)
           .single();
 
         if (existing) {
-          // 更新為指派狀態
+          console.log(`[指派成員] 成員 ${member.display_name} 已存在，更新狀態`);
+          
+          // ✅ 如果允許重新指派，清除完成狀態
+          const updateData = {
+            is_assigned: true,
+            assigned_by: assignedBy,
+            assigned_at: assignedAt
+          };
+
+          // ✅ 重新指派時清除完成時間
+          if (allowReassign && existing.completed_at) {
+            updateData.completed_at = null;
+            console.log(`[指派成員] 清除 ${member.display_name} 的完成狀態，允許重新回報`);
+          }
+
           await supabase
             .from('mission_participants')
-            .update({
-              is_assigned: true,
-              assigned_by: assignedBy,
-              assigned_at: assignedAt
-            })
+            .update(updateData)
             .eq('id', existing.id);
         } else {
+          console.log(`[指派成員] 成員 ${member.display_name} 不存在，新增並指派`);
+          
           // 新增並指派
           await supabase
             .from('mission_participants')
@@ -897,19 +911,24 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             });
         }
 
-        // 記錄指派歷史
-        if (note) {
-          await supabase
-            .from('mission_progress')
-            .insert({
-              mission_id: missionId,
-              user_id: member.user_id,
-              status: '已指派',
-              note: `${assignedBy} 指派: ${note}`,
-              timestamp: assignedAt
-            });
-        }
+        // ✅ 記錄指派歷史 (重新指派也記錄)
+        const isReassign = existing && existing.completed_at;
+        const statusNote = isReassign 
+          ? `${assignedBy} 重新指派${note ? ': ' + note : ''}`
+          : `${assignedBy} 指派${note ? ': ' + note : ''}`;
+
+        await supabase
+          .from('mission_progress')
+          .insert({
+            mission_id: missionId,
+            user_id: member.user_id,
+            status: isReassign ? '重新指派' : '已指派',
+            note: statusNote,
+            timestamp: assignedAt
+          });
       }
+
+      console.log('[指派成員] 指派完成');
 
       return res.status(200).json({
         status: "ok",
