@@ -875,25 +875,29 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           .single();
 
         if (existing) {
-          console.log(`[指派成員] 成員 ${member.display_name} 已存在，更新狀態`);
-          
-          // ✅ 如果允許重新指派，清除完成狀態
-          const updateData = {
-            is_assigned: true,
-            assigned_by: assignedBy,
-            assigned_at: assignedAt
-          };
+            const updateData = {
+                is_assigned: true,
+                assigned_by: assignedBy,
+                assigned_at: assignedAt
+            };
 
-          // ✅ 重新指派時清除完成時間
-          if (allowReassign && existing.completed_at) {
-            updateData.completed_at = null;
-            console.log(`[指派成員] 清除 ${member.display_name} 的完成狀態，允許重新回報`);
-          }
+            // ✅ 重新指派時清除完成狀態
+            if (allowReassign && existing.completed_at) {
+                updateData.completed_at = null;
+                
+                // ✅ 關鍵: 清空舊的完成記錄
+                await supabase
+                    .from('mission_progress')
+                    .delete()
+                    .eq('mission_id', missionId)
+                    .eq('user_id', member.user_id)
+                    .eq('status', '已完成');
+            }
 
-          await supabase
-            .from('mission_participants')
-            .update(updateData)
-            .eq('id', existing.id);
+            await supabase
+                .from('mission_participants')
+                .update(updateData)
+                .eq('id', existing.id);
         } else {
           console.log(`[指派成員] 成員 ${member.display_name} 不存在，新增並指派`);
           
