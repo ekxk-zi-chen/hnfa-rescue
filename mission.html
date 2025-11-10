@@ -824,7 +824,7 @@
         document.addEventListener('DOMContentLoaded', async function() {
             await initializeApp();
         });
-
+        // 初始化應用程式
         async function initializeApp() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -838,6 +838,11 @@
                 await loadMembers();
 
                 setupEventListeners();
+                
+                // 修復：確保初始狀態正確
+                setTimeout(() => {
+                    restoreUIState();
+                }, 500);
 
             } catch (error) {
                 console.error('初始化失敗:', error);
@@ -846,6 +851,7 @@
             }
         }
 
+        // 驗證用戶身份
         async function verifyUser(sessionToken) {
             const response = await fetch(CONFIG.API_BASE, {
                 method: 'POST',
@@ -1114,7 +1120,7 @@
             const content = document.getElementById(`group-${groupId}`);
             const icon = document.querySelector(`[data-group-id="${groupId}"]`);
             
-            if (!content) {
+            if (!content || !icon) {
                 console.error('找不到分組:', groupId);
                 return;
             }
@@ -1123,13 +1129,14 @@
             
             if (isCurrentlyExpanded) {
                 content.classList.remove('show');
-                if (icon) icon.textContent = '▼';
-                uiState.groups.set(groupId, false);
+                icon.textContent = '▼';
             } else {
                 content.classList.add('show');
-                if (icon) icon.textContent = '▲';
-                uiState.groups.set(groupId, true);
+                icon.textContent = '▲';
             }
+            
+            // 立即更新狀態
+            uiState.groups.set(groupId, !isCurrentlyExpanded);
         }
 
 
@@ -1434,7 +1441,7 @@
                 const data = await response.json();
                 if (data.status === 'ok') {
                     showToast('報名成功', 'success');
-                    await loadMissions();
+                    await handleOperation('join', missionId, '報名成功');
                 } else {
                     throw new Error(data.message || '報名失敗');
                 }
@@ -1465,7 +1472,7 @@
                 const data = await response.json();
                 if (data.status === 'ok') {
                     showToast('已取消報名', 'success');
-                    await loadMissions();
+                    await handleOperation('cancelJoin', missionId, '已取消報名');
                 } else {
                     throw new Error(data.message || '取消失敗');
                 }
@@ -1603,7 +1610,7 @@
                 if (data.status === 'ok') {
                     showToast(status === '已完成' ? '已標記個人任務完成！' : '進度已提交', 'success');
                     closeModal('progressModal');
-                    await loadMissions();
+                    await handleOperation('progress', currentMissionId, '進度已提交');
                 } else {
                     throw new Error(data.message || '提交失敗');
                 }
@@ -1708,122 +1715,144 @@
             if (!mission) return;
 
             const participants = mission.participants || [];
-            const myParticipation = participants.find(p => p.user_id === currentUser.userId);
-
-            // ✅ 修正問題 3: 更精確的檢查
-            const hasCompletedPersonalTask = myParticipation?.progress_history?.some(p => 
-                p.status === '已完成' && 
-                new Date(p.timestamp) >= new Date(myParticipation.assigned_at || myParticipation.joined_at)
-            );
+            
+            // 修復：正確識別每個參與者的完成狀態
+            const participantDetails = participants.map(p => {
+                const progressHistory = p.progress_history || [];
+                
+                // 按時間排序，最新的在前面
+                const sortedProgress = progressHistory.sort((a, b) => 
+                    new Date(b.timestamp) - new Date(a.timestamp)
+                );
+                
+                // 修復：正確識別個人任務完成狀態
+                const latestProgress = sortedProgress[0];
+                const hasCompleted = latestProgress && latestProgress.status === '已完成';
+                
+                return {
+                    ...p,
+                    sortedProgress,
+                    hasCompleted,
+                    latestProgress
+                };
+            });
 
             let detailHTML = `
                 <div style="margin-bottom: 2rem;">
                     <h2 style="margin-bottom: 1rem;">${mission.mission_title}</h2>
-                    <div class="mission-info" style="display: grid; gap: 1rem; margin-bottom: 1.5rem;">
-                        <div><strong>📝 任務類型:</strong>${mission.mission_type}</div>
-                        <div><strong>📅 任務日期:</strong>${new Date(mission.mission_date).toLocaleString('zh-TW')}</div>
-                        <div><strong>👤 發起人:</strong>${mission.created_by}</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div><strong>📝 任務類型:</strong> ${mission.mission_type}</div>
+                        <div><strong>📅 任務日期:</strong> ${new Date(mission.mission_date).toLocaleString('zh-TW')}</div>
+                        <div><strong>👤 發起人:</strong> ${mission.created_by}</div>
                         <div><strong>📊 狀態:</strong>
                             <span class="status-badge ${mission.status === 'completed' ? 'status-completed' : 'status-active'}">
                                 ${mission.status === 'completed' ? '已完成' : '進行中'}
                             </span>
                         </div>
-                        ${mission.mission_description ? `
-                            <div style="grid-column: 1/-1;">
-                                <strong>📋 任務描述:</strong><br>
-                                <div style="background: var(--gray-100); padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
-                                    ${mission.mission_description}
-                                </div>
-                            </div>
-                        ` : ''}
                     </div>
+                    ${mission.mission_description ? `
+                        <div>
+                            <strong>📋 任務描述:</strong><br>
+                            <div style="background: var(--gray-100); padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
+                                ${mission.mission_description}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
+            `;
 
-                ${participants.filter(p => p.is_assigned).length > 0 ? `
-                    <div style="background: rgba(0, 195, 0, 0.08); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; border-left: 4px solid var(--primary);">
-                        <h3 style="margin-bottom: 0.5rem;">🎯 主要指派人員</h3>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                            ${participants.filter(p => p.is_assigned).map(p => {
-                                const hasCompleted = p.progress_history?.some(prog => prog.status === '已完成');
-                                return `
-                                    <div style="background: white; padding: 0.5rem 1rem; border-radius: 8px; display: flex; align-items: center; gap: 0.5rem;">
+            // 修復：正確顯示指派人員和進度
+            const assignedParticipants = participantDetails.filter(p => p.is_assigned);
+            if (assignedParticipants.length > 0) {
+                detailHTML += `
+                    <div style="background: rgba(0, 195, 0, 0.08); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; border-left: 4px solid var(--primary);">
+                        <h3 style="margin-bottom: 1rem;">🎯 主要指派人員</h3>
+                        <div style="display: grid; gap: 1rem;">
+                            ${assignedParticipants.map(p => `
+                                <div style="background: white; padding: 1rem; border-radius: 8px; border: 1px solid var(--gray-300);">
+                                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
                                         <strong>${p.display_name}</strong>
-                                        ${hasCompleted ? '<span style="color: var(--success);">✓ 已完成個人任務</span>' : '<span style="color: #666;">進行中</span>'}
+                                        <span class="status-badge ${p.hasCompleted ? 'status-completed' : 'status-active'}">
+                                            ${p.hasCompleted ? '✓ 已完成個人任務' : '進行中'}
+                                        </span>
                                     </div>
-                                `;
-                            }).join('')}
+                                    ${p.sortedProgress.length > 0 ? `
+                                        <div style="margin-top: 0.5rem;">
+                                            <strong style="font-size: 0.875rem; color: #666;">最新進度:</strong>
+                                            <div style="font-size: 0.875rem; margin-top: 0.25rem;">
+                                                <strong>${p.latestProgress.status}</strong> - ${p.latestProgress.note}
+                                                <div style="font-size: 0.75rem; color: #999;">
+                                                    ${new Date(p.latestProgress.timestamp).toLocaleString('zh-TW')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ` : '<div style="color: #999; font-size: 0.875rem;">尚無進度回報</div>'}
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
-                ` : ''}
+                `;
+            }
 
+            // 修復：正確顯示所有參與人員的進度歷史
+            detailHTML += `
                 <div style="margin-bottom: 2rem;">
-                    <h3 style="margin-bottom: 1rem;">👥 所有參與人員 (${participants.length}人)</h3>
-                    ${participants.length === 0 ? '<p style="color: #666;">尚無人員參與</p>' : 
-                        participants.map(p => {
-                            const progressHistory = p.progress_history || [];
-                            const isCompleted = progressHistory.some(prog => prog.status === '已完成');
-                            
-                            return `
-                                <div style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: ${isCompleted ? 'rgba(76, 175, 80, 0.05)' : 'white'};">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                        <div>
-                                            <strong>${p.display_name}</strong>
-                                            ${p.is_assigned ? '<span class="status-badge" style="background: var(--primary); margin-left: 0.5rem;">🎯 主要指派</span>' : '<span class="status-badge" style="background: var(--secondary); margin-left: 0.5rem;">報名</span>'}
-                                            ${isCompleted ? '<span class="status-badge" style="background: var(--success); margin-left: 0.5rem;">✓ 已完成個人任務</span>' : ''}
-                                        </div>
-                                        <div style="font-size: 0.875rem; color: #666;">
-                                            ${p.is_assigned ? `指派時間: ${new Date(p.assigned_at).toLocaleString('zh-TW')}` : `報名時間: ${new Date(p.joined_at).toLocaleString('zh-TW')}`}
-                                        </div>
+                    <h3 style="margin-bottom: 1rem;">👥 所有參與人員 (${participantDetails.length}人)</h3>
+                    ${participantDetails.length === 0 ? 
+                        '<p style="color: #666; text-align: center; padding: 2rem;">尚無人員參與</p>' : 
+                        participantDetails.map(p => `
+                            <div style="border: 1px solid var(--gray-300); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; 
+                                background: ${p.hasCompleted ? 'rgba(76, 175, 80, 0.05)' : 'white'}; 
+                                ${p.hasCompleted ? 'border-left: 4px solid var(--success);' : ''}">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                                    <div>
+                                        <strong style="font-size: 1.125rem;">${p.display_name}</strong>
+                                        ${p.is_assigned ? 
+                                            '<span class="status-badge" style="background: var(--primary); margin-left: 0.5rem;">🎯 主要指派</span>' : 
+                                            '<span class="status-badge" style="background: var(--secondary); margin-left: 0.5rem;">報名參與</span>'
+                                        }
                                     </div>
-                                    
-                                    ${progressHistory.length > 0 ? `
-                                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
-                                            <strong style="font-size: 0.875rem; color: #666;">📈 執行進度 (${p.display_name}):</strong>
-                                            ${progressHistory.map((prog) => `
-                                                <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--gray-100); border-radius: 6px; ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : ''}">
-                                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.875rem; color: #666;">
+                                            ${p.is_assigned ? 
+                                                `指派時間: ${new Date(p.assigned_at).toLocaleString('zh-TW')}` : 
+                                                `報名時間: ${new Date(p.joined_at).toLocaleString('zh-TW')}`
+                                            }
+                                        </div>
+                                        ${p.hasCompleted ? 
+                                            '<div class="status-badge" style="background: var(--success); margin-top: 0.25rem;">✓ 個人任務已完成</div>' : 
+                                            '<div class="status-badge" style="background: var(--warning); margin-top: 0.25rem;">進行中</div>'
+                                        }
+                                    </div>
+                                </div>
+                                
+                                ${p.sortedProgress.length > 0 ? `
+                                    <div style="border-top: 1px solid var(--gray-200); padding-top: 1rem;">
+                                        <strong style="font-size: 0.875rem; color: #666; display: block; margin-bottom: 0.5rem;">
+                                            📈 進度記錄 (${p.sortedProgress.length}筆):
+                                        </strong>
+                                        <div style="max-height: 300px; overflow-y: auto;">
+                                            ${p.sortedProgress.map((prog, index) => `
+                                                <div style="padding: 0.75rem; background: var(--gray-100); border-radius: 6px; margin-bottom: 0.5rem; 
+                                                    ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : 'border-left: 3px solid var(--info);'}">
+                                                    <div style="display: flex; justify-content: between; margin-bottom: 0.25rem;">
                                                         <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
                                                             ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
                                                         </span>
-                                                        <span style="font-size: 0.75rem; color: #666;">${new Date(prog.timestamp).toLocaleString('zh-TW')}</span>
+                                                        <span style="font-size: 0.75rem; color: #666;">
+                                                            ${new Date(prog.timestamp).toLocaleString('zh-TW')}
+                                                        </span>
                                                     </div>
                                                     <div style="font-size: 0.875rem; color: #333;">📝 ${prog.note}</div>
-                                                    <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">👤 填寫人: ${p.display_name}</div>
                                                 </div>
                                             `).join('')}
                                         </div>
-                                    ` : '<div style="color: #999; font-size: 0.875rem; margin-top: 0.5rem;">尚無進度回報</div>'}
-                                </div>
-                            `;
-                        }).join('')
+                                    </div>
+                                ` : '<div style="color: #999; font-size: 0.875rem; text-align: center; padding: 1rem;">尚無進度回報記錄</div>'}
+                            </div>
+                        `).join('')
                     }
                 </div>
-
-                ${(() => {
-                    const canReport = myParticipation && 
-                                    mission.status !== 'completed' && 
-                                    !hasCompletedPersonalTask;
-                    
-                    if (!canReport) {
-                        if (hasCompletedPersonalTask) {
-                            return `
-                                <div style="background: rgba(76, 175, 80, 0.1); padding: 1rem; border-radius: 8px; border-left: 4px solid var(--success); text-align: center;">
-                                    <strong style="color: var(--success);">✓ 您已完成個人任務</strong>
-                                </div>
-                            `;
-                        }
-                        return '';
-                    }
-                    
-                    return `
-                        <div style="background: rgba(0, 195, 0, 0.05); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--primary);">
-                            <h3 style="margin-bottom: 1rem;">✍️ 我的任務回報</h3>
-                            <button class="btn btn-primary" onclick="closeModal('detailModal'); showProgressModal('${missionId}')">
-                                回報任務進度
-                            </button>
-                        </div>
-                    `;
-                })()}
             `;
 
             document.getElementById('missionDetailContent').innerHTML = detailHTML;
@@ -1863,7 +1892,76 @@
 
             showModal('createMissionModal');
         }
+        // 新增局部更新機制
+        async function updateSingleMission(missionId) {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMission',
+                        sessionToken,
+                        missionId
+                    })
+                });
 
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok' && data.mission) {
+                        // 更新本地任務數據
+                        const index = allMissions.findIndex(m => m.id === missionId);
+                        if (index !== -1) {
+                            allMissions[index] = data.mission;
+                            
+                            // 局部更新 UI
+                            updateMissionCard(missionId, data.mission);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            } catch (error) {
+                console.error('局部更新失敗:', error);
+                return false;
+            }
+        }
+        // 局部更新任務卡片
+        function updateMissionCard(missionId, missionData) {
+            // 找到並更新對應的任務卡片
+            const cardElements = document.querySelectorAll(`[id*="mission-${missionId}-"]`);
+            
+            cardElements.forEach(element => {
+                if (element.classList.contains('mission-card')) {
+                    const newCardHTML = createMissionCard(missionData);
+                    element.outerHTML = newCardHTML;
+                }
+            });
+        }
+        // 改進所有操作函數，使用局部更新
+        async function handleOperation(operation, missionId, successMessage) {
+            // 先保存狀態
+            saveUIState();
+            
+            try {
+                // 嘗試局部更新
+                const localUpdateSuccess = await updateSingleMission(missionId);
+                
+                if (!localUpdateSuccess) {
+                    // 如果局部更新失敗，回退到完整刷新
+                    await loadMissions();
+                }
+                
+                showToast(successMessage, 'success');
+            } catch (error) {
+                console.error('操作失敗:', error);
+                showToast('操作失敗: ' + error.message, 'error');
+                // 失敗時也恢復狀態
+                restoreUIState();
+            }
+        }
+        
+        
         // 載入成員選項
         function loadHistoryMemberOptions() {
             const select = document.getElementById('historyMemberFilter');
@@ -2001,7 +2099,7 @@
             uiState.groups.clear();
             uiState.cards.clear();
             
-            // 保存分組狀態
+            // 保存分組狀態 - 修復：使用更可靠的方法
             document.querySelectorAll('.group-content').forEach(content => {
                 const groupId = content.id.replace('group-', '');
                 const isExpanded = content.classList.contains('show');
@@ -2009,90 +2107,80 @@
                 console.log(`  📁 分組 [${groupId}]: ${isExpanded ? '展開' : '收合'}`);
             });
             
-            // 保存卡片狀態 - 使用更精確的選擇器
-            document.querySelectorAll('[id^="mission-"]').forEach(content => {
-                if (content.classList.contains('mission-card-content')) {
-                    const cardId = content.id;
-                    const missionId = cardId.split('-')[1];
-                    const isExpanded = content.style.display === 'block';
-                    
+            // 保存卡片狀態 - 修復：使用更精確的選擇器
+            document.querySelectorAll('.mission-card').forEach(card => {
+                const content = card.querySelector('.mission-card-content');
+                if (content && content.id) {
+                    const missionId = content.id.split('-')[1];
                     if (missionId && !isNaN(missionId)) {
+                        const isExpanded = content.style.display === 'block';
                         uiState.cards.set(missionId, isExpanded);
                         console.log(`  📄 卡片 [${missionId}]: ${isExpanded ? '展開' : '收合'}`);
                     }
                 }
             });
             
-            console.log('✅ [狀態保存] 完成:', {
-                groups: uiState.groups.size,
-                cards: uiState.cards.size,
-                scroll: Math.round(uiState.scrollPosition)
-            });
+            console.log('✅ [狀態保存] 完成');
         }
         // 恢復 UI 狀態
         function restoreUIState() {
             console.log('📥 [狀態恢復] 開始...');
             
-            // 使用雙重 requestAnimationFrame 確保 DOM 完全更新
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    let groupsRestored = 0;
-                    let cardsRestored = 0;
+            // 使用更可靠的恢復時機
+            setTimeout(() => {
+                let restoredCount = 0;
+                
+                // 恢復分組狀態
+                uiState.groups.forEach((isExpanded, groupId) => {
+                    const content = document.getElementById(`group-${groupId}`);
+                    const icon = document.querySelector(`[data-group-id="${groupId}"]`);
                     
-                    // 恢復分組展開狀態
-                    uiState.groups.forEach((isExpanded, groupId) => {
-                        const content = document.getElementById(`group-${groupId}`);
-                        const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-                        
-                        if (content && icon) {
-                            if (isExpanded) {
-                                content.classList.add('show');
-                                icon.textContent = '▲';
-                            } else {
-                                content.classList.remove('show');
-                                icon.textContent = '▼';
+                    if (content && icon) {
+                        if (isExpanded) {
+                            content.classList.add('show');
+                            icon.textContent = '▲';
+                        } else {
+                            content.classList.remove('show');
+                            icon.textContent = '▼';
+                        }
+                        restoredCount++;
+                    }
+                });
+                
+                // 恢復卡片狀態 - 修復：使用更可靠的方法
+                uiState.cards.forEach((isExpanded, missionId) => {
+                    // 找到所有包含這個 missionId 的卡片
+                    const cards = document.querySelectorAll(`[id*="mission-${missionId}-"]`);
+                    
+                    cards.forEach(element => {
+                        if (element.classList.contains('mission-card-content')) {
+                            const cardId = element.id;
+                            const icon = document.getElementById(`${cardId}-icon`);
+                            
+                            if (icon) {
+                                if (isExpanded) {
+                                    element.style.display = 'block';
+                                    icon.textContent = '▲';
+                                } else {
+                                    element.style.display = 'none';
+                                    icon.textContent = '▼';
+                                }
+                                restoredCount++;
                             }
-                            groupsRestored++;
                         }
                     });
-                    
-                    // 恢復卡片展開狀態
-                    uiState.cards.forEach((shouldExpand, missionId) => {
-                        // 找到所有包含這個 missionId 的卡片
-                        const cards = document.querySelectorAll(`[id^="mission-${missionId}-"]`);
-                        
-                        cards.forEach(content => {
-                            if (content.classList.contains('mission-card-content')) {
-                                const cardId = content.id;
-                                const icon = document.getElementById(`${cardId}-icon`);
-                                
-                                if (icon) {
-                                    if (shouldExpand) {
-                                        content.style.display = 'block';
-                                        icon.textContent = '▲';
-                                    } else {
-                                        content.style.display = 'none';
-                                        icon.textContent = '▼';
-                                    }
-                                    cardsRestored++;
-                                }
-                            }
-                        });
-                    });
-                    
-                    // 恢復滾動位置
+                });
+                
+                // 恢復滾動位置
+                if (uiState.scrollPosition > 0) {
                     window.scrollTo({
                         top: uiState.scrollPosition,
                         behavior: 'instant'
                     });
-                    
-                    console.log('✅ [狀態恢復] 完成:', {
-                        groups: groupsRestored,
-                        cards: cardsRestored,
-                        scroll: Math.round(uiState.scrollPosition)
-                    });
-                });
-            });
+                }
+                
+                console.log(`✅ [狀態恢復] 完成，恢復了 ${restoredCount} 個元素`);
+            }, 100); // 增加延遲確保 DOM 完全渲染
         }
         // 返回導航頁面
         function goBack() {
