@@ -1422,7 +1422,7 @@
         }
         // 報名任務
         async function joinMission(missionId) {
-            await handleOperation(async () => {
+            try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
@@ -1437,12 +1437,19 @@
                 });
 
                 if (!response.ok) throw new Error('報名失敗');
-                
+
                 const data = await response.json();
-                if (data.status !== 'ok') throw new Error(data.message || '報名失敗');
-            }, '報名成功');
+                if (data.status === 'ok') {
+                    showToast('報名成功', 'success');
+                    await handleOperation('join', missionId, '報名成功');
+                } else {
+                    throw new Error(data.message || '報名失敗');
+                }
+            } catch (error) {
+                console.error('報名失敗:', error);
+                showToast('報名失敗: ' + error.message, 'error');
+            }
         }
-                
         // 取消報名任務
         async function cancelJoin(missionId) {
             if (!confirm('確定要取消報名嗎?')) return;
@@ -1709,7 +1716,7 @@
 
             const participants = mission.participants || [];
             
-            // ✅ 修正：正確識別每個參與者的完成狀態
+            // 修復：正確識別每個參與者的完成狀態
             const participantDetails = participants.map(p => {
                 const progressHistory = p.progress_history || [];
                 
@@ -1718,21 +1725,15 @@
                     new Date(b.timestamp) - new Date(a.timestamp)
                 );
                 
-                // ✅ 重要修正：檢查是否在當前指派階段完成
-                const currentAssignmentProgress = sortedProgress.filter(prog => 
-                    new Date(prog.timestamp) >= new Date(p.assigned_at || p.joined_at)
-                );
+                // 修復：正確識別個人任務完成狀態
+                const latestProgress = sortedProgress[0];
+                const hasCompleted = latestProgress && latestProgress.status === '已完成';
                 
-                const hasCompletedInCurrentAssignment = currentAssignmentProgress.some(prog => 
-                    prog.status === '已完成'
-                );
-
                 return {
                     ...p,
                     sortedProgress,
-                    hasCompleted: hasCompletedInCurrentAssignment,
-                    currentAssignmentProgress,
-                    latestProgress: sortedProgress[0]
+                    hasCompleted,
+                    latestProgress
                 };
             });
 
@@ -1760,7 +1761,7 @@
                 </div>
             `;
 
-            // ✅ 修正：正確顯示指派人員和進度
+            // 修復：正確顯示指派人員和進度
             const assignedParticipants = participantDetails.filter(p => p.is_assigned);
             if (assignedParticipants.length > 0) {
                 detailHTML += `
@@ -1775,23 +1776,17 @@
                                             ${p.hasCompleted ? '✓ 已完成個人任務' : '進行中'}
                                         </span>
                                     </div>
-                                    <div style="font-size: 0.875rem; color: #666;">
-                                        指派時間: ${new Date(p.assigned_at).toLocaleString('zh-TW')}
-                                    </div>
-                                    ${p.currentAssignmentProgress.length > 0 ? `
+                                    ${p.sortedProgress.length > 0 ? `
                                         <div style="margin-top: 0.5rem;">
-                                            <strong style="font-size: 0.875rem; color: #666;">當前指派階段進度:</strong>
-                                            ${p.currentAssignmentProgress.map(prog => `
-                                                <div style="margin-top: 0.25rem; padding: 0.5rem; background: var(--gray-100); border-radius: 4px; ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : ''}">
-                                                    <div style="display: flex; justify-content: between;">
-                                                        <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">${prog.status}</span>
-                                                        <span style="font-size: 0.75rem; color: #666;">${new Date(prog.timestamp).toLocaleString('zh-TW')}</span>
-                                                    </div>
-                                                    <div style="font-size: 0.75rem;">${prog.note}</div>
+                                            <strong style="font-size: 0.875rem; color: #666;">最新進度:</strong>
+                                            <div style="font-size: 0.875rem; margin-top: 0.25rem;">
+                                                <strong>${p.latestProgress.status}</strong> - ${p.latestProgress.note}
+                                                <div style="font-size: 0.75rem; color: #999;">
+                                                    ${new Date(p.latestProgress.timestamp).toLocaleString('zh-TW')}
                                                 </div>
-                                            `).join('')}
+                                            </div>
                                         </div>
-                                    ` : '<div style="color: #999; font-size: 0.875rem; margin-top: 0.5rem;">當前指派階段尚無進度</div>'}
+                                    ` : '<div style="color: #999; font-size: 0.875rem;">尚無進度回報</div>'}
                                 </div>
                             `).join('')}
                         </div>
@@ -1799,7 +1794,7 @@
                 `;
             }
 
-            // ✅ 修正：正確顯示所有參與人員的進度歷史
+            // 修復：正確顯示所有參與人員的進度歷史
             detailHTML += `
                 <div style="margin-bottom: 2rem;">
                     <h3 style="margin-bottom: 1rem;">👥 所有參與人員 (${participantDetails.length}人)</h3>
@@ -1834,32 +1829,23 @@
                                 ${p.sortedProgress.length > 0 ? `
                                     <div style="border-top: 1px solid var(--gray-200); padding-top: 1rem;">
                                         <strong style="font-size: 0.875rem; color: #666; display: block; margin-bottom: 0.5rem;">
-                                            📈 完整進度記錄 (${p.sortedProgress.length}筆):
+                                            📈 進度記錄 (${p.sortedProgress.length}筆):
                                         </strong>
                                         <div style="max-height: 300px; overflow-y: auto;">
-                                            ${p.sortedProgress.map((prog, index) => {
-                                                const isInCurrentAssignment = new Date(prog.timestamp) >= new Date(p.assigned_at || p.joined_at);
-                                                return `
-                                                    <div style="padding: 0.75rem; background: var(--gray-100); border-radius: 6px; margin-bottom: 0.5rem; 
-                                                        ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : 'border-left: 3px solid var(--info);'}
-                                                        ${isInCurrentAssignment ? 'border-right: 3px solid var(--primary);' : ''}">
-                                                        <div style="display: flex; justify-content: between; margin-bottom: 0.25rem;">
-                                                            <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
-                                                                ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
-                                                                ${isInCurrentAssignment ? ' 🆕' : ''}
-                                                            </span>
-                                                            <span style="font-size: 0.75rem; color: #666;">
-                                                                ${new Date(prog.timestamp).toLocaleString('zh-TW')}
-                                                            </span>
-                                                        </div>
-                                                        <div style="font-size: 0.875rem; color: #333;">📝 ${prog.note}</div>
-                                                        ${isInCurrentAssignment ? 
-                                                            '<div style="font-size: 0.7rem; color: var(--primary); margin-top: 0.25rem;">🔄 當前指派階段</div>' : 
-                                                            '<div style="font-size: 0.7rem; color: #999; margin-top: 0.25rem;">歷史記錄</div>'
-                                                        }
+                                            ${p.sortedProgress.map((prog, index) => `
+                                                <div style="padding: 0.75rem; background: var(--gray-100); border-radius: 6px; margin-bottom: 0.5rem; 
+                                                    ${prog.status === '已完成' ? 'border-left: 3px solid var(--success);' : 'border-left: 3px solid var(--info);'}">
+                                                    <div style="display: flex; justify-content: between; margin-bottom: 0.25rem;">
+                                                        <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
+                                                            ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
+                                                        </span>
+                                                        <span style="font-size: 0.75rem; color: #666;">
+                                                            ${new Date(prog.timestamp).toLocaleString('zh-TW')}
+                                                        </span>
                                                     </div>
-                                                `;
-                                            }).join('')}
+                                                    <div style="font-size: 0.875rem; color: #333;">📝 ${prog.note}</div>
+                                                </div>
+                                            `).join('')}
                                         </div>
                                     </div>
                                 ` : '<div style="color: #999; font-size: 0.875rem; text-align: center; padding: 1rem;">尚無進度回報記錄</div>'}
@@ -1871,39 +1857,6 @@
 
             document.getElementById('missionDetailContent').innerHTML = detailHTML;
             showModal('detailModal');
-        }
-        // ✅ 新增：智能局部更新
-        async function smartUpdateMissions() {
-            try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'getMissions',
-                        sessionToken
-                    })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.status === 'ok') {
-                        const newMissions = data.missions || [];
-                        
-                        // ✅ 只有資料真正變化時才重新渲染
-                        if (JSON.stringify(allMissions) !== JSON.stringify(newMissions)) {
-                            console.log('任務資料已更新，重新渲染');
-                            allMissions = newMissions;
-                            renderMissions();
-                        } else {
-                            console.log('任務資料無變化，跳過渲染');
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('更新任務失敗:', error);
-                // 失敗時不顯示錯誤，避免打擾用戶
-            }
         }
         // 編輯任務
         function editMission(missionId) {
@@ -1986,25 +1939,28 @@
             });
         }
         // 改進所有操作函數，使用局部更新
-        async function handleOperation(operationFn, successMessage) {
-            // 保存當前狀態
+        async function handleOperation(operation, missionId, successMessage) {
+            // 先保存狀態
             saveUIState();
             
             try {
-                await operationFn();
+                // 嘗試局部更新
+                const localUpdateSuccess = await updateSingleMission(missionId);
                 
-                // 使用智能更新而不是完整重新載入
-                await smartUpdateMissions();
+                if (!localUpdateSuccess) {
+                    // 如果局部更新失敗，回退到完整刷新
+                    await loadMissions();
+                }
                 
                 showToast(successMessage, 'success');
             } catch (error) {
                 console.error('操作失敗:', error);
                 showToast('操作失敗: ' + error.message, 'error');
-                // 失敗時恢復狀態
+                // 失敗時也恢復狀態
                 restoreUIState();
             }
         }
-
+        
         
         // 載入成員選項
         function loadHistoryMemberOptions() {
