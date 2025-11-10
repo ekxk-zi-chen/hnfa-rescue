@@ -649,7 +649,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   // ====== 取得所有任務 ======
   if (action === 'getMissions') {
     try {
-      // 先取得任務和參與者
+      // ✅ 修正：同時取得參與者的最後指派時間
       const { data: missions, error } = await supabase
         .from('missions')
         .select(`
@@ -662,7 +662,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             assigned_by,
             assigned_at,
             joined_at,
-            completed_at
+            completed_at,
+            last_assigned_at
           )
         `)
         .order('created_at', { ascending: false });
@@ -672,7 +673,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
       }
 
-      // 為每個任務的參與者加載進度記錄
+      // ✅ 為每個任務的參與者加載進度記錄
       if (missions && missions.length > 0) {
         for (const mission of missions) {
           if (mission.participants && mission.participants.length > 0) {
@@ -683,13 +684,17 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               .eq('mission_id', mission.id)
               .order('timestamp', { ascending: false });
 
-            // 將進度分配給對應的參與者
-            mission.participants = mission.participants.map(participant => ({
-              ...participant,
-              progress_history: allProgress 
+            // ✅ 修正：將進度分配給對應的參與者，並過濾出正確的進度記錄
+            mission.participants = mission.participants.map(participant => {
+              const participantProgress = allProgress 
                 ? allProgress.filter(p => p.user_id === participant.user_id)
-                : []
-            }));
+                : [];
+              
+              return {
+                ...participant,
+                progress_history: participantProgress
+              };
+            });
           }
         }
       }
@@ -869,38 +874,34 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         // 檢查是否已存在
         const { data: existing } = await supabase
           .from('mission_participants')
-          .select('id, progress_history, completed_at')
+          .select('id, completed_at, assigned_at')
           .eq('mission_id', missionId)
           .eq('user_id', member.user_id)
           .single();
 
         if (existing) {
-            const updateData = {
-                is_assigned: true,
-                assigned_by: assignedBy,
-                assigned_at: assignedAt
-            };
+          // ✅ 重要修正：重新指派時完全重置狀態
+          const updateData = {
+            is_assigned: true,
+            assigned_by: assignedBy,
+            assigned_at: assignedAt,
+            completed_at: null // 清除完成時間
+          };
 
-            // ✅ 重新指派時清除完成狀態
-            if (allowReassign && existing.completed_at) {
-                updateData.completed_at = null;
-                
-                // ✅ 關鍵: 清空舊的完成記錄
-                await supabase
-                    .from('mission_progress')
-                    .delete()
-                    .eq('mission_id', missionId)
-                    .eq('user_id', member.user_id)
-                    .eq('status', '已完成');
-            }
+          await supabase
+            .from('mission_participants')
+            .update(updateData)
+            .eq('id', existing.id);
 
-            await supabase
-                .from('mission_participants')
-                .update(updateData)
-                .eq('id', existing.id);
+          // ✅ 刪除舊的進度記錄，但保留指派記錄
+          await supabase
+            .from('mission_progress')
+            .delete()
+            .eq('mission_id', missionId)
+            .eq('user_id', member.user_id)
+            .neq('status', '已指派') // 保留指派記錄
+            .neq('status', '重新指派'); // 保留重新指派記錄
         } else {
-          console.log(`[指派成員] 成員 ${member.display_name} 不存在，新增並指派`);
-          
           // 新增並指派
           await supabase
             .from('mission_participants')
@@ -911,12 +912,13 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               is_assigned: true,
               assigned_by: assignedBy,
               assigned_at: assignedAt,
-              joined_at: assignedAt
+              joined_at: assignedAt,
+              completed_at: null
             });
         }
 
-        // ✅ 記錄指派歷史 (重新指派也記錄)
-        const isReassign = existing && existing.completed_at;
+        // ✅ 記錄指派歷史
+        const isReassign = existing && existing.assigned_at;
         const statusNote = isReassign 
           ? `${assignedBy} 重新指派${note ? ': ' + note : ''}`
           : `${assignedBy} 指派${note ? ': ' + note : ''}`;
@@ -949,7 +951,19 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     try {
       const { missionId, userId, status, note, timestamp } = body;
 
-      // 新增進度記錄
+      // ✅ 檢查是否為重新指派後的第一次進度回報
+      const { data: participant } = await supabase
+        .from('mission_participants')
+        .select('assigned_at, completed_at')
+        .eq('mission_id', missionId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!participant) {
+        return res.status(404).json({ status: "error", message: "找不到參與記錄" });
+      }
+
+      // ✅ 新增進度記錄
       const { error } = await supabase
         .from('mission_progress')
         .insert({
@@ -965,11 +979,15 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         return res.status(500).json({ status: "error", message: "Failed to submit progress" });
       }
 
-      // 如果狀態是已完成，更新參與者狀態
+      // ✅ 如果狀態是已完成，更新參與者狀態
       if (status === '已完成') {
         await supabase
           .from('mission_participants')
-          .update({ completed_at: new Date().toISOString() })
+          .update({ 
+            completed_at: new Date().toISOString(),
+            // ✅ 記錄完成時的指派階段
+            last_assigned_at: participant.assigned_at
+          })
           .eq('mission_id', missionId)
           .eq('user_id', userId);
       }
@@ -983,6 +1001,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(500).json({ status: "error", message: error.message });
     }
   }
+
 
   // ====== 關閉報名 ======
   if (action === 'closeRecruitment') {
