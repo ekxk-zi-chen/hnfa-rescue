@@ -1003,7 +1003,6 @@
             const isPersonalTab = containerId === 'personalMissions';
             
             if (isPersonalTab) {
-                // ✅ 修正：未完成任务也使用分组结构
                 const incompleteMissions = missions.filter(m => {
                     const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
                     return !myParticipation?.progress_history?.some(p => p.status === '已完成') && m.status !== 'completed';
@@ -1021,13 +1020,11 @@
                     html += `
                         <div class="mission-group">
                             <div class="group-header" style="background: rgba(255, 107, 53, 0.1); border-left: 4px solid var(--accent);">
-                                <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">
-                                    🔥 进行中的任务 (${incompleteMissions.length})
-                                </h3>
+                                <h3 style="flex: 1;">🔥 進行中的任務 (${incompleteMissions.length})</h3>
                                 <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▲</span>
                             </div>
                             <div class="group-content show" id="group-${groupId}">
-                                ${renderGroupedMissions(incompleteMissions)}
+                                ${renderGroupedMissionsForPersonal(incompleteMissions)}
                             </div>
                         </div>
                     `;
@@ -1038,13 +1035,11 @@
                     html += `
                         <div class="mission-group">
                             <div class="group-header" style="background: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--success);">
-                                <h3 onclick="toggleGroup('${groupId}', event)" style="flex: 1;">
-                                    ✓ 已完成的任务 (${completedMissions.length})
-                                </h3>
+                                <h3 style="flex: 1;">✓ 已完成的任務 (${completedMissions.length})</h3>
                                 <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
                             </div>
                             <div class="group-content" id="group-${groupId}">
-                                ${renderGroupedMissions(completedMissions)}
+                                ${renderGroupedMissionsForPersonal(completedMissions)}
                             </div>
                         </div>
                     `;
@@ -1056,6 +1051,48 @@
 
             container.innerHTML = renderGroupedMissions(missions);
         }
+    
+        // 新增專門用於"我的任務"的分組渲染函數
+        function renderGroupedMissionsForPersonal(missions) {
+            const grouped = groupMissionsByDate(missions);
+            
+            let html = '';
+            Object.keys(grouped).sort().reverse().forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const dateGroups = groupMissionsByDay(monthMissions);
+                const groupId = `personal-${yearMonth.replace(/\s+/g, '-')}`;
+                
+                html += `
+                    <div class="mission-group">
+                        <div class="group-header" style="cursor: pointer;">
+                            <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                            <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
+                        </div>
+                        <div class="group-content" id="group-${groupId}">
+                            ${Object.keys(dateGroups).sort().reverse().map(day => {
+                                const dayMissions = dateGroups[day];
+                                const dayGroupId = `${groupId}-${day}`;
+                                
+                                return `
+                                    <div class="mission-group" style="margin-left: 1rem;">
+                                        <div class="group-header" style="cursor: pointer;">
+                                            <h3 style="font-size: 1rem; flex: 1;">📆 ${day} (${dayMissions.length})</h3>
+                                            <span class="toggle-icon" data-group-id="${dayGroupId}" onclick="toggleGroup('${dayGroupId}', event)">▼</span>
+                                        </div>
+                                        <div class="group-content" id="group-${dayGroupId}">
+                                            ${dayMissions.map(mission => createMissionCard(mission)).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            return html;
+        }
+
         // ✅ 新增：渲染分組任務
         function renderGroupedMissions(missions) {
             const grouped = groupMissionsByDate(missions);
