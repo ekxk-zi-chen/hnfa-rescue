@@ -380,33 +380,41 @@
         }
 
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         .form-group label {
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 600;
-            color: var(--gray-700);
+            color: var(--gray-900);
         }
 
         .form-control {
             width: 100%;
             padding: 0.75rem;
-            border: 2px solid var(--gray-300);
+            border: 1px solid var(--gray-300);
             border-radius: 8px;
-            transition: border-color 0.3s ease;
+            transition: border-color 0.2s ease;
             font-size: 1rem;
         }
 
         .form-control:focus {
             outline: none;
             border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 195, 0, 0.1);
         }
-
+        select.form-control {
+            cursor: pointer;
+        }
+        /* 隱藏欄位確保不顯示 */
+        input[type="hidden"] {
+            display: none !important;
+        }
         textarea.form-control {
             min-height: 100px;
             resize: vertical;
+            font-family: inherit;
         }
 
         .member-selector {
@@ -751,27 +759,58 @@
     <div id="progressModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">回報任務進度</h3>
-                <button class="close" onclick="closeModal('progressModal')">&times;</button>
+                <h2>回報進度</h2>
+                <button class="close-btn" onclick="closeModal('progressModal')">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- ✅ 關鍵：隱藏欄位存放任務 ID -->
+                <input type="hidden" id="progressMissionId">
+                
+                <!-- 顯示當前進度資訊 -->
+                <div id="currentProgressInfo"></div>
+                
+                <!-- 狀態選擇 -->
                 <div class="form-group">
-                    <label for="progressStatus">任務狀態 *</label>
+                    <label for="progressStatus">任務狀態 <span style="color: red;">*</span></label>
                     <select id="progressStatus" class="form-control" required>
-                        <option value="進行中">進行中</option>
-                        <option value="已完成">已完成</option>
+                        <option value="已指派">已指派</option>
+                        <option value="進行中" selected>進行中</option>
+                        <option value="暫停">暫停</option>
                         <option value="遇到困難">遇到困難</option>
-                        <option value="需要支援">需要支援</option>
+                        <option value="等待支援">等待支援</option>
+                        <option value="已完成">已完成</option>
                     </select>
                 </div>
+                
+                <!-- 進度說明 -->
                 <div class="form-group">
-                    <label for="progressNote">進度說明 *</label>
-                    <textarea id="progressNote" class="form-control" required></textarea>
+                    <label for="progressNote">進度說明 <span style="color: red;">*</span></label>
+                    <textarea 
+                        id="progressNote" 
+                        class="form-control" 
+                        rows="4" 
+                        placeholder="請詳細描述當前進度、遇到的問題或需要的支援..."
+                        required
+                    ></textarea>
                 </div>
-                <div style="text-align: right; margin-top: 2rem;">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('progressModal')">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="submitProgress()" style="margin-left: 0.5rem;">提交</button>
+                
+                <!-- 提示訊息 -->
+                <div style="background: rgba(33, 150, 243, 0.1); padding: 0.75rem; border-radius: 6px; margin-top: 1rem;">
+                    <div style="font-size: 0.875rem; color: #666;">
+                        <strong>💡 提示：</strong>
+                        <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                            <li>回報時間將自動記錄</li>
+                            <li>所有進度記錄都會保存在任務歷史中</li>
+                            <li>選擇「已完成」表示您的部分已完成</li>
+                        </ul>
+                    </div>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('progressModal')">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitProgress()">
+                    <span>提交進度</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1664,22 +1703,62 @@
         }
         // 提交進度回報
         async function submitProgress() {
-            const missionId = document.getElementById('progressMissionId').value;
-            const status = document.getElementById('progressStatus').value;
-            const note = document.getElementById('progressNote').value.trim();
-
-            if (!note) {
-                showToast('請填寫進度說明', 'warning');
-                return;
-            }
-
             try {
-                const mission = allMissions.find(m => m.id === parseInt(missionId));
-                if (!mission) throw new Error('找不到任務');
+                // ✅ 安全地取得元素
+                const missionIdElement = document.getElementById('progressMissionId');
+                const statusElement = document.getElementById('progressStatus');
+                const noteElement = document.getElementById('progressNote');
+                
+                // 檢查元素是否存在
+                if (!missionIdElement) {
+                    console.error('找不到 progressMissionId 元素');
+                    showToast('系統錯誤：無法找到任務 ID', 'error');
+                    return;
+                }
+                
+                if (!statusElement) {
+                    console.error('找不到 progressStatus 元素');
+                    showToast('系統錯誤：無法找到狀態選擇', 'error');
+                    return;
+                }
+                
+                if (!noteElement) {
+                    console.error('找不到 progressNote 元素');
+                    showToast('系統錯誤：無法找到說明欄位', 'error');
+                    return;
+                }
+                
+                const missionId = parseInt(missionIdElement.value);
+                const status = statusElement.value;
+                const note = noteElement.value.trim();
 
-                const myParticipation = mission.participants.find(p => p.user_id === currentUser.userId);
-                if (!myParticipation) throw new Error('您不在參與者名單中');
+                // 驗證輸入
+                if (!missionId || isNaN(missionId)) {
+                    showToast('無效的任務 ID', 'error');
+                    return;
+                }
 
+                if (!note) {
+                    showToast('請填寫進度說明', 'warning');
+                    noteElement.focus();
+                    return;
+                }
+
+                // 找到任務
+                const mission = allMissions.find(m => m.id === missionId);
+                if (!mission) {
+                    showToast('找不到該任務', 'error');
+                    return;
+                }
+
+                // 檢查參與狀態
+                const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
+                if (!myParticipation) {
+                    showToast('您不在該任務的參與者名單中', 'error');
+                    return;
+                }
+
+                // 建立進度記錄
                 const progressEntry = {
                     timestamp: new Date().toISOString(),
                     status: status,
@@ -1688,32 +1767,110 @@
                     reporter_id: currentUser.userId
                 };
 
+                // 初始化 progress_history
                 if (!myParticipation.progress_history) {
                     myParticipation.progress_history = [];
                 }
+                
+                // 添加到本地
                 myParticipation.progress_history.push(progressEntry);
 
                 // 保存到後端
                 const response = await fetch(`${API_BASE_URL}/missions/${missionId}/progress`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify(progressEntry)
                 });
 
-                if (!response.ok) throw new Error('提交失敗');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
 
-                showToast('進度已更新', 'success');
+                // 成功提示
+                showToast('✓ 進度已更新', 'success');
+                
+                // 關閉彈窗
                 closeModal('progressModal');
                 
-                // ✅ 關鍵修正：重新載入任務資料並刷新畫面
+                // 清空表單
+                noteElement.value = '';
+                statusElement.value = '進行中';
+                
+                // ✅ 重新載入任務資料並刷新畫面
+                console.log('重新載入任務資料...');
                 await loadMissions();
+                console.log('任務資料已更新');
                 
             } catch (error) {
                 console.error('提交進度失敗:', error);
                 showToast('提交失敗：' + error.message, 'error');
             }
         }
-                
+
+        // ✅ 確保 openProgressModal 正確設定隱藏欄位
+        function openProgressModal(missionId) {
+            const mission = allMissions.find(m => m.id === missionId);
+            if (!mission) {
+                showToast('找不到該任務', 'error');
+                return;
+            }
+
+            const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
+            if (!myParticipation) {
+                showToast('您不在該任務的參與者名單中', 'warning');
+                return;
+            }
+
+            // ✅ 設定隱藏欄位的值
+            const missionIdElement = document.getElementById('progressMissionId');
+            if (missionIdElement) {
+                missionIdElement.value = missionId;
+                console.log('已設定 progressMissionId:', missionId);
+            } else {
+                console.error('找不到 progressMissionId 元素');
+            }
+
+            // 重置表單
+            const statusElement = document.getElementById('progressStatus');
+            const noteElement = document.getElementById('progressNote');
+            
+            if (statusElement) statusElement.value = '進行中';
+            if (noteElement) noteElement.value = '';
+
+            // 顯示當前任務資訊
+            const modalTitle = document.querySelector('#progressModal .modal-header h2');
+            if (modalTitle) {
+                modalTitle.textContent = `回報進度 - ${mission.mission_title}`;
+            }
+
+            // 顯示最新進度
+            const progressHistory = myParticipation.progress_history || [];
+            if (progressHistory.length > 0) {
+                const latest = progressHistory[progressHistory.length - 1];
+                const infoDiv = document.getElementById('currentProgressInfo');
+                if (infoDiv) {
+                    infoDiv.innerHTML = `
+                        <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+                            <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
+                            <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
+                            <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                                ${latest.note}
+                            </div>
+                            <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
+                                ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            showModal('progressModal');
+        }
+
         // 關閉報名
         async function closeRecruitment(missionId) {
             if (!confirm('確定要關閉報名嗎?')) return;
