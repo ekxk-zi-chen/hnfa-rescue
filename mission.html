@@ -1349,18 +1349,21 @@
             const participants = mission.participants || [];
             const isCompleted = mission.status === 'completed';
             
-            // ✅ 修正：按派遣階段判斷個人完成狀態
-            let hasCompletedCurrentPhase = false;
-            if (myParticipation && myParticipation.is_assigned) {
-                const assignmentTime = new Date(myParticipation.last_assigned_at || myParticipation.assigned_at || myParticipation.joined_at);
-                const currentPhaseProgress = (myParticipation.progress_history || []).filter(prog => 
+            // ✅ 修正：正確判斷個人完成狀態
+            let hasCompletedPersonalTask = false;
+            if (myParticipation) {
+                const assignmentTime = myParticipation.is_assigned ? 
+                    new Date(myParticipation.last_assigned_at || myParticipation.assigned_at || myParticipation.joined_at) : 
+                    new Date(myParticipation.joined_at);
+                
+                const relevantProgress = (myParticipation.progress_history || []).filter(prog => 
                     new Date(prog.timestamp) >= assignmentTime
                 );
-                hasCompletedCurrentPhase = currentPhaseProgress.some(prog => prog.status === '已完成');
-            } else if (myParticipation) {
-                // 自願報名者：使用所有進度記錄
-                hasCompletedCurrentPhase = (myParticipation.progress_history || []).some(prog => prog.status === '已完成');
+                
+                hasCompletedPersonalTask = relevantProgress.some(prog => prog.status === '已完成');
             }
+            
+            const statusClass = isCompleted ? 'completed' : (mission.is_urgent ? 'urgent' : '');
             
             return `
                 <div class="mission-info">
@@ -1391,11 +1394,22 @@
                         <strong style="display: block; margin-bottom: 0.5rem;">參與人員:</strong>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             ${participants.map(p => {
-                                const hasCompleted = p.progress_history?.some(prog => prog.status === '已完成');
+                                // ✅ 修正：正確顯示每個人的完成狀態
+                                let personHasCompleted = false;
+                                if (p.is_assigned) {
+                                    const assignTime = new Date(p.last_assigned_at || p.assigned_at || p.joined_at);
+                                    const currentPhaseProgress = (p.progress_history || []).filter(prog => 
+                                        new Date(prog.timestamp) >= assignTime
+                                    );
+                                    personHasCompleted = currentPhaseProgress.some(prog => prog.status === '已完成');
+                                } else {
+                                    personHasCompleted = (p.progress_history || []).some(prog => prog.status === '已完成');
+                                }
+                                
                                 return `
                                     <div class="participant-chip ${p.is_assigned ? 'assigned' : ''}">
                                         ${p.display_name} ${p.is_assigned ? '(指派)' : ''}
-                                        ${hasCompleted ? ' ✓' : ''}
+                                        ${personHasCompleted ? ' ✓' : ''}
                                     </div>
                                 `;
                             }).join('')}
@@ -1461,7 +1475,7 @@
                 </div>
             `;
         }
-
+                
         // 設置事件監聽器
         function setupEventListeners() {
             document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
