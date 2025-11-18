@@ -1005,69 +1005,100 @@
         // 渲染任務列表，按年月日分組
         function renderMissionList(containerId, missions) {
             const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // ✅ 根據容器 ID 設定 context
+            const context = containerId.replace('Missions', ''); // 'active', 'recruiting', 'history', 'personal'
             
             if (missions.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>目前沒有任務</p>
-                    </div>
-                `;
+                container.innerHTML = '<p style="color: #666; text-align: center; padding: 2rem;">目前沒有任務</p>';
                 return;
             }
 
-            const isPersonalTab = containerId === 'personalMissions';
+            // 按日期分組
+            const grouped = missions.reduce((acc, mission) => {
+                const date = new Date(mission.mission_date);
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                
+                const yearKey = `${year}`;
+                const monthKey = `${year}-${month}`;
+                const dayKey = `${year}-${month}-${day}`;
+                
+                if (!acc[yearKey]) acc[yearKey] = {};
+                if (!acc[yearKey][monthKey]) acc[yearKey][monthKey] = {};
+                if (!acc[yearKey][monthKey][dayKey]) acc[yearKey][monthKey][dayKey] = [];
+                
+                acc[yearKey][monthKey][dayKey].push(mission);
+                return acc;
+            }, {});
+
+            let html = '';
             
-            if (isPersonalTab) {
-                const incompleteMissions = missions.filter(m => {
-                    const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
-                    return !myParticipation?.progress_history?.some(p => p.status === '已完成') && m.status !== 'completed';
+            Object.keys(grouped).sort((a, b) => b - a).forEach(year => {
+                const yearGroup = grouped[year];
+                const yearId = `${context}-year-${year}`;
+                
+                html += `
+                    <div class="time-group" style="margin-bottom: 1.5rem;">
+                        <div class="group-header" onclick="toggleGroup('${yearId}', event)" style="cursor: pointer;">
+                            <h3>${year} 年</h3>
+                            <span class="toggle-icon" data-group-id="${yearId}">▼</span>
+                        </div>
+                        <div id="group-${yearId}" class="group-content">
+                `;
+                
+                Object.keys(yearGroup).sort((a, b) => {
+                    const [aY, aM] = a.split('-').map(Number);
+                    const [bY, bM] = b.split('-').map(Number);
+                    return bY !== aY ? bY - aY : bM - aM;
+                }).forEach(month => {
+                    const monthGroup = yearGroup[month];
+                    const [y, m] = month.split('-');
+                    const monthId = `${context}-month-${month}`;
+                    
+                    html += `
+                        <div class="time-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                            <div class="group-header" onclick="toggleGroup('${monthId}', event)" style="cursor: pointer;">
+                                <h4>${m} 月</h4>
+                                <span class="toggle-icon" data-group-id="${monthId}">▼</span>
+                            </div>
+                            <div id="group-${monthId}" class="group-content">
+                    `;
+                    
+                    Object.keys(monthGroup).sort((a, b) => {
+                        const [aY, aM, aD] = a.split('-').map(Number);
+                        const [bY, bM, bD] = b.split('-').map(Number);
+                        if (bY !== aY) return bY - aY;
+                        if (bM !== aM) return bM - aM;
+                        return bD - aD;
+                    }).forEach(day => {
+                        const dayMissions = monthGroup[day];
+                        const [y, m, d] = day.split('-');
+                        const dayId = `${context}-day-${day}`;
+                        
+                        html += `
+                            <div class="time-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                                <div class="group-header" onclick="toggleGroup('${dayId}', event)" style="cursor: pointer;">
+                                    <h5>${d} 日</h5>
+                                    <span class="toggle-icon" data-group-id="${dayId}">▼</span>
+                                </div>
+                                <div id="group-${dayId}" class="group-content">
+                                    ${dayMissions.map(m => createMissionCard(m, `${context}-${day}`)).join('')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div></div>';
                 });
                 
-                const completedMissions = missions.filter(m => {
-                    const myParticipation = m.participants?.find(p => p.user_id === currentUser.userId);
-                    return myParticipation?.progress_history?.some(p => p.status === '已完成') || m.status === 'completed';
-                });
-
-                let html = '';
-                
-                if (incompleteMissions.length > 0) {
-                    const groupId = 'personal-incomplete';
-                    html += `
-                        <div class="mission-group">
-                            <div class="group-header" style="background: rgba(255, 107, 53, 0.1); border-left: 4px solid var(--accent);">
-                                <h3 style="flex: 1;">🔥 進行中的任務 (${incompleteMissions.length})</h3>
-                                <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▲</span>
-                            </div>
-                            <div class="group-content show" id="group-${groupId}">
-                                ${renderGroupedMissionsForPersonal(incompleteMissions)}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                if (completedMissions.length > 0) {
-                    const groupId = 'personal-completed';
-                    html += `
-                        <div class="mission-group">
-                            <div class="group-header" style="background: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--success);">
-                                <h3 style="flex: 1;">✓ 已完成的任務 (${completedMissions.length})</h3>
-                                <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
-                            </div>
-                            <div class="group-content" id="group-${groupId}">
-                                ${renderGroupedMissionsForPersonal(completedMissions)}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                container.innerHTML = html;
-                return;
-            }
-
-            container.innerHTML = renderGroupedMissions(missions);
+                html += '</div></div>';
+            });
+            
+            container.innerHTML = html;
         }
-    
         // 新增專門用於"我的任務"的分組渲染函數
         function renderGroupedMissionsForPersonal(missions) {
             const grouped = groupMissionsByDate(missions);
@@ -1210,52 +1241,37 @@
 
         // ✅ 新增：全部展開
         function expandAll() {
-            // 只操作任務卡片內容
             document.querySelectorAll('.mission-card-content').forEach(content => {
-                const cardId = content.id;
-                const icon = document.getElementById(`${cardId}-icon`);
-                
-                // 展開卡片
                 content.style.display = 'block';
+                const icon = document.getElementById(`${content.id}-icon`);
                 if (icon) icon.textContent = '▲';
                 
-                // 保存狀態（提取任務ID）
-                const missionIdMatch = cardId.match(/-(\d+)-/);
-                if (missionIdMatch) {
-                    uiState.cards.set(missionIdMatch[1], true);
-                }
+                // 保存狀態
+                const missionId = content.closest('.mission-card')?.dataset?.missionId;
+                if (missionId) uiState.cards.set(missionId, true);
             });
             
-            // 不操作 group-content（年月日分組保持原狀）
             saveUIState();
             showToast('已展開所有任務卡片', 'success');
         }
 
-        // ✅ 新增：收合功能
         function collapseAll() {
-            // 只操作任務卡片內容
             document.querySelectorAll('.mission-card-content').forEach(content => {
-                const cardId = content.id;
-                const icon = document.getElementById(`${cardId}-icon`);
-                
-                // 收合卡片
                 content.style.display = 'none';
+                const icon = document.getElementById(`${content.id}-icon`);
                 if (icon) icon.textContent = '▼';
                 
                 // 保存狀態
-                const missionIdMatch = cardId.match(/-(\d+)-/);
-                if (missionIdMatch) {
-                    uiState.cards.set(missionIdMatch[1], false);
-                }
+                const missionId = content.closest('.mission-card')?.dataset?.missionId;
+                if (missionId) uiState.cards.set(missionId, false);
             });
             
-            // 不操作 group-content（年月日分組保持原狀）
             saveUIState();
             showToast('已收合所有任務卡片', 'success');
         }
-                
+
         // 建立任務卡片 HTML
-        function createMissionCard(mission) {
+        function createMissionCard(mission, context = 'default') {
             const isUrgent = mission.is_urgent;
             const isCompleted = mission.status === 'completed';
             
@@ -1275,13 +1291,11 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
             
-            // ✅ 關鍵修正：使用更唯一的 ID，包含當前頁籤資訊
-            const currentTab = document.querySelector('.tab-btn.active')?.textContent || 'default';
-            const tabPrefix = currentTab.replace(/[^a-zA-Z0-9]/g, '');
-            const cardId = `mission-${tabPrefix}-${mission.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            // ✅ 關鍵修正：使用 context + mission.id 作為唯一標識
+            const cardId = `card-${context}-${mission.id}`;
             
             return `
-                <div class="mission-card ${statusClass}" style="margin-bottom: 1rem;">
+                <div class="mission-card ${statusClass}" data-mission-id="${mission.id}" style="margin-bottom: 1rem;">
                     <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                             <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
@@ -1301,7 +1315,7 @@
                 </div>
             `;
         }
-
+                
         // ✅ 新增：切換任務卡片
         function toggleMissionCard(cardId, event) {
             if (event) {
@@ -1312,27 +1326,13 @@
             const content = document.getElementById(cardId);
             const icon = document.getElementById(`${cardId}-icon`);
             
-            if (!content) {
-                console.warn(`找不到卡片內容: ${cardId}`);
-                // 嘗試使用備用方法查找
-                const allCards = document.querySelectorAll('.mission-card-content');
-                for (let card of allCards) {
-                    if (card.id.includes(cardId.split('-')[2])) { // 使用任務ID匹配
-                        console.log(`使用備用方法找到卡片: ${card.id}`);
-                        content = card;
-                        break;
-                    }
-                }
-                if (!content) return;
-            }
-            
-            if (!icon) {
-                console.warn(`找不到圖標: ${cardId}-icon`);
+            if (!content || !icon) {
+                console.error('找不到元素:', cardId);
                 return;
             }
             
             const isCurrentlyExpanded = content.style.display === 'block';
-            const missionId = cardId.split('-')[2]; // 提取實際的任務ID
+            const missionId = content.closest('.mission-card')?.dataset?.missionId;
             
             if (isCurrentlyExpanded) {
                 content.style.display = 'none';
@@ -1343,6 +1343,8 @@
                 icon.textContent = '▲';
                 if (missionId) uiState.cards.set(missionId, true);
             }
+            
+            saveUIState();
         }
         // ✅ 新增：將卡片內容提取為獨立函數，避免程式碼重複
         function createMissionCardContent(mission, myParticipation) {
@@ -1662,51 +1664,56 @@
         }
         // 提交進度回報
         async function submitProgress() {
+            const missionId = document.getElementById('progressMissionId').value;
             const status = document.getElementById('progressStatus').value;
-            const note = document.getElementById('progressNote').value;
+            const note = document.getElementById('progressNote').value.trim();
 
             if (!note) {
-                showToast('請填寫進度說明', 'error');
+                showToast('請填寫進度說明', 'warning');
                 return;
             }
 
-            // ✅ 檢查是否選擇"已完成"
-            if (status === '已完成') {
-                const confirmComplete = confirm('確認要標記「我的個人任務」為已完成嗎？\n\n注意：這只會標記您個人的任務完成狀態，不會結案整個任務。');
-                if (!confirmComplete) return;
-            }
-
             try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const mission = allMissions.find(m => m.id === parseInt(missionId));
+                if (!mission) throw new Error('找不到任務');
+
+                const myParticipation = mission.participants.find(p => p.user_id === currentUser.userId);
+                if (!myParticipation) throw new Error('您不在參與者名單中');
+
+                const progressEntry = {
+                    timestamp: new Date().toISOString(),
+                    status: status,
+                    note: note,
+                    reporter_name: currentUser.displayName,
+                    reporter_id: currentUser.userId
+                };
+
+                if (!myParticipation.progress_history) {
+                    myParticipation.progress_history = [];
+                }
+                myParticipation.progress_history.push(progressEntry);
+
+                // 保存到後端
+                const response = await fetch(`${API_BASE_URL}/missions/${missionId}/progress`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'submitProgress',
-                        sessionToken,
-                        missionId: currentMissionId,
-                        userId: currentUser.userId,
-                        status,
-                        note,
-                        timestamp: new Date().toISOString()
-                    })
+                    body: JSON.stringify(progressEntry)
                 });
 
                 if (!response.ok) throw new Error('提交失敗');
 
-                const data = await response.json();
-                if (data.status === 'ok') {
-                    showToast(status === '已完成' ? '已標記個人任務完成！' : '進度已提交', 'success');
-                    closeModal('progressModal');
-                    await handleOperation('progress', currentMissionId, '進度已提交');
-                } else {
-                    throw new Error(data.message || '提交失敗');
-                }
+                showToast('進度已更新', 'success');
+                closeModal('progressModal');
+                
+                // ✅ 關鍵修正：重新載入任務資料並刷新畫面
+                await loadMissions();
+                
             } catch (error) {
                 console.error('提交進度失敗:', error);
-                showToast('提交進度失敗: ' + error.message, 'error');
+                showToast('提交失敗：' + error.message, 'error');
             }
         }
+                
         // 關閉報名
         async function closeRecruitment(missionId) {
             if (!confirm('確定要關閉報名嗎?')) return;
@@ -1828,38 +1835,37 @@
                 </div>
             `;
 
-            // ✅ 核心邏輯：找出所有「指派事件」的時間點
-            const assignmentEvents = new Map(); // key: timestamp, value: [參與者列表]
+            // ✅ 找出所有指派的成員及其指派時間
+            const assignedParticipants = participants.filter(p => p.is_assigned);
             
-            participants.forEach(p => {
-                if (p.is_assigned) {
-                    // 使用 last_assigned_at（最新指派） 或 assigned_at（首次指派）
+            if (assignedParticipants.length > 0) {
+                // 按 last_assigned_at 分組（相同時間 = 同一次派遣）
+                const assignmentPhases = new Map();
+                
+                assignedParticipants.forEach(p => {
                     const assignTime = p.last_assigned_at || p.assigned_at || p.joined_at;
                     const timeKey = new Date(assignTime).toISOString();
                     
-                    if (!assignmentEvents.has(timeKey)) {
-                        assignmentEvents.set(timeKey, []);
+                    if (!assignmentPhases.has(timeKey)) {
+                        assignmentPhases.set(timeKey, []);
                     }
-                    assignmentEvents.get(timeKey).push(p);
-                }
-            });
-            
-            // ✅ 按時間排序（最新的在前）
-            const sortedAssignments = Array.from(assignmentEvents.entries())
-                .sort((a, b) => new Date(b[0]) - new Date(a[0]));
-            
-            // ✅ 顯示每個指派階段
-            if (sortedAssignments.length > 0) {
-                sortedAssignments.forEach(([assignTime, members], phaseIndex) => {
+                    assignmentPhases.get(timeKey).push(p);
+                });
+                
+                // 按時間排序（最新的在前）
+                const sortedPhases = Array.from(assignmentPhases.entries())
+                    .sort((a, b) => new Date(b[0]) - new Date(a[0]));
+                
+                sortedPhases.forEach(([phaseTime, members], phaseIndex) => {
                     const isCurrentPhase = phaseIndex === 0;
-                    const phaseDate = new Date(assignTime);
+                    const phaseDate = new Date(phaseTime);
                     
                     detailHTML += `
                         <div style="background: ${isCurrentPhase ? 'rgba(0, 195, 0, 0.08)' : 'rgba(158, 158, 158, 0.08)'}; 
                                     padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; 
                                     border-left: 4px solid ${isCurrentPhase ? 'var(--primary)' : 'var(--gray-600)'};">
                             <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                                ${isCurrentPhase ? '🎯 當前派遣階段' : `📜 第 ${sortedAssignments.length - phaseIndex} 次派遣`}
+                                ${isCurrentPhase ? '🎯 當前派遣階段' : `📜 第 ${sortedPhases.length - phaseIndex} 次派遣`}
                                 <span style="font-size: 0.9em; color: #666; font-weight: normal;">
                                     (${phaseDate.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})
                                 </span>
@@ -1867,21 +1873,37 @@
                             
                             <div style="display: grid; gap: 1rem;">
                                 ${members.map(p => {
-                                    // ✅ 取得該成員的所有進度記錄（完整的，不過濾）
                                     const allProgress = (p.progress_history || []).sort((a, b) => 
                                         new Date(b.timestamp) - new Date(a.timestamp)
                                     );
                                     
-                                    // ✅ 區分：這次派遣後的記錄 vs 之前的記錄
-                                    const thisPhaseProgress = allProgress.filter(prog => 
-                                        new Date(prog.timestamp) >= phaseDate
-                                    );
+                                    // ✅ 關鍵修正：只有當前階段才判斷「本次派遣」vs「歷史記錄」
+                                    let thisPhaseProgress, beforePhaseProgress;
                                     
-                                    const beforePhaseProgress = allProgress.filter(prog => 
-                                        new Date(prog.timestamp) < phaseDate
-                                    );
+                                    if (isCurrentPhase) {
+                                        // 當前階段：按 phaseDate 分割
+                                        thisPhaseProgress = allProgress.filter(prog => 
+                                            new Date(prog.timestamp) >= phaseDate
+                                        );
+                                        beforePhaseProgress = allProgress.filter(prog => 
+                                            new Date(prog.timestamp) < phaseDate
+                                        );
+                                    } else {
+                                        // 歷史階段：找出下一次派遣時間，作為結束時間
+                                        const nextPhaseTime = phaseIndex > 0 ? 
+                                            new Date(sortedPhases[phaseIndex - 1][0]) : 
+                                            new Date();
+                                        
+                                        thisPhaseProgress = allProgress.filter(prog => {
+                                            const progTime = new Date(prog.timestamp);
+                                            return progTime >= phaseDate && progTime < nextPhaseTime;
+                                        });
+                                        
+                                        beforePhaseProgress = allProgress.filter(prog => 
+                                            new Date(prog.timestamp) < phaseDate
+                                        );
+                                    }
                                     
-                                    // 檢查這次派遣是否已完成
                                     const completedThisPhase = thisPhaseProgress.some(prog => 
                                         prog.status === '已完成'
                                     );
@@ -1890,7 +1912,6 @@
                                         <div style="background: white; padding: 1.25rem; border-radius: 8px; 
                                             border: 2px solid ${completedThisPhase ? 'var(--success)' : 'var(--gray-300)'};">
                                             
-                                            <!-- 成員標題 -->
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                                                 <div>
                                                     <strong style="font-size: 1.1rem;">${p.display_name}</strong>
@@ -1903,11 +1924,10 @@
                                                 </span>
                                             </div>
                                             
-                                            <!-- 這次派遣的進度記錄 -->
                                             ${thisPhaseProgress.length > 0 ? `
                                                 <div style="margin-bottom: 1rem;">
                                                     <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary-dark); font-size: 0.95rem;">
-                                                        📊 本次派遣回報記錄 (${thisPhaseProgress.length} 筆)：
+                                                        📊 ${isCurrentPhase ? '本次' : '此次'}派遣回報記錄 (${thisPhaseProgress.length} 筆)：
                                                     </strong>
                                                     <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem;">
                                                         ${thisPhaseProgress.map(prog => `
@@ -1937,15 +1957,14 @@
                                                 </div>
                                             ` : `
                                                 <div style="text-align: center; padding: 1.5rem; color: #999; background: var(--gray-100); border-radius: 6px; font-size: 0.9rem;">
-                                                    本次派遣尚無回報記錄
+                                                    ${isCurrentPhase ? '本次' : '此次'}派遣尚無回報記錄
                                                 </div>
                                             `}
                                             
-                                            <!-- 之前的歷史記錄（折疊顯示） -->
                                             ${beforePhaseProgress.length > 0 ? `
                                                 <details style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--gray-300);">
                                                     <summary style="cursor: pointer; color: #666; font-weight: 600; font-size: 0.9rem; padding: 0.5rem; background: var(--gray-100); border-radius: 6px;">
-                                                        📜 查看更早期的記錄 (本次派遣前的 ${beforePhaseProgress.length} 筆)
+                                                        📜 查看更早期的記錄 (${beforePhaseProgress.length} 筆)
                                                     </summary>
                                                     <div style="max-height: 200px; overflow-y: auto; margin-top: 0.75rem; padding: 0.5rem; border: 1px solid var(--gray-200); border-radius: 6px;">
                                                         ${beforePhaseProgress.map(prog => `
@@ -1977,7 +1996,7 @@
                 });
             }
 
-            // ✅ 顯示所有參與人員（包含非指派的自願報名者）
+            // 自願報名者
             const unassignedParticipants = participants.filter(p => !p.is_assigned);
             if (unassignedParticipants.length > 0) {
                 detailHTML += `
@@ -1988,21 +2007,19 @@
                                 const allProgress = (p.progress_history || []).sort((a, b) => 
                                     new Date(b.timestamp) - new Date(a.timestamp)
                                 );
-                                
                                 const latestProgress = allProgress[0];
                                 
                                 return `
                                     <div style="background: white; padding: 1rem; border-radius: 8px; border: 1px solid var(--gray-300);">
                                         <strong>${p.display_name}</strong>
                                         <span style="color: #666; font-size: 0.85rem; margin-left: 0.5rem;">
-                                            (報名時間: ${new Date(p.joined_at).toLocaleString('zh-TW', { 
+                                            (報名: ${new Date(p.joined_at).toLocaleString('zh-TW', { 
                                                 month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
                                             })})
                                         </span>
-                                        
                                         ${latestProgress ? `
                                             <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--gray-100); border-radius: 4px; font-size: 0.9rem;">
-                                                <strong>最新狀態：</strong>${latestProgress.status} - ${latestProgress.note}
+                                                <strong>最新：</strong>${latestProgress.status} - ${latestProgress.note}
                                                 <div style="font-size: 0.75rem; color: #666; margin-top: 0.25rem;">
                                                     ${new Date(latestProgress.timestamp).toLocaleString('zh-TW')}
                                                 </div>
@@ -2018,7 +2035,7 @@
 
             document.getElementById('missionDetailContent').innerHTML = detailHTML;
             showModal('detailModal');
-        }
+        }   
                 
         // 編輯任務
         function editMission(missionId) {
@@ -2321,26 +2338,23 @@
                     }
                 });
                 
-                // ✅ 改進：恢復卡片狀態時使用模糊匹配
+                // ✅ 恢復卡片狀態 - 使用 data-mission-id
                 uiState.cards.forEach((isExpanded, missionId) => {
-                    // 查找所有包含此任務ID的卡片
-                    const cards = document.querySelectorAll(`[id*="-${missionId}-"]`);
+                    const cards = document.querySelectorAll(`[data-mission-id="${missionId}"]`);
                     
-                    cards.forEach(element => {
-                        if (element.classList.contains('mission-card-content')) {
-                            const cardId = element.id;
-                            const icon = document.getElementById(`${cardId}-icon`);
-                            
-                            if (icon) {
-                                if (isExpanded) {
-                                    element.style.display = 'block';
-                                    icon.textContent = '▲';
-                                } else {
-                                    element.style.display = 'none';
-                                    icon.textContent = '▼';
-                                }
-                                restoredCount++;
+                    cards.forEach(card => {
+                        const content = card.querySelector('.mission-card-content');
+                        const icon = card.querySelector('.toggle-icon');
+                        
+                        if (content && icon) {
+                            if (isExpanded) {
+                                content.style.display = 'block';
+                                icon.textContent = '▲';
+                            } else {
+                                content.style.display = 'none';
+                                icon.textContent = '▼';
                             }
+                            restoredCount++;
                         }
                     });
                 });
@@ -2354,9 +2368,9 @@
                 }
                 
                 console.log(`✅ [狀態恢復] 完成，恢復了 ${restoredCount} 個元素`);
-            }, 100);
+            }, 150);
         }
-          
+                
         // ✅ 新增：定期檢查報名截止時間（每分鐘檢查一次）
         setInterval(() => {
             const now = new Date();
