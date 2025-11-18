@@ -1690,14 +1690,10 @@
                 return;
             }
 
-            // ✅ 檢查是否選擇"已完成"
-            if (status === '已完成') {
-                const confirmComplete = confirm('確認要標記「我的個人任務」為已完成嗎？\n\n注意：這只會標記您個人在當前派遣階段的任務完成狀態，不會影響其他階段的記錄。');
-                if (!confirmComplete) return;
-            }
-
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
+                const timestamp = new Date().toISOString();
+                
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1708,8 +1704,7 @@
                         userId: currentUser.userId,
                         status,
                         note,
-                        timestamp: new Date().toISOString(),
-                        // ✅ 新增：記錄回報者資訊
+                        timestamp,
                         reporter_name: currentUser.displayName
                     })
                 });
@@ -1718,9 +1713,11 @@
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    showToast(status === '已完成' ? '已標記個人任務完成！' : '進度已提交', 'success');
+                    showToast('進度已提交', 'success');
                     closeModal('progressModal');
-                    await handleOperation('progress', currentMissionId, '進度已提交');
+                    
+                    // ✅ 重要：重新載入任務資料以更新狀態
+                    await loadMissions();
                 } else {
                     throw new Error(data.message || '提交失敗');
                 }
@@ -1851,135 +1848,142 @@
                 </div>
             `;
 
-            // ✅ 按照要求收集派遣階段
-            const assignmentPhases = getAssignmentPhases(participants);
+            // ✅ 修正：使用新的派遣階段分析邏輯
+            const assignmentPhases = getCorrectAssignmentPhases(participants);
+            
+            console.log('派遣階段分析結果:', assignmentPhases);
             
             // ✅ 顯示派遣階段（最新的在前）
-            assignmentPhases.forEach((phase, index) => {
-                const isCurrentPhase = index === 0;
-                const phaseTitle = isCurrentPhase ? '🎯 當前派遣階段' : `📜 第 ${assignmentPhases.length - index} 次派遣`;
-                const phaseTime = phase.assignmentTime;
-                
-                detailHTML += `
-                    <div style="background: ${isCurrentPhase ? 'rgba(0, 195, 0, 0.08)' : 'rgba(158, 158, 158, 0.08)'}; 
-                                padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; 
-                                border-left: 4px solid ${isCurrentPhase ? 'var(--primary)' : 'var(--gray-600)'};">
-                        <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            ${phaseTitle}
-                            <span style="font-size: 0.9em; color: #666; font-weight: normal;">
-                                (${phaseTime.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})
-                            </span>
-                        </h3>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 1rem;">
-                `;
-
-                // ✅ 顯示該階段的所有成員
-                phase.members.forEach(member => {
-                    const memberProgress = phase.memberProgress[member.user_id] || [];
-                    const completedThisPhase = memberProgress.some(prog => prog.status === '已完成');
+            if (assignmentPhases.length > 0) {
+                assignmentPhases.forEach((phase, index) => {
+                    const isCurrentPhase = index === 0;
+                    const phaseTitle = isCurrentPhase ? '🎯 當前派遣階段' : `📜 歷史派遣階段 ${assignmentPhases.length - index}`;
                     
-                    // ✅ 獲取更早期的記錄（本次派遣之前）
-                    const allProgress = member.progress_history || [];
-                    const beforePhaseProgress = allProgress.filter(prog => 
-                        new Date(prog.timestamp) < phaseTime
-                    );
-
                     detailHTML += `
-                        <div style="background: white; padding: 1.25rem; border-radius: 8px; 
-                            border: 2px solid ${completedThisPhase ? 'var(--success)' : 'var(--gray-300)'};
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: ${isCurrentPhase ? 'rgba(0, 195, 0, 0.08)' : 'rgba(158, 158, 158, 0.08)'}; 
+                                    padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; 
+                                    border-left: 4px solid ${isCurrentPhase ? 'var(--primary)' : 'var(--gray-600)'};">
+                            <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                                ${phaseTitle}
+                                <span style="font-size: 0.9em; color: #666; font-weight: normal;">
+                                    (${phase.assignmentTime.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})
+                                </span>
+                            </h3>
                             
-                            <!-- 成員標題 -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="font-size: 1.2rem;">${completedThisPhase ? '✅' : '⭕'}</span>
-                                    <strong style="font-size: 1.1rem;">${member.display_name}</strong>
-                                    ${completedThisPhase ? '<span style="color: var(--success); font-weight: 600;">✓ 已完成此次派遣</span>' : '<span style="color: var(--warning);">進行中</span>'}
-                                </div>
-                                ${member.assigned_by ? `
-                                    <span style="color: #666; font-size: 0.85rem;">
-                                        (由 ${member.assigned_by} 指派)
-                                    </span>
-                                ` : ''}
-                            </div>
-                            
-                            <!-- 本次派遣的進度記錄 -->
-                            <div style="margin-bottom: ${beforePhaseProgress.length > 0 ? '1rem' : '0'};">
-                                <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary-dark); font-size: 0.95rem;">
-                                    📊 本次派遣回報記錄 (${memberProgress.length} 筆)
-                                </strong>
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    `;
+
+                    // ✅ 顯示該階段的所有成員
+                    phase.members.forEach(member => {
+                        const memberProgress = phase.memberProgress[member.user_id] || [];
+                        const completedThisPhase = memberProgress.some(prog => prog.status === '已完成');
+                        
+                        // ✅ 修正：正確獲取歷史記錄（本次派遣之前的記錄）
+                        const allProgress = member.progress_history || [];
+                        const beforePhaseProgress = allProgress.filter(prog => {
+                            const progTime = new Date(prog.timestamp);
+                            return progTime < phase.assignmentTime;
+                        });
+
+                        detailHTML += `
+                            <div style="background: white; padding: 1.25rem; border-radius: 8px; 
+                                border: 2px solid ${completedThisPhase ? 'var(--success)' : 'var(--gray-300)'};
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                                 
-                                ${memberProgress.length > 0 ? `
-                                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                        ${memberProgress.map(prog => `
-                                            <div style="padding: 0.75rem; background: ${prog.status === '已完成' ? 'rgba(76, 175, 80, 0.1)' : 'var(--gray-100)'}; 
-                                                border-radius: 6px; border-left: 4px solid ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
-                                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-                                                    <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
-                                                        ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
-                                                    </span>
-                                                    <span style="font-size: 0.75rem; color: #666;">
-                                                        ${new Date(prog.timestamp).toLocaleString('zh-TW', { 
-                                                            month: '2-digit', day: '2-digit', 
-                                                            hour: '2-digit', minute: '2-digit' 
-                                                        })}
-                                                    </span>
-                                                </div>
-                                                <div style="font-size: 0.9rem; color: #333; margin-bottom: 0.25rem;">
-                                                    📝 ${prog.note}
-                                                </div>
-                                                <div style="font-size: 0.75rem; color: #666;">
-                                                    👤 回報者: ${prog.reporter_name || member.display_name || '未知'}
-                                                </div>
-                                            </div>
-                                        `).join('')}
+                                <!-- 成員標題 -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 1.2rem;">${completedThisPhase ? '✅' : '⭕'}</span>
+                                        <strong style="font-size: 1.1rem;">${member.display_name}</strong>
+                                        ${completedThisPhase ? 
+                                            '<span style="color: var(--success); font-weight: 600;">✓ 已完成此次派遣</span>' : 
+                                            '<span style="color: var(--warning);">進行中</span>'
+                                        }
                                     </div>
-                                ` : `
-                                    <div style="text-align: center; padding: 1.5rem; color: #999; background: var(--gray-100); border-radius: 6px; font-size: 0.9rem;">
-                                        本次派遣尚無回報記錄
-                                    </div>
-                                `}
-                            </div>
-                            
-                            <!-- 之前的歷史記錄（折疊顯示） -->
-                            ${beforePhaseProgress.length > 0 ? `
-                                <details style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--gray-300);">
-                                    <summary style="cursor: pointer; color: #666; font-weight: 600; font-size: 0.9rem; padding: 0.5rem; background: var(--gray-100); border-radius: 6px;">
-                                        📜 查看更早期的記錄 (本次派遣前的 ${beforePhaseProgress.length} 筆)
-                                    </summary>
-                                    <div style="max-height: 200px; overflow-y: auto; margin-top: 0.75rem; padding: 0.5rem; border: 1px solid var(--gray-200); border-radius: 6px;">
+                                    ${member.assigned_by ? `
+                                        <span style="color: #666; font-size: 0.85rem;">
+                                            (由 ${member.assigned_by} 指派)
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                
+                                <!-- 本次派遣的進度記錄 -->
+                                <div style="margin-bottom: ${beforePhaseProgress.length > 0 ? '1rem' : '0'};">
+                                    <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary-dark); font-size: 0.95rem;">
+                                        📊 本次派遣回報記錄 (${memberProgress.length} 筆)
+                                    </strong>
+                                    
+                                    ${memberProgress.length > 0 ? `
                                         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                            ${beforePhaseProgress.map(prog => `
-                                                <div style="padding: 0.5rem; background: rgba(0,0,0,0.02); border-radius: 4px; font-size: 0.85rem;">
-                                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                                                        <strong style="color: #666;">${prog.status}</strong>
-                                                        <span style="font-size: 0.75rem; color: #999;">
+                                            ${memberProgress.map(prog => `
+                                                <div style="padding: 0.75rem; background: ${prog.status === '已完成' ? 'rgba(76, 175, 80, 0.1)' : 'var(--gray-100)'}; 
+                                                    border-radius: 6px; border-left: 4px solid ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
+                                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                                                        <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
+                                                            ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
+                                                        </span>
+                                                        <span style="font-size: 0.75rem; color: #666;">
                                                             ${new Date(prog.timestamp).toLocaleString('zh-TW', { 
                                                                 month: '2-digit', day: '2-digit', 
                                                                 hour: '2-digit', minute: '2-digit' 
                                                             })}
                                                         </span>
                                                     </div>
-                                                    <div style="color: #666;">📝 ${prog.note}</div>
-                                                    <div style="font-size: 0.7rem; color: #999; margin-top: 0.25rem;">
-                                                        👤 ${prog.reporter_name || member.display_name}
+                                                    <div style="font-size: 0.9rem; color: #333; margin-bottom: 0.25rem;">
+                                                        📝 ${prog.note}
+                                                    </div>
+                                                    <div style="font-size: 0.75rem; color: #666;">
+                                                        👤 回報者: ${prog.reporter_name || member.display_name || '未知'}
                                                     </div>
                                                 </div>
                                             `).join('')}
                                         </div>
-                                    </div>
-                                </details>
-                            ` : ''}
+                                    ` : `
+                                        <div style="text-align: center; padding: 1.5rem; color: #999; background: var(--gray-100); border-radius: 6px; font-size: 0.9rem;">
+                                            本次派遣尚無回報記錄
+                                        </div>
+                                    `}
+                                </div>
+                                
+                                <!-- 之前的歷史記錄（折疊顯示） -->
+                                ${beforePhaseProgress.length > 0 ? `
+                                    <details style="margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--gray-300);">
+                                        <summary style="cursor: pointer; color: #666; font-weight: 600; font-size: 0.9rem; padding: 0.5rem; background: var(--gray-100); border-radius: 6px;">
+                                            📜 查看更早期的記錄 (本次派遣前的 ${beforePhaseProgress.length} 筆)
+                                        </summary>
+                                        <div style="max-height: 200px; overflow-y: auto; margin-top: 0.75rem; padding: 0.5rem; border: 1px solid var(--gray-200); border-radius: 6px;">
+                                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                                ${beforePhaseProgress.map(prog => `
+                                                    <div style="padding: 0.5rem; background: rgba(0,0,0,0.02); border-radius: 4px; font-size: 0.85rem;">
+                                                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                                            <strong style="color: #666;">${prog.status}</strong>
+                                                            <span style="font-size: 0.75rem; color: #999;">
+                                                                ${new Date(prog.timestamp).toLocaleString('zh-TW', { 
+                                                                    month: '2-digit', day: '2-digit', 
+                                                                    hour: '2-digit', minute: '2-digit' 
+                                                                })}
+                                                            </span>
+                                                        </div>
+                                                        <div style="color: #666;">📝 ${prog.note}</div>
+                                                        <div style="font-size: 0.7rem; color: #999; margin-top: 0.25rem;">
+                                                            👤 ${prog.reporter_name || member.display_name}
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </details>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+
+                    detailHTML += `
+                            </div>
                         </div>
                     `;
                 });
-
-                detailHTML += `
-                        </div>
-                    </div>
-                `;
-            });
+            }
 
             // ✅ 顯示自願報名參與者
             const unassignedParticipants = participants.filter(p => !p.is_assigned);
@@ -2027,55 +2031,97 @@
             showModal('detailModal');
         }
 
-        // ✅ 核心修正：正確分析派遣階段
-        function getAssignmentPhases(participants) {
+        // ✅ 完全重寫：正確的派遣階段分析邏輯
+        function getCorrectAssignmentPhases(participants) {
             const assignedParticipants = participants.filter(p => p.is_assigned);
             
             if (assignedParticipants.length === 0) return [];
             
-            // 收集所有指派時間點
+            console.log('分析指派成員:', assignedParticipants.map(p => ({
+                name: p.display_name,
+                assigned_at: p.assigned_at,
+                last_assigned_at: p.last_assigned_at,
+                progress_count: (p.progress_history || []).length
+            })));
+            
+            // ✅ 修正：收集所有唯一的指派時間點（包括重新指派）
             const assignmentTimes = new Set();
+            
             assignedParticipants.forEach(p => {
-                // 使用最後指派時間或首次指派時間
+                // 優先使用最後指派時間，如果沒有則使用首次指派時間
                 const assignTime = p.last_assigned_at || p.assigned_at;
                 if (assignTime) {
-                    // 使用標準化時間（精確到分鐘）來避免微小時間差異
+                    // 標準化時間到分鐘級別，避免微小差異
                     const normalizedTime = new Date(assignTime);
                     normalizedTime.setSeconds(0, 0);
                     assignmentTimes.add(normalizedTime.getTime());
                 }
+                
+                // ✅ 重要：也檢查進度記錄中的指派相關記錄
+                const progressHistory = p.progress_history || [];
+                progressHistory.forEach(prog => {
+                    if (prog.status === '已指派' || prog.status === '重新指派') {
+                        const progressTime = new Date(prog.timestamp);
+                        progressTime.setSeconds(0, 0);
+                        assignmentTimes.add(progressTime.getTime());
+                    }
+                });
             });
             
             // 按時間排序（從新到舊）
             const sortedTimes = Array.from(assignmentTimes).sort((a, b) => b - a);
             
-            // 為每個時間點建立階段
+            console.log('發現的指派時間點:', sortedTimes.map(t => new Date(t).toLocaleString('zh-TW')));
+            
+            // ✅ 為每個時間點建立階段
             const phases = sortedTimes.map((time, index) => {
                 const phaseTime = new Date(time);
                 
-                // 找出在此時間點被指派的成員
+                // ✅ 找出在此時間點被指派的成員
                 const phaseMembers = assignedParticipants.filter(p => {
+                    // 檢查指派時間
                     const memberAssignTime = p.last_assigned_at || p.assigned_at;
-                    if (!memberAssignTime) return false;
+                    if (memberAssignTime) {
+                        const normalizedMemberTime = new Date(memberAssignTime);
+                        normalizedMemberTime.setSeconds(0, 0);
+                        if (normalizedMemberTime.getTime() === time) {
+                            return true;
+                        }
+                    }
                     
-                    const normalizedMemberTime = new Date(memberAssignTime);
-                    normalizedMemberTime.setSeconds(0, 0);
-                    return normalizedMemberTime.getTime() === time;
+                    // ✅ 檢查進度記錄中的指派記錄
+                    const progressHistory = p.progress_history || [];
+                    const hasAssignmentProgress = progressHistory.some(prog => {
+                        if (prog.status === '已指派' || prog.status === '重新指派') {
+                            const progTime = new Date(prog.timestamp);
+                            progTime.setSeconds(0, 0);
+                            return progTime.getTime() === time;
+                        }
+                        return false;
+                    });
+                    
+                    return hasAssignmentProgress;
                 });
                 
-                // 分析每個成員在此階段的進度
+                console.log(`階段 ${index + 1} (${phaseTime.toLocaleString('zh-TW')}) 的成員:`, 
+                    phaseMembers.map(m => m.display_name));
+                
+                // ✅ 分析每個成員在此階段的進度
                 const memberProgress = {};
                 
                 phaseMembers.forEach(member => {
                     const allProgress = member.progress_history || [];
                     
-                    // 只計算在此指派時間之後的進度記錄
+                    // ✅ 修正：只計算在此指派時間之後的進度記錄
                     const phaseProgress = allProgress.filter(prog => {
                         const progTime = new Date(prog.timestamp);
                         return progTime >= phaseTime;
                     }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                     
                     memberProgress[member.user_id] = phaseProgress;
+                    
+                    console.log(`成員 ${member.display_name} 在階段 ${index + 1} 的進度:`, 
+                        phaseProgress.map(p => ({ status: p.status, time: p.timestamp })));
                 });
                 
                 return {
@@ -2086,9 +2132,13 @@
                 };
             });
             
-            return phases;
-        }
-                
+            // ✅ 過濾掉空的階段
+            const validPhases = phases.filter(phase => phase.members.length > 0);
+            
+            console.log('最終有效的階段:', validPhases.length);
+            
+            return validPhases;
+        } 
         // 編輯任務
         function editMission(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
