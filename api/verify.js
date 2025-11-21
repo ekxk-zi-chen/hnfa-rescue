@@ -949,56 +949,72 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           console.log('[提交進度] 開始:', { missionId, userId, status });
 
-          // 1. 找到該成員當前所屬的派遣階段（尚未完成的最新派遣）
-          const { data: currentMember, error: memberError } = await supabase
+          // ✅ 修正：分步查詢，避免複雜的 JOIN
+          // 1. 先找到該用戶在這個任務中的所有派遣記錄
+          const { data: memberRecords, error: memberError } = await supabase
               .from('assignment_members')
               .select(`
                   assignment_id,
                   completed_at,
-                  assignment:mission_assignments(*)
+                  user_id,
+                  display_name
               `)
               .eq('user_id', userId)
-              .eq('assignment:mission_assignments.mission_id', missionId)
               .is('completed_at', null)
-              .order('assignment_id', { ascending: false })
-              .limit(1)
-              .maybeSingle();
+              .order('assignment_id', { ascending: false });
 
           if (memberError) {
               console.error('[提交進度] 查詢成員錯誤:', memberError);
               throw memberError;
           }
 
-          if (!currentMember) {
-              console.error('[提交進度] 找不到當前派遣階段');
+          if (!memberRecords || memberRecords.length === 0) {
+              console.error('[提交進度] 找不到派遣記錄');
               return res.status(404).json({ 
                   status: "error", 
                   message: "找不到當前派遣階段，可能您尚未被指派或已完成" 
               });
           }
 
+          // 2. 檢查這些派遣記錄中，哪個屬於當前任務
+          let currentMember = null;
+          
+          for (const member of memberRecords) {
+              // 查詢這個 assignment 是否屬於當前任務
+              const { data: assignment } = await supabase
+                  .from('mission_assignments')
+                  .select('mission_id')
+                  .eq('id', member.assignment_id)
+                  .eq('mission_id', missionId)
+                  .single();
+              
+              if (assignment) {
+                  currentMember = member;
+                  break;
+              }
+          }
+
+          if (!currentMember) {
+              console.error('[提交進度] 該用戶不在此任務的派遣階段中');
+              return res.status(404).json({ 
+                  status: "error", 
+                  message: "您不在此任務的當前派遣階段中" 
+              });
+          }
+
           console.log(`[提交進度] 找到派遣階段 ID: ${currentMember.assignment_id}`);
 
-          // 獲取用戶資訊以記錄回報者
-          const { data: userData } = await supabase
-              .from('users')
-              .select('display_name, 姓名')
-              .eq('user_id', userId)
-              .single();
-
-          const reporterName = userData?.display_name || userData?.姓名 || '未知用戶';
-
-          // 2. 記錄進度
+          // 3. 記錄進度
           const { error: progressError } = await supabase
               .from('mission_progress')
               .insert({
                   mission_id: missionId,
                   user_id: userId,
-                  assignment_id: currentMember.assignment_id,  // ✅ 關鍵：關聯到派遣階段
+                  assignment_id: currentMember.assignment_id,
                   status,
                   note,
                   timestamp: timestamp || new Date().toISOString(),
-                  reporter_name: reporterName
+                  reporter_name: userData.display_name || userData.姓名 || '未知用戶'
               });
 
           if (progressError) {
@@ -1008,7 +1024,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           console.log('[提交進度] 進度已記錄');
 
-          // 3. 如果狀態是「已完成」，更新完成時間
+          // 4. 如果狀態是「已完成」，更新完成時間
           if (status === '已完成') {
               const { error: updateError } = await supabase
                   .from('assignment_members')
