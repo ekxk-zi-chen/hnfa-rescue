@@ -1008,50 +1008,45 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       }
   }
 
-  // ====== 提交任務進度（支援選擇派遣階段）======
+  // ====== 提交任務進度 ======
   if (action === 'submitProgress') {
       try {
-          const { missionId, userId, status, note, timestamp, assignmentId } = body;
+          const { missionId, userId, status, note, timestamp } = body;
 
           console.log('[提交進度] 開始:', { 
               missionId, 
               userId, 
-              status, 
-              assignmentId 
+              status
           });
 
-          // ✅ 如果有指定 assignmentId，直接使用
-          let targetAssignmentId = assignmentId;
-          
-          if (!targetAssignmentId) {
-              // 沒指定的話，找最新未完成的派遣階段
-              const { data: memberRecords } = await supabase
-                  .from('assignment_members')
-                  .select('assignment_id, completed_at, role')
-                  .eq('user_id', userId)
-                  .is('completed_at', null)
-                  .order('assignment_id', { ascending: false });
+          // 找到最新未完成的派遣階段
+          const { data: memberRecords } = await supabase
+              .from('assignment_members')
+              .select('assignment_id, completed_at, role, id')
+              .eq('user_id', userId)
+              .is('completed_at', null)
+              .order('assignment_id', { ascending: false });
 
-              if (!memberRecords || memberRecords.length === 0) {
-                  return res.status(404).json({ 
-                      status: "error", 
-                      message: "找不到未完成的派遣階段" 
-                  });
-              }
+          if (!memberRecords || memberRecords.length === 0) {
+              return res.status(404).json({ 
+                  status: "error", 
+                  message: "找不到未完成的派遣階段" 
+              });
+          }
 
-              // 找屬於當前任務的派遣
-              for (const member of memberRecords) {
-                  const { data: assignment } = await supabase
-                      .from('mission_assignments')
-                      .select('mission_id')
-                      .eq('id', member.assignment_id)
-                      .eq('mission_id', missionId)
-                      .single();
-                  
-                  if (assignment) {
-                      targetAssignmentId = member.assignment_id;
-                      break;
-                  }
+          // 找屬於當前任務的派遣
+          let targetAssignmentId = null;
+          for (const member of memberRecords) {
+              const { data: assignment } = await supabase
+                  .from('mission_assignments')
+                  .select('mission_id')
+                  .eq('id', member.assignment_id)
+                  .eq('mission_id', missionId)
+                  .single();
+              
+              if (assignment) {
+                  targetAssignmentId = member.assignment_id;
+                  break;
               }
           }
 
@@ -1062,15 +1057,15 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               });
           }
 
-          // ✅ 改進：獲取完整的成員資訊（包含 id）
+          // 檢查用戶角色
           const { data: memberInfo } = await supabase
               .from('assignment_members')
-              .select('id, role, leader_id')
+              .select('id, role')
               .eq('assignment_id', targetAssignmentId)
               .eq('user_id', userId)
               .single();
 
-          // ✅ 小隊成員不能回報「已完成」
+          // ✅ 修正：小隊成員不能回報「已完成」
           if (memberInfo?.role === 'member' && status === '已完成') {
               return res.status(403).json({ 
                   status: "error", 
@@ -1093,7 +1088,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           if (progressError) throw progressError;
 
-          // ✅ 改進：如果是隊長回報「已完成」，更新整個小隊的完成時間
+          // ✅ 修正：如果是隊長回報「已完成」，更新整個小隊的完成時間
           if (memberInfo?.role === 'leader' && status === '已完成') {
               const completionTime = new Date().toISOString();
               
@@ -1104,12 +1099,12 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
                   .eq('assignment_id', targetAssignmentId)
                   .eq('user_id', userId);
 
-              // 2. ✅ 新增：更新該隊長所有小隊成員的完成時間
+              // 2. 更新該隊長所有小隊成員的完成時間
               await supabase
                   .from('assignment_members')
                   .update({ completed_at: completionTime })
                   .eq('assignment_id', targetAssignmentId)
-                  .eq('leader_id', memberInfo.id); // 使用隊長的 assignment_members.id
+                  .eq('leader_id', memberInfo.id);
               
               console.log(`✅ 隊長 ${userId} 完成任務，小隊成員同步完成`);
           }
