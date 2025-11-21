@@ -1665,19 +1665,34 @@
                 const data = await response.json();
                 if (data.status === 'ok') {
                     allMembers = data.members;
-                    membersByUnit = data.groupedByUnit;
+                    
+                    // ✅ 確保正確分組
+                    membersByUnit = {};
+                    allMembers.forEach(member => {
+                        const unit = member.unit || '未分組';
+                        if (!membersByUnit[unit]) {
+                            membersByUnit[unit] = [];
+                        }
+                        membersByUnit[unit].push(member);
+                    });
+                    
+                    console.log('✅ 成員資料載入完成，單位數:', Object.keys(membersByUnit).length);
                 }
             } catch (error) {
                 console.error('載入成員失敗:', error);
+                showToast('載入成員失敗', 'error');
             }
         }
-
         // 指派人員 Modal
         // 顯示指派人員 Modal
-        function showAssignModal(missionId) {
+        async function showAssignModal(missionId) {
             currentMissionId = missionId;
             selectedLeaders.clear();
             
+            // ✅ 先載入成員資料
+            await loadMembersForAssignment();
+            
+            // ✅ 然後再渲染選擇器
             renderAssignmentSelector();
             showModal('assignModal');
         }
