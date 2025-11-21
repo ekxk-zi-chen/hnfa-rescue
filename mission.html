@@ -2483,15 +2483,45 @@
                     detailHTML += renderAssignmentPhaseDetail(assignment, isCurrentPhase);
                 });
             } else {
-                detailHTML += `
-                    <div style="text-align: center; padding: 2rem; color: #666; background: var(--gray-100); border-radius: 8px;">
-                        尚未進行任何派遣
-                    </div>
-                `;
+                // ✅ 修正：如果沒有派遣階段，顯示所有參與者
+                detailHTML += renderAllParticipantsWithoutAssignments(mission);
             }
 
             document.getElementById('missionDetailContent').innerHTML = detailHTML;
             showModal('detailModal');
+        }
+        
+        // ✅ 新增：顯示沒有派遣階段的參與者
+        function renderAllParticipantsWithoutAssignments(mission) {
+            const participants = mission.participants || [];
+            
+            if (participants.length === 0) {
+                return `
+                    <div style="text-align: center; padding: 2rem; color: #666; background: var(--gray-100); border-radius: 8px;">
+                        尚無參與者
+                    </div>
+                `;
+            }
+
+            let html = `
+                <div style="background: rgba(0, 123, 255, 0.08); padding: 1.5rem; border-radius: 12px; 
+                            margin-bottom: 2rem; border-left: 4px solid var(--info);">
+                    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        👥 所有參與者
+                    </h3>
+                    <div style="display: grid; gap: 1rem;">
+            `;
+
+            participants.forEach(participant => {
+                html += renderParticipantCard(participant, true);
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            return html;
         }
 
         // ✅ 修正：詳細資料頁面顯示隊長+隊員 + 其他參與者
@@ -2500,14 +2530,19 @@
             const phaseColor = isCurrentPhase ? 'var(--primary)' : 'var(--gray-600)';
             const phaseBg = isCurrentPhase ? 'rgba(0, 195, 0, 0.08)' : 'rgba(158, 158, 158, 0.08)';
             
-            // ✅ 分組：隊長和其隊員
+            // ✅ 修正：正確分組隊長和隊員
             const leaders = (assignment.members || []).filter(m => m.role === 'leader');
+            const allMembers = assignment.members || [];
             
-            // ✅ 其他參與者（沒有被指派到任何隊長的成員）
-            const otherParticipants = (assignment.members || []).filter(m => 
-                m.role === 'member' && !m.leader_id
+            // ✅ 找出沒有被分配到任何隊長的成員
+            const unassignedMembers = allMembers.filter(member => 
+                member.role === 'member' && 
+                !member.leader_id && 
+                !leaders.some(leader => 
+                    leader.members?.some(m => m.user_id === member.user_id)
+                )
             );
-            
+
             let html = `
                 <div style="background: ${phaseBg}; padding: 1.5rem; border-radius: 12px; 
                             margin-bottom: 2rem; border-left: 4px solid ${phaseColor};">
@@ -2523,7 +2558,7 @@
                         ${assignment.assignment_note ? `<br>📝 備註：${assignment.assignment_note}` : ''}
                     </div>
                     
-                    <div style="display: grid; gap: 1rem;">
+                    <div style="display: grid; gap: 1.5rem;">
             `;
             
             // ✅ 渲染隊長及其團隊成員
@@ -2531,30 +2566,83 @@
                 html += renderLeaderWithTeamDetailCard(leader, assignment, isCurrentPhase);
             });
             
-            html += `
-                    </div>
-                </div>
-            `;
-            
-            // ✅ 如果有其他參與者，顯示"其他意見"框
-            if (otherParticipants.length > 0) {
+            // ✅ 渲染沒有被分配的成員（其他意見）
+            if (unassignedMembers.length > 0) {
                 html += `
-                    <div style="background: rgba(255, 193, 7, 0.08); padding: 1.5rem; border-radius: 12px; 
-                                margin-bottom: 2rem; border-left: 4px solid var(--warning);">
-                        <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            💬 其他意見
-                        </h3>
+                    <div style="background: rgba(255, 193, 7, 0.08); padding: 1.25rem; border-radius: 8px; 
+                                border-left: 4px solid var(--warning);">
+                        <h4 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            💬 其他參與者意見
+                        </h4>
                         <div style="display: grid; gap: 1rem;">
-                            ${otherParticipants.map(participant => 
-                                renderOtherParticipantCard(participant, isCurrentPhase)
+                            ${unassignedMembers.map(member => 
+                                renderParticipantCard(member, isCurrentPhase)
                             ).join('')}
                         </div>
                     </div>
                 `;
             }
             
+            html += `
+                    </div>
+                </div>
+            `;
+            
             return html;
         }
+
+        // ✅ 修正：渲染參與者卡片（用於沒有被分配的成員）
+        function renderParticipantCard(participant, isCurrentPhase) {
+            const progressList = participant.progress_history || [];
+            const completedThisPhase = participant.completed_at !== null;
+            
+            return `
+                <div style="background: white; padding: 1rem; border-radius: 8px; 
+                            border: 2px solid ${completedThisPhase ? 'var(--success)' : 'var(--warning)'};">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <div>
+                            <strong style="font-size: 1rem;">${participant.display_name}</strong>
+                            <span style="color: #666; font-size: 0.8rem; margin-left: 0.5rem;">
+                                ${participant.role === 'leader' ? '(隊長)' : '(成員)'}
+                            </span>
+                        </div>
+                        <span class="status-badge ${completedThisPhase ? 'status-completed' : 'status-active'}" style="font-size: 0.7rem;">
+                            ${completedThisPhase ? '已完成' : '進行中'}
+                        </span>
+                    </div>
+                    
+                    ${progressList.length > 0 ? `
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${progressList.map(prog => `
+                                <div style="padding: 0.75rem; background: var(--gray-100); border-radius: 6px; margin-bottom: 0.5rem;
+                                            border-left: 4px solid ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                        <span style="font-weight: 600; color: ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'}; font-size: 0.8rem;">
+                                            ${prog.status}
+                                        </span>
+                                        <span style="font-size: 0.65rem; color: #666;">
+                                            ${new Date(prog.timestamp).toLocaleString('zh-TW', { 
+                                                month: '2-digit', day: '2-digit', 
+                                                hour: '2-digit', minute: '2-digit' 
+                                            })}
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #333;">
+                                        ${prog.note}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div style="text-align: center; padding: 1rem; color: #999; background: var(--gray-100); border-radius: 6px; font-size: 0.9rem;">
+                            尚無回報記錄
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
 
         // ✅ 新增：渲染其他參與者卡片
         function renderOtherParticipantCard(participant, isCurrentPhase) {
@@ -2609,7 +2697,7 @@
             const progressList = leader.progress_history || [];
             const completedThisPhase = leader.completed_at !== null;
             
-            // ✅ 找到該隊長的小隊成員
+            // ✅ 修正：正確找到該隊長的小隊成員
             const teamMembers = (assignment.members || []).filter(m => 
                 m.role === 'member' && m.leader_id === leader.id
             );
@@ -2718,6 +2806,7 @@
                 </div>
             `;
         }
+                
         /*
         // ✅ 新增：渲染成員詳情卡片
         function renderMemberDetailCard(member, isCurrentPhase) {
