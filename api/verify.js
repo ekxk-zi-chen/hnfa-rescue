@@ -648,65 +648,67 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
   // ====== 取得所有任務 ======
   if (action === 'getMissions') {
-    try {
-      // ✅ 修正：同時取得參與者的最後指派時間
-      const { data: missions, error } = await supabase
-        .from('missions')
-        .select(`
-          *,
-          participants:mission_participants(
-            id,
-            user_id,
-            display_name,
-            is_assigned,
-            assigned_by,
-            assigned_at,
-            joined_at,
-            completed_at,
-            last_assigned_at
-          )
-        `)
-        .order('created_at', { ascending: false });
+      try {
+          // ✅ 修改：使用新的派遣階段結構
+          const { data: missions, error } = await supabase
+              .from('missions')
+              .select(`
+                  *,
+                  assignments:mission_assignments(
+                      id,
+                      assignment_number,
+                      assigned_by,
+                      assigned_at,
+                      assignment_note,
+                      members:assignment_members(
+                          id,
+                          user_id,
+                          display_name,
+                          completed_at
+                      )
+                  )
+              `)
+              .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('取得任務錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
-      }
-
-      // ✅ 為每個任務的參與者加載進度記錄
-      if (missions && missions.length > 0) {
-        for (const mission of missions) {
-          if (mission.participants && mission.participants.length > 0) {
-            // 一次性取得這個任務的所有進度
-            const { data: allProgress } = await supabase
-              .from('mission_progress')
-              .select('*')
-              .eq('mission_id', mission.id)
-              .order('timestamp', { ascending: false });
-
-            // ✅ 修正：將進度分配給對應的參與者，並過濾出正確的進度記錄
-            mission.participants = mission.participants.map(participant => {
-              const participantProgress = allProgress 
-                ? allProgress.filter(p => p.user_id === participant.user_id)
-                : [];
-              
-              return {
-                ...participant,
-                progress_history: participantProgress
-              };
-            });
+          if (error) {
+              console.error('取得任務錯誤:', error);
+              return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
           }
-        }
-      }
 
-      return res.status(200).json({
-        status: "ok",
-        missions: missions || []
-      });
-    } catch (error) {
-      console.error('getMissions 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
+          // ✅ 為每個派遣階段的成員載入進度記錄
+          if (missions && missions.length > 0) {
+              for (const mission of missions) {
+                  if (mission.assignments && mission.assignments.length > 0) {
+                      for (const assignment of mission.assignments) {
+                          if (assignment.members && assignment.members.length > 0) {
+                              // 取得這個派遣階段的所有進度
+                              const { data: allProgress } = await supabase
+                                  .from('mission_progress')
+                                  .select('*')
+                                  .eq('assignment_id', assignment.id)
+                                  .order('timestamp', { ascending: false });
+
+                              // 分配給對應的成員
+                              assignment.members = assignment.members.map(member => ({
+                                  ...member,
+                                  progress_history: allProgress 
+                                      ? allProgress.filter(p => p.user_id === member.user_id)
+                                      : []
+                              }));
+                          }
+                      }
+                  }
+              }
+          }
+
+          return res.status(200).json({
+              status: "ok",
+              missions: missions || []
+          });
+      } catch (error) {
+          console.error('getMissions 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
   }
 
   // ====== 取得進行中任務數量 ======
@@ -771,45 +773,47 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
   // ====== 報名任務 ======
   if (action === 'joinMission') {
-    try {
-      const { missionId, userId, displayName } = body;
+      try {
+          const { missionId, userId, displayName } = body;
 
-      // 檢查是否已經報名
-      const { data: existing } = await supabase
-        .from('mission_participants')
-        .select('id')
-        .eq('mission_id', missionId)
-        .eq('user_id', userId)
-        .single();
+          // ✅ 注意：自願報名者不屬於任何派遣階段
+          // 他們的資料應該存在哪？有兩種方案：
 
-      if (existing) {
-        return res.status(400).json({ status: "error", message: "已經報名過此任務" });
+          // 方案 A: 繼續用舊的 mission_participants 表（推薦）
+          const { data: existing } = await supabase
+              .from('mission_participants')
+              .select('id')
+              .eq('mission_id', missionId)
+              .eq('user_id', userId)
+              .single();
+
+          if (existing) {
+              return res.status(400).json({ status: "error", message: "已經報名過此任務" });
+          }
+
+          const { error } = await supabase
+              .from('mission_participants')
+              .insert({
+                  mission_id: missionId,
+                  user_id: userId,
+                  display_name: displayName,
+                  is_assigned: false,  // 自願報名，非指派
+                  joined_at: new Date().toISOString()
+              });
+
+          if (error) {
+              console.error('報名任務錯誤:', error);
+              return res.status(500).json({ status: "error", message: "Failed to join mission" });
+          }
+
+          return res.status(200).json({
+              status: "ok",
+              message: "報名成功"
+          });
+      } catch (error) {
+          console.error('joinMission 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
       }
-
-      // 新增參與者
-      const { error } = await supabase
-        .from('mission_participants')
-        .insert({
-          mission_id: missionId,
-          user_id: userId,
-          display_name: displayName,
-          is_assigned: false,
-          joined_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('報名任務錯誤:', error);
-        return res.status(500).json({ status: "error", message: "Failed to join mission" });
-      }
-
-      return res.status(200).json({
-        status: "ok",
-        message: "報名成功"
-      });
-    } catch (error) {
-      console.error('joinMission 錯誤:', error);
-      return res.status(500).json({ status: "error", message: error.message });
-    }
   }
 
   // ====== 取消報名 ======
@@ -852,145 +856,171 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   }
 
   // ====== 指派成員 ======
-    if (action === 'assignMembers') {
-        if (userRole !== '管理') {
-            return res.status(403).json({ status: "error", message: "沒有權限指派成員" });
-        }
+  if (action === 'assignMembers') {
+      if (userRole !== '管理') {
+          return res.status(403).json({ status: "error", message: "沒有權限指派成員" });
+      }
 
-        try {
-            const { missionId, members, note, assignedBy, allowReassign } = body;
-            const assignedAt = new Date().toISOString();
+      try {
+          const { missionId, members, note, assignedBy } = body;
 
-            console.log('[指派成員] 開始處理:', { missionId, members, allowReassign });
+          console.log('[指派成員] 開始處理:', { missionId, members: members.length });
 
-            // ✅ 先取消所有人的指派狀態
-            await supabase
-                .from('mission_participants')
-                .update({ is_assigned: false })
-                .eq('mission_id', missionId);
+          // 1. 計算新的派遣編號
+          const { data: lastAssignment } = await supabase
+              .from('mission_assignments')
+              .select('assignment_number')
+              .eq('mission_id', missionId)
+              .order('assignment_number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-            // 處理每個被選中的成員
-            for (const member of members) {
-                // 檢查是否已存在
-                const { data: existing } = await supabase
-                    .from('mission_participants')
-                    .select('id, completed_at, assigned_at')
-                    .eq('mission_id', missionId)
-                    .eq('user_id', member.user_id)
-                    .single();
+          const nextNumber = (lastAssignment?.assignment_number || 0) + 1;
+          console.log(`[指派成員] 新派遣編號: ${nextNumber}`);
 
-                if (existing) {
-                    // ✅ 重要修正：重新指派時只更新指派狀態，不刪除進度記錄
-                    const updateData = {
-                        is_assigned: true,
-                        assigned_by: assignedBy,
-                        assigned_at: assignedAt,
-                        // 不清除完成時間，保留歷史狀態
-                        last_assigned_at: assignedAt // 記錄最後指派時間
-                    };
+          // 2. 建立新派遣階段
+          const { data: assignment, error: assignError } = await supabase
+              .from('mission_assignments')
+              .insert({
+                  mission_id: missionId,
+                  assignment_number: nextNumber,
+                  assigned_by: assignedBy,
+                  assigned_at: new Date().toISOString(),
+                  assignment_note: note || null
+              })
+              .select()
+              .single();
 
-                    await supabase
-                        .from('mission_participants')
-                        .update(updateData)
-                        .eq('id', existing.id);
-                } else {
-                    // 新增並指派
-                    await supabase
-                        .from('mission_participants')
-                        .insert({
-                            mission_id: missionId,
-                            user_id: member.user_id,
-                            display_name: member.display_name,
-                            is_assigned: true,
-                            assigned_by: assignedBy,
-                            assigned_at: assignedAt,
-                            joined_at: assignedAt,
-                            completed_at: null,
-                            last_assigned_at: assignedAt
-                        });
-                }
+          if (assignError) {
+              console.error('[指派成員] 建立派遣階段失敗:', assignError);
+              throw assignError;
+          }
 
-                // ✅ 記錄指派歷史（不刪除舊記錄）
-                const isReassign = existing && existing.assigned_at;
-                const statusNote = isReassign 
-                    ? `${assignedBy} 重新指派${note ? ': ' + note : ''}`
-                    : `${assignedBy} 指派${note ? ': ' + note : ''}`;
+          console.log(`[指派成員] 派遣階段已建立，ID: ${assignment.id}`);
 
-                await supabase
-                    .from('mission_progress')
-                    .insert({
-                        mission_id: missionId,
-                        user_id: member.user_id,
-                        status: isReassign ? '重新指派' : '已指派',
-                        note: statusNote,
-                        timestamp: assignedAt,
-                        reporter_name: assignedBy // ✅ 記錄操作者
-                    });
-            }
+          // 3. 加入成員
+          const { error: membersError } = await supabase
+              .from('assignment_members')
+              .insert(
+                  members.map(m => ({
+                      assignment_id: assignment.id,
+                      user_id: m.user_id,
+                      display_name: m.display_name,
+                      completed_at: null
+                  }))
+              );
 
-            console.log('[指派成員] 指派完成');
+          if (membersError) {
+              console.error('[指派成員] 加入成員失敗:', membersError);
+              throw membersError;
+          }
 
-            return res.status(200).json({
-                status: "ok",
-                message: "指派成功"
-            });
-        } catch (error) {
-            console.error('assignMembers 錯誤:', error);
-            return res.status(500).json({ status: "error", message: error.message });
-        }
-    }
+          console.log(`[指派成員] 成功加入 ${members.length} 位成員`);
+
+          return res.status(200).json({
+              status: "ok",
+              message: `第 ${nextNumber} 次派遣完成`,
+              assignmentNumber: nextNumber
+          });
+
+      } catch (error) {
+          console.error('assignMembers 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
+  }
 
   // ====== 提交任務進度 ======
-    if (action === 'submitProgress') {
-        try {
-            const { missionId, userId, status, note, timestamp } = body;
+  if (action === 'submitProgress') {
+      try {
+          const { missionId, userId, status, note, timestamp } = body;
 
-            // 獲取用戶資訊以記錄回報者
-            const { data: userData } = await supabase
-                .from('users')
-                .select('display_name, 姓名')
-                .eq('user_id', userId)
-                .single();
+          console.log('[提交進度] 開始:', { missionId, userId, status });
 
-            const reporterName = userData?.display_name || userData?.姓名 || '未知用戶';
+          // 1. 找到該成員當前所屬的派遣階段（尚未完成的最新派遣）
+          const { data: currentMember, error: memberError } = await supabase
+              .from('assignment_members')
+              .select(`
+                  assignment_id,
+                  completed_at,
+                  assignment:mission_assignments(*)
+              `)
+              .eq('user_id', userId)
+              .eq('assignment:mission_assignments.mission_id', missionId)
+              .is('completed_at', null)
+              .order('assignment_id', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-            // ✅ 新增進度記錄，包含回報者姓名
-            const { error } = await supabase
-                .from('mission_progress')
-                .insert({
-                    mission_id: missionId,
-                    user_id: userId,
-                    status: status,
-                    note: note,
-                    timestamp: timestamp || new Date().toISOString(),
-                    reporter_name: reporterName // ✅ 新增回報者姓名
-                });
+          if (memberError) {
+              console.error('[提交進度] 查詢成員錯誤:', memberError);
+              throw memberError;
+          }
 
-            if (error) {
-                console.error('提交進度錯誤:', error);
-                return res.status(500).json({ status: "error", message: "Failed to submit progress" });
-            }
+          if (!currentMember) {
+              console.error('[提交進度] 找不到當前派遣階段');
+              return res.status(404).json({ 
+                  status: "error", 
+                  message: "找不到當前派遣階段，可能您尚未被指派或已完成" 
+              });
+          }
 
-            // ✅ 如果狀態是已完成，更新參與者狀態
-            if (status === '已完成') {
-                await supabase
-                    .from('mission_participants')
-                    .update({ 
-                        completed_at: new Date().toISOString()
-                    })
-                    .eq('mission_id', missionId)
-                    .eq('user_id', userId);
-            }
+          console.log(`[提交進度] 找到派遣階段 ID: ${currentMember.assignment_id}`);
 
-            return res.status(200).json({
-                status: "ok",
-                message: "進度已提交"
-            });
-        } catch (error) {
-            console.error('submitProgress 錯誤:', error);
-            return res.status(500).json({ status: "error", message: error.message });
-        }
-    }
+          // 獲取用戶資訊以記錄回報者
+          const { data: userData } = await supabase
+              .from('users')
+              .select('display_name, 姓名')
+              .eq('user_id', userId)
+              .single();
+
+          const reporterName = userData?.display_name || userData?.姓名 || '未知用戶';
+
+          // 2. 記錄進度
+          const { error: progressError } = await supabase
+              .from('mission_progress')
+              .insert({
+                  mission_id: missionId,
+                  user_id: userId,
+                  assignment_id: currentMember.assignment_id,  // ✅ 關鍵：關聯到派遣階段
+                  status,
+                  note,
+                  timestamp: timestamp || new Date().toISOString(),
+                  reporter_name: reporterName
+              });
+
+          if (progressError) {
+              console.error('[提交進度] 記錄進度錯誤:', progressError);
+              throw progressError;
+          }
+
+          console.log('[提交進度] 進度已記錄');
+
+          // 3. 如果狀態是「已完成」，更新完成時間
+          if (status === '已完成') {
+              const { error: updateError } = await supabase
+                  .from('assignment_members')
+                  .update({ completed_at: new Date().toISOString() })
+                  .eq('assignment_id', currentMember.assignment_id)
+                  .eq('user_id', userId);
+
+              if (updateError) {
+                  console.error('[提交進度] 更新完成時間錯誤:', updateError);
+                  throw updateError;
+              }
+
+              console.log('[提交進度] 已標記為完成');
+          }
+
+          return res.status(200).json({
+              status: "ok",
+              message: "進度已提交"
+          });
+
+      } catch (error) {
+          console.error('submitProgress 錯誤:', error);
+          return res.status(500).json({ status: "error", message: error.message });
+      }
+  }
 
 
   // ====== 關閉報名 ======
