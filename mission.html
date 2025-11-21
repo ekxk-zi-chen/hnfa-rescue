@@ -1734,16 +1734,23 @@
         }
         // ✅ 修改：支援多階段派遣的進度回報
         function showProgressModal(missionId) {
+            console.log('🔔 [showProgressModal] 打開進度回報視窗, missionId:', missionId);
+            
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) {
+                console.error('❌ 找不到任務, missionId:', missionId);
                 showToast('找不到該任務', 'error');
                 return;
             }
+
+            console.log('✅ 找到任務:', mission.mission_title);
 
             // 找到我當前所屬的派遣階段（尚未完成的最新派遣）
             const assignments = (mission.assignments || []).sort((a, b) => 
                 b.assignment_number - a.assignment_number
             );
+            
+            console.log('📊 派遣階段數:', assignments.length);
             
             let myCurrentAssignment = null;
             let myCurrentMember = null;
@@ -1755,19 +1762,25 @@
                 if (member) {
                     myCurrentAssignment = assignment;
                     myCurrentMember = member;
+                    console.log('✅ 找到我的派遣階段:', assignment.assignment_number);
                     break;
                 }
             }
             
             if (!myCurrentMember) {
+                console.error('❌ 找不到當前派遣階段或已完成');
                 showToast('您不在當前派遣階段中或已完成', 'warning');
                 return;
             }
 
-            // 設定隱藏欄位的值
+            // ✅ 關鍵：設定隱藏欄位的值
             const missionIdElement = document.getElementById('progressMissionId');
             if (missionIdElement) {
-                missionIdElement.value = missionId;
+                missionIdElement.value = missionId;  // ✅ 確保是字串
+                console.log('✅ 已設定 progressMissionId:', missionId);
+            } else {
+                console.error('❌ 找不到 progressMissionId 元素');
+                return;
             }
 
             // 重置表單
@@ -1782,65 +1795,55 @@
 
             // 顯示最新進度
             const progressHistory = myCurrentMember.progress_history || [];
-            if (progressHistory.length > 0) {
+            const infoDiv = document.getElementById('currentProgressInfo');
+            
+            if (progressHistory.length > 0 && infoDiv) {
                 const latest = progressHistory[0];
-                const infoDiv = document.getElementById('currentProgressInfo');
-                if (infoDiv) {
-                    infoDiv.innerHTML = `
-                        <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
-                            <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
-                            <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
-                            <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
-                                ${latest.note}
-                            </div>
-                            <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
-                                ${new Date(latest.timestamp).toLocaleString('zh-TW')}
-                            </div>
+                infoDiv.innerHTML = `
+                    <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+                        <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
+                        <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
+                        <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                            ${latest.note}
                         </div>
-                    `;
-                }
-            } else {
-                const infoDiv = document.getElementById('currentProgressInfo');
-                if (infoDiv) {
-                    infoDiv.innerHTML = '';
-                }
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
+                            ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                        </div>
+                    </div>
+                `;
+            } else if (infoDiv) {
+                infoDiv.innerHTML = '';
             }
 
+            console.log('✅ 打開進度回報 Modal');
             showModal('progressModal');
         }
         // 提交進度回報
+        // ✅ 修正：提交進度回報
         async function submitProgress() {
             try {
-                // ✅ 安全地取得元素
+                console.log('📤 [提交進度] 開始...');
+                
+                // 取得表單元素
                 const missionIdElement = document.getElementById('progressMissionId');
                 const statusElement = document.getElementById('progressStatus');
                 const noteElement = document.getElementById('progressNote');
                 
                 // 檢查元素是否存在
-                if (!missionIdElement) {
-                    console.error('找不到 progressMissionId 元素');
-                    showToast('系統錯誤：無法找到任務 ID', 'error');
+                if (!missionIdElement || !statusElement || !noteElement) {
+                    console.error('❌ 找不到表單元素');
+                    showToast('系統錯誤：表單元素缺失', 'error');
                     return;
                 }
                 
-                if (!statusElement) {
-                    console.error('找不到 progressStatus 元素');
-                    showToast('系統錯誤：無法找到狀態選擇', 'error');
-                    return;
-                }
-                
-                if (!noteElement) {
-                    console.error('找不到 progressNote 元素');
-                    showToast('系統錯誤：無法找到說明欄位', 'error');
-                    return;
-                }
-                
-                const missionId = parseInt(missionIdElement.value);
+                const missionId = missionIdElement.value;
                 const status = statusElement.value;
                 const note = noteElement.value.trim();
 
+                console.log('📋 表單資料:', { missionId, status, note });
+
                 // 驗證輸入
-                if (!missionId || isNaN(missionId)) {
+                if (!missionId) {
                     showToast('無效的任務 ID', 'error');
                     return;
                 }
@@ -1851,73 +1854,54 @@
                     return;
                 }
 
-                // 找到任務
-                const mission = allMissions.find(m => m.id === missionId);
-                if (!mission) {
-                    showToast('找不到該任務', 'error');
-                    return;
-                }
-
-                // 檢查參與狀態
-                const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
-                if (!myParticipation) {
-                    showToast('您不在該任務的參與者名單中', 'error');
-                    return;
-                }
-
-                // 建立進度記錄
-                const progressEntry = {
-                    timestamp: new Date().toISOString(),
-                    status: status,
-                    note: note,
-                    reporter_name: currentUser.displayName,
-                    reporter_id: currentUser.userId
-                };
-
-                // 初始化 progress_history
-                if (!myParticipation.progress_history) {
-                    myParticipation.progress_history = [];
-                }
-                
-                // 添加到本地
-                myParticipation.progress_history.push(progressEntry);
-
-                // 保存到後端
-                const response = await fetch(`${API_BASE_URL}/missions/${missionId}/progress`, {
+                // ✅ 關鍵修正：使用正確的 API endpoint
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(progressEntry)
+                    body: JSON.stringify({
+                        action: 'submitProgress',  // ✅ 使用 action 方式
+                        sessionToken,
+                        missionId,
+                        userId: currentUser.userId,
+                        status,
+                        note,
+                        timestamp: new Date().toISOString()
+                    })
                 });
+
+                console.log('📡 API 回應狀態:', response.status);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
 
-                // 成功提示
-                showToast('✓ 進度已更新', 'success');
-                
-                // 關閉彈窗
-                closeModal('progressModal');
-                
-                // 清空表單
-                noteElement.value = '';
-                statusElement.value = '進行中';
-                
-                // ✅ 重新載入任務資料並刷新畫面
-                console.log('重新載入任務資料...');
-                await loadMissions();
-                console.log('任務資料已更新');
+                const data = await response.json();
+                console.log('📡 API 回應資料:', data);
+
+                if (data.status === 'ok') {
+                    showToast('✓ 進度已提交', 'success');
+                    closeModal('progressModal');
+                    
+                    // 清空表單
+                    noteElement.value = '';
+                    statusElement.value = '進行中';
+                    
+                    // 重新載入任務資料
+                    console.log('🔄 重新載入任務資料...');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '提交失敗');
+                }
                 
             } catch (error) {
-                console.error('提交進度失敗:', error);
+                console.error('❌ 提交進度失敗:', error);
                 showToast('提交失敗：' + error.message, 'error');
             }
         }
-
         // ✅ 確保 openProgressModal 正確設定隱藏欄位
         function openProgressModal(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
