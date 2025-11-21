@@ -649,7 +649,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   // ====== 取得所有任務 ======
   if (action === 'getMissions') {
       try {
-          // ✅ 修改：使用新的派遣階段結構
+          console.log('[getMissions] 開始查詢任務...');
+          
+          // ✅ 同時查詢新舊結構
           const { data: missions, error } = await supabase
               .from('missions')
               .select(`
@@ -666,14 +668,23 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
                           display_name,
                           completed_at
                       )
+                  ),
+                  participants:mission_participants(
+                      id,
+                      user_id,
+                      display_name,
+                      is_assigned,
+                      joined_at
                   )
               `)
               .order('created_at', { ascending: false });
 
           if (error) {
-              console.error('取得任務錯誤:', error);
+              console.error('❌ 取得任務錯誤:', error);
               return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
           }
+
+          console.log(`✅ 成功查詢到 ${missions?.length || 0} 個任務`);
 
           // ✅ 為每個派遣階段的成員載入進度記錄
           if (missions && missions.length > 0) {
@@ -701,12 +712,14 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               }
           }
 
+          console.log('✅ [getMissions] 最終返回:', missions?.length, '個任務');
+
           return res.status(200).json({
               status: "ok",
               missions: missions || []
           });
       } catch (error) {
-          console.error('getMissions 錯誤:', error);
+          console.error('❌ [getMissions] 異常錯誤:', error);
           return res.status(500).json({ status: "error", message: error.message });
       }
   }
