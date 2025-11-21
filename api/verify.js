@@ -1062,10 +1062,10 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               });
           }
 
-          // 檢查用戶角色
+          // ✅ 改進：獲取完整的成員資訊（包含 id）
           const { data: memberInfo } = await supabase
               .from('assignment_members')
-              .select('role')
+              .select('id, role, leader_id')
               .eq('assignment_id', targetAssignmentId)
               .eq('user_id', userId)
               .single();
@@ -1093,13 +1093,25 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           if (progressError) throw progressError;
 
-          // 如果是隊長回報「已完成」，更新完成時間
+          // ✅ 改進：如果是隊長回報「已完成」，更新整個小隊的完成時間
           if (memberInfo?.role === 'leader' && status === '已完成') {
+              const completionTime = new Date().toISOString();
+              
+              // 1. 更新隊長自己的完成時間
               await supabase
                   .from('assignment_members')
-                  .update({ completed_at: new Date().toISOString() })
+                  .update({ completed_at: completionTime })
                   .eq('assignment_id', targetAssignmentId)
                   .eq('user_id', userId);
+
+              // 2. ✅ 新增：更新該隊長所有小隊成員的完成時間
+              await supabase
+                  .from('assignment_members')
+                  .update({ completed_at: completionTime })
+                  .eq('assignment_id', targetAssignmentId)
+                  .eq('leader_id', memberInfo.id); // 使用隊長的 assignment_members.id
+              
+              console.log(`✅ 隊長 ${userId} 完成任務，小隊成員同步完成`);
           }
 
           return res.status(200).json({
