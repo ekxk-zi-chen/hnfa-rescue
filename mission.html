@@ -1388,167 +1388,157 @@
             saveUIState();
         }
         // ✅ 改進：只顯示隊長相關的任務卡片
+        // ✅ 修正：所有參與者都顯示回報按鈕，但只有隊長顯示完整小隊資訊
         function createMissionCardContent(mission, myParticipation) {
-            const isCompleted = mission.status === 'completed';
-            
-            // 取得所有派遣階段
-            const assignments = (mission.assignments || []).sort((a, b) => 
-                b.assignment_number - a.assignment_number
+    const isCompleted = mission.status === 'completed';
+    
+    // 取得所有派遣階段
+    const assignments = (mission.assignments || []).sort((a, b) => 
+        b.assignment_number - a.assignment_number
+    );
+    
+    // ✅ 修正：找到我參與的最新派遣階段（不管是隊長還是成員）
+    let currentAssignment = null;
+    let myCurrentMember = null;
+    let myRole = null;
+    
+    if (assignments.length > 0) {
+        for (const assignment of assignments) {
+            const member = assignment.members?.find(m => 
+                m.user_id === currentUser.userId && !m.completed_at
             );
-            
-            // ✅ 關鍵：只顯示我是隊長的派遣階段
-            let currentAssignment = null;
-            let myCurrentMember = null;
-            
-            if (assignments.length > 0) {
-                // 找到我作為隊長的最新派遣階段
-                for (const assignment of assignments) {
-                    const member = assignment.members?.find(m => 
-                        m.user_id === currentUser.userId && 
-                        m.role === 'leader' &&  // ✅ 只找隊長
-                        !m.completed_at
-                    );
-                    if (member) {
-                        currentAssignment = assignment;
-                        myCurrentMember = member;
-                        break;
-                    }
-                }
+            if (member) {
+                currentAssignment = assignment;
+                myCurrentMember = member;
+                myRole = member.role; // ✅ 記錄我的角色
+                break;
             }
-            
-            // ✅ 檢查整個派遣階段是否完成（隊長完成 = 全隊完成）
-            const isAssignmentCompleted = currentAssignment?.members?.every(m => m.completed_at) || false;
-            
-            return `
-                <div class="mission-info">
-                    <div class="info-item">
-                        <span class="info-icon">📅</span>
-                        ${new Date(mission.mission_date).toLocaleString('zh-TW')}
-                    </div>
-                    <div class="info-item">
-                        <span class="info-icon">👤</span>
-                        發起人: ${mission.created_by}
-                    </div>
-                    ${mission.recruitment_deadline ? `
-                        <div class="info-item">
-                            <span class="info-icon">⏰</span>
-                            截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
-                        </div>
-                    ` : ''}
-                </div>
-                
-                ${mission.mission_description ? `
-                    <div style="margin: 1rem 0; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">
-                        ${mission.mission_description}
-                    </div>
-                ` : ''}
-                
-                ${assignments.length > 0 ? `
-                    <div style="margin-top: 1rem;">
-                        <strong style="display: block; margin-bottom: 0.5rem;">派遣階段:</strong>
-                        ${renderAssignmentsSummary(assignments)}
-                    </div>
-                ` : ''}
-                
-                ${myCurrentMember && myCurrentMember.progress_history?.length > 0 ? `
-                    <div class="progress-section" style="margin-top: 1rem;">
-                        <strong style="display: block; margin-bottom: 0.5rem;">隊長最新進度:</strong>
-                        ${(() => {
-                            const latest = myCurrentMember.progress_history[0];
-                            return `
-                                <div class="progress-item ${latest.status === '已完成' ? 'completed' : ''}">
-                                    <div class="progress-header">
-                                        <span><strong>${latest.status}</strong></span>
-                                        <span class="progress-time">${new Date(latest.timestamp).toLocaleString('zh-TW')}</span>
-                                    </div>
-                                    <div class="progress-content">${latest.note}</div>
-                                </div>
-                            `;
-                        })()}
-                    </div>
-                ` : ''}
-                
-                <!-- ✅ 顯示小隊成員進度（隊長專用） -->
-                ${currentAssignment && myCurrentMember?.role === 'leader' ? `
-                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(0, 123, 255, 0.05); border-radius: 8px;">
-                        <strong style="display: block; margin-bottom: 0.75rem;">👥 小隊成員進度:</strong>
-                        ${renderTeamMembersProgress(currentAssignment, myCurrentMember)}
-                    </div>
-                ` : ''}
-                
-                <div class="mission-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
-                    ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); joinMission('${mission.id}')">我要報名</button>
-                    ` : ''}
-                    
-                    ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
-                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
-                    ` : ''}
-                    
-                    ${(() => {
-                        // ✅ 只有隊長且派遣階段未完成時才顯示回報按鈕
-                        if (!myCurrentMember || isCompleted || isAssignmentCompleted || myCurrentMember.role !== 'leader') {
-                            return '';
-                        }
-                        
-                        return `
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">
-                                第 ${currentAssignment.assignment_number} 次派遣回報
-                            </button>
-                        `;
-                    })()}
-
-                    ${currentUser.role === '管理' && !isCompleted ? `
-                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
-                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
-                        ${mission.allow_recruitment && !mission.recruitment_closed ? `
-                            <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
-                        ` : ''}
-                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
-                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
-                    ` : ''}
-                    
-                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
-                </div>
-            `;
         }
-
-        // ✅ 新增：顯示小隊成員進度
-        function renderTeamMembersProgress(assignment, leaderMember) {
-            const teamMembers = assignment.members?.filter(m => 
-                m.role === 'member' && m.leader_id === leaderMember.id
-            ) || [];
-            
-            if (teamMembers.length === 0) {
-                return '<div style="color: #666; text-align: center;">尚無小隊成員</div>';
-            }
-            
-            return teamMembers.map(member => {
-                const latestProgress = member.progress_history?.[0];
-                const isCompleted = member.completed_at !== null;
-                
-                return `
-                    <div style="padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid ${isCompleted ? 'var(--success)' : 'var(--warning)'};">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong>${member.display_name}</strong>
-                            <span class="status-badge ${isCompleted ? 'status-completed' : 'status-active'}">
-                                ${isCompleted ? '已完成' : '進行中'}
-                            </span>
-                        </div>
-                        ${latestProgress ? `
-                            <div style="margin-top: 0.5rem; font-size: 0.875rem;">
-                                <div><strong>${latestProgress.status}</strong></div>
-                                <div style="color: #666;">${latestProgress.note}</div>
-                                <div style="font-size: 0.75rem; color: #999;">
-                                    ${new Date(latestProgress.timestamp).toLocaleString('zh-TW')}
-                                </div>
+    }
+    
+    return `
+        <div class="mission-info">
+            <div class="info-item">
+                <span class="info-icon">📅</span>
+                ${new Date(mission.mission_date).toLocaleString('zh-TW')}
+            </div>
+            <div class="info-item">
+                <span class="info-icon">👤</span>
+                發起人: ${mission.created_by}
+            </div>
+            ${mission.recruitment_deadline ? `
+                <div class="info-item">
+                    <span class="info-icon">⏰</span>
+                    截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
+                </div>
+            ` : ''}
+        </div>
+        
+        ${mission.mission_description ? `
+            <div style="margin: 1rem 0; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">
+                ${mission.mission_description}
+            </div>
+        ` : ''}
+        
+        ${assignments.length > 0 ? `
+            <div style="margin-top: 1rem;">
+                <strong style="display: block; margin-bottom: 0.5rem;">派遣階段:</strong>
+                ${renderAssignmentsSummary(assignments)}
+            </div>
+        ` : ''}
+        
+        ${myCurrentMember && myCurrentMember.progress_history?.length > 0 ? `
+            <div class="progress-section" style="margin-top: 1rem;">
+                <strong style="display: block; margin-bottom: 0.5rem;">我的最新進度:</strong>
+                ${(() => {
+                    const latest = myCurrentMember.progress_history[0];
+                    return `
+                        <div class="progress-item ${latest.status === '已完成' ? 'completed' : ''}">
+                            <div class="progress-header">
+                                <span><strong>${latest.status}</strong></span>
+                                <span class="progress-time">${new Date(latest.timestamp).toLocaleString('zh-TW')}</span>
                             </div>
-                        ` : '<div style="color: #999; font-size: 0.875rem;">尚無進度回報</div>'}
+                            <div class="progress-content">${latest.note}</div>
+                        </div>
+                    `;
+                })()}
+            </div>
+        ` : ''}
+        
+        <!-- ✅ 修正：只有隊長顯示小隊成員進度 -->
+        ${myRole === 'leader' && currentAssignment ? `
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(0, 123, 255, 0.05); border-radius: 8px;">
+                <strong style="display: block; margin-bottom: 0.75rem;">👥 小隊成員進度:</strong>
+                ${renderTeamMembersProgress(currentAssignment, myCurrentMember)}
+            </div>
+        ` : ''}
+        
+        <div class="mission-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+            ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
+                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); joinMission('${mission.id}')">我要報名</button>
+            ` : ''}
+            
+            ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
+            ` : ''}
+            
+            <!-- ✅ 修正：所有參與者都有回報按鈕 -->
+            ${myCurrentMember && !isCompleted ? `
+                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showProgressModal('${mission.id}')">
+                    ${myRole === 'leader' ? `第 ${currentAssignment.assignment_number} 次派遣回報` : '個人進度回報'}
+                </button>
+            ` : ''}
+
+            ${currentUser.role === '管理' && !isCompleted ? `
+                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
+                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
+                ${mission.allow_recruitment && !mission.recruitment_closed ? `
+                    <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
+                ` : ''}
+                <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
+                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
+            ` : ''}
+            
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
+        </div>
+    `;
+}
+        // ✅ 新增：顯示小隊成員進度
+        // ✅ 修正：顯示小隊成員進度（只有隊長能看到）
+        function renderTeamMembersProgress(assignment, leaderMember) {
+    const teamMembers = assignment.members?.filter(m => 
+        m.role === 'member' && m.leader_id === leaderMember.id
+    ) || [];
+    
+    if (teamMembers.length === 0) {
+        return '<div style="color: #666; text-align: center;">尚無小隊成員</div>';
+    }
+    
+    return teamMembers.map(member => {
+        const latestProgress = member.progress_history?.[0];
+        const isCompleted = member.completed_at !== null;
+        
+        return `
+            <div style="padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid ${isCompleted ? 'var(--success)' : 'var(--warning)'};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong>${member.display_name}</strong>
+                    <span class="status-badge ${isCompleted ? 'status-completed' : 'status-active'}">
+                        ${isCompleted ? '已完成' : '進行中'}
+                    </span>
+                </div>
+                ${latestProgress ? `
+                    <div style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        <div><strong>${latestProgress.status}</strong></div>
+                        <div style="color: #666;">${latestProgress.note}</div>
+                        <div style="font-size: 0.75rem; color: #999;">
+                            ${new Date(latestProgress.timestamp).toLocaleString('zh-TW')}
+                        </div>
                     </div>
-                `;
-            }).join('');
-        }
-                
+                ` : '<div style="color: #999; font-size: 0.875rem;">尚無進度回報</div>'}
+            </div>
+        `;
+    }).join('');
+}
         // ✅ 新增：渲染派遣階段摘要
         function renderAssignmentsSummary(assignments) {
             return assignments.map((assignment, index) => {
