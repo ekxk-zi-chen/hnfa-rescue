@@ -311,7 +311,22 @@
             padding-top: 1rem;
             border-top: 1px solid var(--gray-200);
         }
-
+        .btn-action-primary {
+            flex: 1 1 calc(50% - 0.25rem);
+            min-width: 150px;
+            padding: 1rem 1.5rem !important;
+            font-size: 1rem !important;
+            font-weight: 700 !important;
+        }
+        .btn-action-secondary {
+            flex: 0 0 auto;
+        }
+        @media (max-width: 768px) {
+            .btn-action-primary {
+                flex: 1 1 100%;
+                min-width: 100%;
+            }
+        }
         .modal {
             display: none;
             position: fixed;
@@ -759,7 +774,7 @@
                 </div>
                 
                 <!-- ✅ Email 通知選項 -->
-                <div class="form-group" id="emailNotifySection" style="display: none;">
+                <div class="form-group" id="emailNotifySection" style="display: none !important;">
                     <label>📧 Email 通知</label>
                     <p style="font-size: 0.875rem; color: #666; margin-bottom: 0.5rem;">
                         勾選要發送 Email 通知的隊長（不會發送給小隊成員）
@@ -1533,52 +1548,62 @@
                     </div>
                 ` : ''}
                 
-                <div class="mission-actions" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+                <div class="mission-actions">
                     ${mission.allow_recruitment && !mission.recruitment_closed && !myParticipation && !isCompleted ? `
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); joinMission('${mission.id}')">我要報名</button>
+                        <button class="btn btn-primary btn-sm btn-action-primary" onclick="event.stopPropagation(); joinMission('${mission.id}')">
+                            🙋 我要報名
+                        </button>
                     ` : ''}
                     
                     ${myParticipation && !myParticipation.is_assigned && mission.allow_recruitment && !mission.recruitment_closed && !isCompleted ? `
-                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
+                        <button class="btn btn-danger btn-sm btn-action-primary" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">
+                            ❌ 取消報名
+                        </button>
                     ` : ''}
                     
-                    <!-- // 在任務卡片的行動按鈕部分修改： -->
                     ${(() => {
-                        if (!myCurrentMember || isCompleted) {
-                            return '';
-                        }
+                        if (!myCurrentMember || isCompleted) return '';
                         
-                        // 計算使用者參與的未完成階段數量
                         const myActiveAssignments = (mission.assignments || []).filter(assignment => {
                             const member = assignment.members?.find(m => m.user_id === currentUser.userId);
-                            return member && !member.completed_at;
+                            if (member && !member.completed_at) return true;
+                            
+                            return assignment.members?.some(leader => 
+                                leader.team_members?.some(tm => 
+                                    tm.user_id === currentUser.userId && !tm.completed_at
+                                )
+                            );
                         }).length;
 
-                        let buttonText = '個人進度回報';
-                        if (myActiveAssignments > 0) {
-                            buttonText = `進度回報 (${myActiveAssignments}個階段)`;
+                        if (myActiveAssignments === 0) return '';
+
+                        let buttonText = '📝 個人進度回報';
+                        if (myActiveAssignments > 1) {
+                            buttonText = `📝 進度回報 (${myActiveAssignments}個階段)`;
                         }
                         
                         return `
-                            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); showStageSelectionModal('${mission.id}')">
+                            <button class="btn btn-primary btn-sm btn-action-primary" onclick="event.stopPropagation(); showStageSelectionModal('${mission.id}')">
                                 ${buttonText}
                             </button>
                         `;
                     })()}
 
-
                     ${currentUser.role === '管理' && !isCompleted ? `
-                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
-                        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
+                        <div style="flex-basis: 100%; height: 0;"></div>
+                        <button class="btn btn-secondary btn-sm btn-action-secondary" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
+                        <button class="btn btn-secondary btn-sm btn-action-secondary" onclick="event.stopPropagation(); editMission('${mission.id}')">編輯</button>
                         ${mission.allow_recruitment && !mission.recruitment_closed ? `
-                            <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
+                            <button class="btn btn-warning btn-sm btn-action-secondary" onclick="event.stopPropagation(); closeRecruitment('${mission.id}')">關閉報名</button>
                         ` : ''}
-                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
-                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
+                        <button class="btn btn-success btn-sm btn-action-secondary" onclick="event.stopPropagation(); completeMission('${mission.id}')">結案</button>
+                        <button class="btn btn-danger btn-sm btn-action-secondary" onclick="event.stopPropagation(); deleteMission('${mission.id}')">刪除</button>
                     ` : ''}
                     
-                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
+                    ${currentUser.role === '管理' || myCurrentMember ? '<div style="flex-basis: 100%; height: 0;"></div>' : ''}
+                    <button class="btn btn-secondary btn-sm btn-action-secondary" onclick="event.stopPropagation(); viewMissionDetail('${mission.id}')">查看詳情</button>
                 </div>
+
             `;
         }
                 
@@ -2708,7 +2733,6 @@
                 return;
             }
 
-            // 找到使用者參與的所有階段（未完成的）
             const assignments = (mission.assignments || []).sort((a, b) => 
                 b.assignment_number - a.assignment_number
             );
@@ -2716,16 +2740,12 @@
             const myAssignments = [];
             
             assignments.forEach(assignment => {
-                const member = assignment.members?.find(m => m.user_id === currentUser.userId);
-                if (member && !member.completed_at) {
-                    // ✅ 關鍵修正：精確判斷在當前階段的角色
+                const leaderMember = assignment.members?.find(m => m.user_id === currentUser.userId);
+                if (leaderMember && !leaderMember.completed_at) {
                     let role = 'member';
-                    
-                    // 檢查是否是隊長（有帶領小隊成員）
-                    if (member.team_members && member.team_members.length > 0) {
+                    if (leaderMember.team_members && leaderMember.team_members.length > 0) {
                         role = 'leader';
                     } else {
-                        // 檢查是否被其他隊長帶領（成員身份）
                         const isTeamMember = assignment.members?.some(leader => 
                             leader.team_members?.some(tm => tm.user_id === currentUser.userId)
                         );
@@ -2734,10 +2754,24 @@
                     
                     myAssignments.push({
                         assignment,
-                        member,
+                        member: leaderMember,
                         role
                     });
+                    return;
                 }
+                
+                assignment.members?.forEach(leader => {
+                    const teamMember = leader.team_members?.find(tm => tm.user_id === currentUser.userId);
+                    if (teamMember && !teamMember.completed_at) {
+                        myAssignments.push({
+                            assignment,
+                            member: teamMember,
+                            role: 'member',
+                            leaderId: leader.id,
+                            leaderName: leader.display_name
+                        });
+                    }
+                });
             });
 
             if (myAssignments.length === 0) {
@@ -2745,7 +2779,6 @@
                 return;
             }
 
-            // 建構階段選擇介面
             let html = `
                 <div style="text-align: center; margin-bottom: 1.5rem;">
                     <h3>選擇要回報的派遣階段</h3>
@@ -2761,7 +2794,7 @@
                 
                 html += `
                     <div class="stage-option" 
-                        onclick="selectStage('${missionId}', ${assignment.assignment_number})"
+                        onclick="selectStage('${missionId}', ${assignment.assignment_number}, '${item.role}', '${item.leaderId || ''}')"
                         style="padding: 1.25rem; border: 2px solid var(--gray-300); border-radius: 12px; cursor: pointer; transition: all 0.3s ease; background: white;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div style="text-align: left;">
@@ -2770,6 +2803,7 @@
                                 </div>
                                 <div style="color: #666; font-size: 0.9rem;">
                                     <span style="margin-right: 1rem;">${roleText}</span>
+                                    ${item.leaderName ? `<span style="margin-right: 1rem;">👨‍✈️ 隊長: ${item.leaderName}</span>` : ''}
                                     <span>📊 ${progressCount} 次回報</span>
                                 </div>
                                 ${assignment.assignment_note ? `
@@ -2786,7 +2820,6 @@
 
             html += `</div>`;
 
-            // 創建或更新階段選擇 Modal
             let stageModal = document.getElementById('stageSelectionModal');
             if (!stageModal) {
                 stageModal = document.createElement('div');
@@ -2810,9 +2843,9 @@
 
             showModal('stageSelectionModal');
         }
-
+                
         // ✅ 修正：選擇特定階段進行回報
-        function selectStage(missionId, assignmentNumber) {
+        function selectStage(missionId, assignmentNumber, role, leaderId) {
             closeModal('stageSelectionModal');
             
             const mission = allMissions.find(m => m.id === missionId);
@@ -2824,62 +2857,51 @@
                 return;
             }
 
-            const member = assignment.members?.find(m => m.user_id === currentUser.userId);
+            let member = null;
+            
+            if (role === 'leader') {
+                member = assignment.members?.find(m => m.user_id === currentUser.userId);
+            } else {
+                const leader = assignment.members?.find(m => m.id === leaderId);
+                if (leader) {
+                    member = leader.team_members?.find(tm => tm.user_id === currentUser.userId);
+                }
+            }
+
             if (!member) {
                 showToast('您不在該派遣階段中', 'error');
                 return;
             }
 
-            // ✅ 關鍵修正：精確判斷在當前階段的角色
-            let role = 'member';
-            
-            // 檢查是否是隊長（有帶領小隊成員）
-            if (member.team_members && member.team_members.length > 0) {
-                role = 'leader';
-            } else {
-                // 檢查是否被其他隊長帶領
-                const isTeamMember = assignment.members?.some(leader => 
-                    leader.team_members?.some(tm => tm.user_id === currentUser.userId)
-                );
-                role = isTeamMember ? 'member' : 'leader';
-            }
-
-            // 打開進度回報 Modal
-            openProgressModalForStage(missionId, assignment, member, role);
+            openProgressModalForStage(missionId, assignment, member, role, leaderId);
         }
 
         // ✅ 新增：为特定阶段打开进度回报
-        function openProgressModalForStage(missionId, assignment, member, role) {
+        function openProgressModalForStage(missionId, assignment, member, role, leaderId) {
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) return;
 
-            // ✅ 关键：设定隐藏字段的值
             const missionIdElement = document.getElementById('progressMissionId');
             if (missionIdElement) {
                 missionIdElement.value = missionId;
-                // ✅ 新增：存储当前选择的阶段信息
                 missionIdElement.dataset.assignmentNumber = assignment.assignment_number;
                 missionIdElement.dataset.assignmentId = assignment.id;
+                missionIdElement.dataset.role = role;
+                missionIdElement.dataset.leaderId = leaderId || '';
             }
 
-            // 重置表单
             document.getElementById('progressStatus').value = '進行中';
             document.getElementById('progressNote').value = '';
 
-            // 显示当前派遣信息和角色
             const modalTitle = document.querySelector('#progressModal .modal-header h2');
             if (modalTitle) {
-                modalTitle.textContent = `回報進度 - ${mission.mission_title} (第 ${assignment.assignment_number} 次派遣, ${role === 'leader' ? '隊長' : '隊員'})`;
+                const roleText = role === 'leader' ? '隊長' : '隊員';
+                modalTitle.textContent = `回報進度 - ${mission.mission_title} (第 ${assignment.assignment_number} 次派遣, ${roleText})`;
             }
 
-            // ✅ 关键：根据角色设置状态选项
             const statusSelect = document.getElementById('progressStatus');
             if (statusSelect) {
-                // 保存原始选项
-                const originalOptions = statusSelect.innerHTML;
-                
                 if (role === 'member') {
-                    // 队员不能选择"已完成"
                     statusSelect.innerHTML = `
                         <option value="已指派">已指派</option>
                         <option value="進行中" selected>進行中</option>
@@ -2888,12 +2910,17 @@
                         <option value="等待支援">等待支援</option>
                     `;
                 } else {
-                    // 队长可以選擇所有狀態
-                    statusSelect.innerHTML = originalOptions;
+                    statusSelect.innerHTML = `
+                        <option value="已指派">已指派</option>
+                        <option value="進行中" selected>進行中</option>
+                        <option value="暫停">暫停</option>
+                        <option value="遇到困難">遇到困難</option>
+                        <option value="等待支援">等待支援</option>
+                        <option value="已完成">已完成</option>
+                    `;
                 }
             }
 
-            // 显示最新进度
             const progressHistory = member.progress_history || [];
             const infoDiv = document.getElementById('currentProgressInfo');
             
@@ -2916,8 +2943,7 @@
             }
 
             showModal('progressModal');
-        }
-                
+        }    
         // ✅ 完全重寫：支援多階段派遣的詳情頁面
         function viewMissionDetail(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
