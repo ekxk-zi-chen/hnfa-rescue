@@ -932,6 +932,11 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="equipmentVehicle">出勤車輛</label>
+                        <input type="text" id="equipmentVehicle" class="form-control" placeholder="例如：消防車01">
+                    </div>
+
+                    <div class="form-group">
                         <label for="equipmentNote">狀態備註（借出/出勤時填寫）</label>
                         <input type="text" id="equipmentNote" class="form-control" placeholder="例如：借給張三，預計3天歸還">
                     </div>
@@ -1051,7 +1056,47 @@
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
     </div>
+    <div id="transferModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">轉借裝備</h3>
+                <button class="close" onclick="closeModal('transferModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="transferForm">
+                    <input type="hidden" id="transferEquipmentId">
+                    
+                    <div class="form-group">
+                        <label>當前借出資訊</label>
+                        <div id="currentBorrowInfo" style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                            <!-- 動態顯示當前借出資訊 -->
+                        </div>
+                    </div>
 
+                    <div class="form-group">
+                        <label for="transferTo">轉借給 *</label>
+                        <input type="text" id="transferTo" class="form-control" required placeholder="輸入轉借對象姓名">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="transferQuantity">轉借數量</label>
+                        <input type="number" id="transferQuantity" class="form-control" min="1" value="1">
+                        <small style="color: #666;">部分轉借：填寫要轉借的數量</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="transferNote">轉借備註</label>
+                        <textarea id="transferNote" class="form-control" rows="3" placeholder="轉借原因或說明"></textarea>
+                    </div>
+
+                    <div style="text-align: right; margin-top: 2rem;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('transferModal')">取消</button>
+                        <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">確認轉借</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <script>
         // 配置常數
         const CONFIG = {
@@ -1754,6 +1799,9 @@
                         
                         ${currentUser && currentUser.role !== '一般用戶' ? `
                             <button class="btn btn-primary btn-sm" onclick="editEquipment('${equipment.id}')">編輯</button>
+                            ${equipment.目前狀態 === '借出' ? `
+                                <button class="btn btn-warning btn-sm" onclick="showTransferModal('${equipment.id}')">轉借</button>
+                            ` : ''}
                             <button class="btn btn-danger btn-sm" onclick="deleteEquipment('${equipment.id}')">刪除</button>
                             <button class="btn btn-info btn-sm toggle-history-btn" 
                                     onclick="toggleHistory(this, '${equipment.id}')">
@@ -2045,6 +2093,8 @@
             document.getElementById('equipmentImage').value = equipment.圖片檔案位置 || '';
             document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
             document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
+            document.getElementById('equipmentNote').value = equipment.狀態 || '';
+            document.getElementById('equipmentVehicle').value = equipment.出勤車輛
             document.getElementById('equipmentStatus').value = equipment.目前狀態;
 
             showModal('equipmentModal');
@@ -2060,12 +2110,13 @@
                 裝備編號: document.getElementById('equipmentNumber').value,
                 型號: document.getElementById('equipmentModel').value,
                 特別位置: document.getElementById('equipmentLocation').value,
-                數量: parseInt(document.getElementById('equipmentQuantity').value),
+                數量: parseInt(document.getElementById('equipmentQuantity').value) || 1, // ✅ 加預設值
                 圖片檔案位置: document.getElementById('equipmentImage').value,
                 說明書連結: document.getElementById('equipmentManual').value,
                 教學影片相關: document.getElementById('equipmentVideo').value,
                 目前狀態: document.getElementById('equipmentStatus').value,
-                狀態: document.getElementById('equipmentNote').value || '', // 新增這行
+                出勤車輛: document.getElementById('equipmentVehicle').value, // ✅ 新增
+                狀態: document.getElementById('equipmentNote').value || '',
                 填表人: currentUser.displayName,
                 updated_at: new Date().toISOString()
             };
@@ -2946,6 +2997,113 @@
                 showToast('批量返隊失敗: ' + error.message, 'error');
             }
         }
+        
+        // 顯示轉借 Modal
+        function showTransferModal(equipmentId) {
+            const equipment = equipmentData.find(item => item.id === equipmentId);
+            if (!equipment) return;
+
+            document.getElementById('transferEquipmentId').value = equipmentId;
+            document.getElementById('transferQuantity').max = equipment.數量;
+            document.getElementById('transferQuantity').value = equipment.數量;
+            
+            document.getElementById('currentBorrowInfo').innerHTML = `
+                <strong>${equipment.器材名稱}</strong> (${equipment.裝備編號})<br>
+                目前狀態：${equipment.目前狀態}<br>
+                ${equipment.狀態 ? `備註：${equipment.狀態}<br>` : ''}
+                數量：${equipment.數量}
+            `;
+
+            showModal('transferModal');
+        }
+
+        // 處理轉借表單
+        document.getElementById('transferForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const equipmentId = document.getElementById('transferEquipmentId').value;
+            const transferTo = document.getElementById('transferTo').value;
+            const transferQuantity = parseInt(document.getElementById('transferQuantity').value);
+            const transferNote = document.getElementById('transferNote').value;
+
+            const equipment = equipmentData.find(item => item.id === equipmentId);
+            if (!equipment) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                
+                // 如果是部分轉借
+                if (transferQuantity < equipment.數量) {
+                    // 需要分成兩筆裝備記錄
+                    const remainQuantity = equipment.數量 - transferQuantity;
+                    
+                    // 1. 更新原裝備數量
+                    await fetch(CONFIG.API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'updateEquipment',
+                            sessionToken,
+                            equipmentData: {
+                                ...equipment,
+                                數量: remainQuantity
+                            }
+                        })
+                    });
+
+                    // 2. 新增轉借的裝備記錄
+                    await fetch(CONFIG.API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'createEquipment',
+                            sessionToken,
+                            equipmentData: {
+                                器材名稱: equipment.器材名稱,
+                                分群組: equipment.分群組,
+                                型號: equipment.型號,
+                                特別位置: equipment.特別位置,
+                                數量: transferQuantity,
+                                圖片檔案位置: equipment.圖片檔案位置,
+                                說明書連結: equipment.說明書連結,
+                                教學影片相關: equipment.教學影片相關,
+                                目前狀態: equipment.目前狀態,
+                                出勤車輛: equipment.出勤車輛,
+                                狀態: `轉借給 ${transferTo}${transferNote ? ` - ${transferNote}` : ''}`,
+                                填表人: currentUser.displayName
+                            }
+                        })
+                    });
+
+                    showToast(`已將 ${transferQuantity} 個 ${equipment.器材名稱} 轉借給 ${transferTo}`, 'success');
+                } else {
+                    // 全部轉借，只更新狀態
+                    await fetch(CONFIG.API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'updateEquipment',
+                            sessionToken,
+                            equipmentData: {
+                                ...equipment,
+                                狀態: `轉借給 ${transferTo}${transferNote ? ` - ${transferNote}` : ''}`,
+                                填表人: currentUser.displayName
+                            }
+                        })
+                    });
+
+                    showToast(`已將 ${equipment.器材名稱} 轉借給 ${transferTo}`, 'success');
+                }
+
+                closeModal('transferModal');
+                await loadEquipmentData();
+
+            } catch (error) {
+                console.error('轉借失敗:', error);
+                showToast('轉借失敗: ' + error.message, 'error');
+            }
+        });
+        
         // 更新表單事件監聽器
         function setupEventListeners() {
             // 現有的事件監聽器...
