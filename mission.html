@@ -628,8 +628,9 @@
         <div class="list-actions">
             <button class="btn btn-secondary btn-sm" onclick="expandAll()">全部展開</button>
             <button class="btn btn-secondary btn-sm" onclick="collapseAll()">全部收合</button>
-            <!-- ✅ 一般用戶刷新按鈕 -->
+            <!-- ✅ 確保刷新按鈕有正確的 ID -->
             <button class="btn btn-secondary btn-sm" id="refreshBtn" style="display: none;">🔄 刷新資料</button>
+            
         </div>
         <div id="activeTab" class="tab-content active">
             <div id="activeMissions"></div>
@@ -909,9 +910,10 @@
 
                 setupEventListeners();
                 
-                // ✅ 初始化刷新按鈕
-                initRealtimeOrRefresh(currentUser);
+                // ✅ 簡單設置刷新按鈕（不影響原有邏輯）
+                setupRefreshButton();
                 
+                // 修復：確保初始狀態正確
                 setTimeout(() => {
                     restoreUIState();
                 }, 500);
@@ -920,6 +922,22 @@
                 console.error('初始化失敗:', error);
                 showToast('系統載入失敗', 'error');
                 setTimeout(() => window.location.href = 'index.html', 2000);
+            }
+        }
+
+        // ✅ 簡單的刷新按鈕設置
+        function setupRefreshButton() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.style.display = 'inline-block';
+                refreshBtn.onclick = async () => {
+                    refreshBtn.disabled = true;
+                    refreshBtn.textContent = '刷新中...';
+                    await loadMissions();
+                    showToast('資料已更新', 'success');
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 刷新資料';
+                };
             }
         }
 
