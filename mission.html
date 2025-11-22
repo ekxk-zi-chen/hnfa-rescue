@@ -1553,9 +1553,9 @@
                             return member && !member.completed_at;
                         }).length;
 
-                        let buttonText = '个人进度回报';
+                        let buttonText = '個人進度回報';
                         if (myActiveAssignments > 0) {
-                            buttonText = `进度回报 (${myActiveAssignments}个阶段)`;
+                            buttonText = `進度回報 (${myActiveAssignments}個階段)`;
                         }
                         
                         return `
@@ -2716,16 +2716,16 @@
             assignments.forEach(assignment => {
                 const member = assignment.members?.find(m => m.user_id === currentUser.userId);
                 if (member && !member.completed_at) {
-                    // 判断角色
+                    // ✅ 关键修正：精确判断在当前阶段的角色
                     let role = 'member';
+                    
+                    // 检查是否是队长（有带领小队成员）
                     if (member.team_members && member.team_members.length > 0) {
                         role = 'leader';
                     } else {
-                        // 检查是否被其他队长带领
-                        const isTeamMember = assignments.some(a => 
-                            a.members?.some(leader => 
-                                leader.team_members?.some(tm => tm.user_id === currentUser.userId)
-                            )
+                        // 检查是否被其他队长带领（成员身份）
+                        const isTeamMember = assignment.members?.some(leader => 
+                            leader.team_members?.some(tm => tm.user_id === currentUser.userId)
                         );
                         role = isTeamMember ? 'member' : 'leader';
                     }
@@ -2746,15 +2746,15 @@
             // 构建阶段选择界面
             let html = `
                 <div style="text-align: center; margin-bottom: 1.5rem;">
-                    <h3>选择要回报的派遣阶段</h3>
-                    <p style="color: #666; margin-top: 0.5rem;">请选择您要回报进度的阶段</p>
+                    <h3>選擇要回報的派遣階段</h3>
+                    <p style="color: #666; margin-top: 0.5rem;">請選擇您要回報進度的階段</p>
                 </div>
                 <div style="display: grid; gap: 1rem;">
             `;
 
             myAssignments.forEach((item, index) => {
                 const assignment = item.assignment;
-                const roleText = item.role === 'leader' ? '👑 队长' : '👤 队员';
+                const roleText = item.role === 'leader' ? '👑 隊長' : '👤 隊員';
                 const progressCount = item.member.progress_history?.length || 0;
                 
                 html += `
@@ -2768,7 +2768,7 @@
                                 </div>
                                 <div style="color: #666; font-size: 0.9rem;">
                                     <span style="margin-right: 1rem;">${roleText}</span>
-                                    <span>📊 ${progressCount} 次回报</span>
+                                    <span>📊 ${progressCount} 次回報</span>
                                 </div>
                                 ${assignment.assignment_note ? `
                                     <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #888;">
@@ -2793,7 +2793,7 @@
                 stageModal.innerHTML = `
                     <div class="modal-content" style="max-width: 500px;">
                         <div class="modal-header">
-                            <h3 class="modal-title">选择派遣阶段</h3>
+                            <h3 class="modal-title">選擇派遣階段</h3>
                             <button class="close" onclick="closeModal('stageSelectionModal')">&times;</button>
                         </div>
                         <div class="modal-body" id="stageSelectionContent">
@@ -2818,25 +2818,26 @@
 
             const assignment = mission.assignments?.find(a => a.assignment_number === assignmentNumber);
             if (!assignment) {
-                showToast('找不到指定的派遣阶段', 'error');
+                showToast('找不到指定的派遣階段', 'error');
                 return;
             }
 
             const member = assignment.members?.find(m => m.user_id === currentUser.userId);
             if (!member) {
-                showToast('您不在该派遣阶段中', 'error');
+                showToast('您不在該派遣階段中', 'error');
                 return;
             }
 
-            // 判断角色
+            // ✅ 关键修正：精确判断在当前阶段的角色
             let role = 'member';
+            
+            // 检查是否是队长（有带领小队成员）
             if (member.team_members && member.team_members.length > 0) {
                 role = 'leader';
             } else {
-                const isTeamMember = mission.assignments?.some(a => 
-                    a.members?.some(leader => 
-                        leader.team_members?.some(tm => tm.user_id === currentUser.userId)
-                    )
+                // 检查是否被其他队长带领（成员身份）
+                const isTeamMember = assignment.members?.some(leader => 
+                    leader.team_members?.some(tm => tm.user_id === currentUser.userId)
                 );
                 role = isTeamMember ? 'member' : 'leader';
             }
@@ -2844,6 +2845,7 @@
             // 打开进度回报 Modal，传入特定阶段
             openProgressModalForStage(missionId, assignment, member, role);
         }
+                
 
         // ✅ 新增：为特定阶段打开进度回报
         function openProgressModalForStage(missionId, assignment, member, role) {
@@ -2854,19 +2856,40 @@
             const missionIdElement = document.getElementById('progressMissionId');
             if (missionIdElement) {
                 missionIdElement.value = missionId;
+                // ✅ 新增：存储当前选择的阶段信息
+                missionIdElement.dataset.assignmentNumber = assignment.assignment_number;
+                missionIdElement.dataset.assignmentId = assignment.id;
             }
 
-            // ✅ 新增：存储当前选择的阶段信息
-            missionIdElement.dataset.assignmentNumber = assignment.assignment_number;
-
             // 重置表单
-            document.getElementById('progressStatus').value = '进行中';
+            document.getElementById('progressStatus').value = '進行中';
             document.getElementById('progressNote').value = '';
 
             // 显示当前派遣信息和角色
             const modalTitle = document.querySelector('#progressModal .modal-header h2');
             if (modalTitle) {
-                modalTitle.textContent = `回报进度 - ${mission.mission_title} (第 ${assignment.assignment_number} 次派遣, ${role === 'leader' ? '队长' : '队员'})`;
+                modalTitle.textContent = `回報進度 - ${mission.mission_title} (第 ${assignment.assignment_number} 次派遣, ${role === 'leader' ? '隊長' : '隊員'})`;
+            }
+
+            // ✅ 关键：根据角色设置状态选项
+            const statusSelect = document.getElementById('progressStatus');
+            if (statusSelect) {
+                // 保存原始选项
+                const originalOptions = statusSelect.innerHTML;
+                
+                if (role === 'member') {
+                    // 队员不能选择"已完成"
+                    statusSelect.innerHTML = `
+                        <option value="已指派">已指派</option>
+                        <option value="進行中" selected>進行中</option>
+                        <option value="暫停">暫停</option>
+                        <option value="遇到困難">遇到困難</option>
+                        <option value="等待支援">等待支援</option>
+                    `;
+                } else {
+                    // 队长可以選擇所有狀態
+                    statusSelect.innerHTML = originalOptions;
+                }
             }
 
             // 显示最新进度
@@ -2877,7 +2900,7 @@
                 const latest = progressHistory[0];
                 infoDiv.innerHTML = `
                     <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
-                        <div style="font-size: 0.875rem; color: #666;">最新状态：</div>
+                        <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
                         <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
                         <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
                             ${latest.note}
@@ -2893,6 +2916,7 @@
 
             showModal('progressModal');
         }
+                
         // ✅ 完全重寫：支援多階段派遣的詳情頁面
         function viewMissionDetail(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
