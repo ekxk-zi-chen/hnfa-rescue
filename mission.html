@@ -2467,7 +2467,7 @@
         // ✅ 修正：提交進度回報（獨立階段處理）
         async function submitProgress() {
             try {
-                console.log('📤 [提交进度] 开始...');
+                console.log('📤 [提交進度] 开始...');
                 
                 // 取得表单元素
                 const missionIdElement = document.getElementById('progressMissionId');
@@ -2530,7 +2530,7 @@
                 console.log('📡 API 回应资料:', data);
 
                 if (data.status === 'ok') {
-                    showToast('✓ 进度已提交', 'success');
+                    showToast('✓ 進度已提交', 'success');
                     closeModal('progressModal');
                     
                     // 清空表单
@@ -2541,12 +2541,12 @@
                     console.log('🔄 重新载入任务资料...');
                     await loadMissions();
                 } else {
-                    throw new Error(data.message || '提交失败');
+                    throw new Error(data.message || '提交失敗');
                 }
                 
             } catch (error) {
-                console.error('❌ 提交进度失败:', error);
-                showToast('提交失败：' + error.message, 'error');
+                console.error('❌ 提交進度失敗:', error);
+                showToast('提交失敗：' + error.message, 'error');
             }
         }    
         // ✅ 確保 openProgressModal 正確設定隱藏欄位
