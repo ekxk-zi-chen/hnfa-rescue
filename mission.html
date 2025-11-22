@@ -1431,8 +1431,8 @@
             
             saveUIState();
         }
-        // ✅ 新版：支援多階段派遣的卡片內容
-        // 修改任務卡片內容，加入人數統計 
+
+        // ✅ 修正：支援多階段派遣的卡片內容（獨立狀態檢查）
         function createMissionCardContent(mission, myParticipation) {
             const isCompleted = mission.status === 'completed';
             const participantCount = getUniqueParticipantCount(mission);
@@ -1443,20 +1443,33 @@
             
             let currentAssignment = null;
             let myCurrentMember = null;
+            let myRole = null;
             
+            // ✅ 關鍵修正：精確找到當前階段的參與記錄和角色
             if (assignments.length > 0) {
                 for (const assignment of assignments) {
-                    const member = assignment.members?.find(m => 
-                        m.user_id === currentUser.userId && !m.completed_at
-                    );
+                    const member = assignment.members?.find(m => m.user_id === currentUser.userId);
                     if (member) {
                         currentAssignment = assignment;
                         myCurrentMember = member;
+                        
+                        // ✅ 判斷在當前階段的角色
+                        if (member.team_members && member.team_members.length > 0) {
+                            myRole = 'leader';
+                        } else {
+                            const isTeamMember = assignments.some(a => 
+                                a.members?.some(leader => 
+                                    leader.team_members?.some(tm => tm.user_id === currentUser.userId)
+                                )
+                            );
+                            myRole = isTeamMember ? 'member' : 'leader';
+                        }
                         break;
                     }
                 }
             }
             
+            // ✅ 修正：使用階段特定的完成狀態
             const hasCompletedCurrentAssignment = myCurrentMember?.completed_at !== null;
             
             return `
@@ -1532,6 +1545,9 @@
                         let buttonText = '個人進度回報';
                         if (currentAssignment) {
                             buttonText = `第 ${currentAssignment.assignment_number} 次派遣回報`;
+                            if (myRole) {
+                                buttonText += ` (${myRole === 'leader' ? '隊長' : '隊員'})`;
+                            }
                         }
                         
                         return `
@@ -1555,8 +1571,7 @@
                 </div>
             `;
         }
-
-        
+                
         // ✅ 新增：渲染派遣階段摘要
         function renderAssignmentsSummary(assignments) {
             return assignments.map((assignment, index) => {
@@ -2327,7 +2342,8 @@
             }
         }
 
-        // ✅ 修改：支援多階段派遣的進度回報
+
+        // ✅ 修正：支援多階段派遣的進度回報（獨立角色判斷）
         function showProgressModal(missionId) {
             console.log('🔔 [showProgressModal] 打開進度回報視窗, missionId:', missionId);
             
@@ -2349,29 +2365,52 @@
             
             let myCurrentAssignment = null;
             let myCurrentMember = null;
+            let myRole = null;
             
+            // ✅ 關鍵修正：精確找到當前階段的參與記錄
             for (const assignment of assignments) {
-                const member = assignment.members?.find(m => 
-                    m.user_id === currentUser.userId && !m.completed_at
-                );
+                const member = assignment.members?.find(m => m.user_id === currentUser.userId);
                 if (member) {
                     myCurrentAssignment = assignment;
                     myCurrentMember = member;
-                    console.log('✅ 找到我的派遣階段:', assignment.assignment_number);
+                    
+                    // ✅ 關鍵：判斷在當前階段的角色（隊長或成員）
+                    // 檢查是否是隊長（有帶領小隊成員）
+                    if (member.team_members && member.team_members.length > 0) {
+                        myRole = 'leader';
+                    } else {
+                        // 檢查是否被其他隊長帶領（成員身份）
+                        const isTeamMember = assignments.some(a => 
+                            a.members?.some(leader => 
+                                leader.team_members?.some(tm => tm.user_id === currentUser.userId)
+                            )
+                        );
+                        myRole = isTeamMember ? 'member' : 'leader'; // 預設為隊長
+                    }
+                    
+                    console.log(`✅ 找到我的派遣階段: 第 ${assignment.assignment_number} 次, 角色: ${myRole}`);
                     break;
                 }
             }
             
             if (!myCurrentMember) {
-                console.error('❌ 找不到當前派遣階段或已完成');
-                showToast('您不在當前派遣階段中或已完成', 'warning');
+                console.error('❌ 找不到當前派遣階段');
+                showToast('您不在當前派遣階段中', 'warning');
+                return;
+            }
+
+            // ✅ 檢查是否已經完成當前階段（使用階段特定的完成狀態）
+            const hasCompletedCurrentAssignment = myCurrentMember.completed_at !== null;
+            if (hasCompletedCurrentAssignment) {
+                console.log('ℹ️ 當前階段已完成');
+                showToast('您已完成當前派遣階段', 'info');
                 return;
             }
 
             // ✅ 關鍵：設定隱藏欄位的值
             const missionIdElement = document.getElementById('progressMissionId');
             if (missionIdElement) {
-                missionIdElement.value = missionId;  // ✅ 確保是字串
+                missionIdElement.value = missionId;
                 console.log('✅ 已設定 progressMissionId:', missionId);
             } else {
                 console.error('❌ 找不到 progressMissionId 元素');
@@ -2382,10 +2421,10 @@
             document.getElementById('progressStatus').value = '進行中';
             document.getElementById('progressNote').value = '';
 
-            // 顯示當前派遣資訊
+            // 顯示當前派遣資訊和角色
             const modalTitle = document.querySelector('#progressModal .modal-header h2');
             if (modalTitle) {
-                modalTitle.textContent = `回報進度 - ${mission.mission_title} (第 ${myCurrentAssignment.assignment_number} 次派遣)`;
+                modalTitle.textContent = `回報進度 - ${mission.mission_title} (第 ${myCurrentAssignment.assignment_number} 次派遣, ${myRole === 'leader' ? '隊長' : '隊員'})`;
             }
 
             // 顯示最新進度
@@ -2413,8 +2452,9 @@
             console.log('✅ 打開進度回報 Modal');
             showModal('progressModal');
         }
-        // 提交進度回報
-        // ✅ 修正：提交進度回報
+                
+
+        // ✅ 修正：提交進度回報（獨立階段處理）
         async function submitProgress() {
             try {
                 console.log('📤 [提交進度] 開始...');
@@ -2497,6 +2537,7 @@
                 showToast('提交失敗：' + error.message, 'error');
             }
         }
+                
         // ✅ 確保 openProgressModal 正確設定隱藏欄位
         function openProgressModal(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
