@@ -2862,20 +2862,21 @@
             if (role === 'leader') {
                 member = assignment.members?.find(m => m.user_id === currentUser.userId);
             } else {
-                const leader = assignment.members?.find(m => m.id === leaderId);
+                // ✅ 修正：小隊成員要用 string 比對 leaderId
+                const leader = assignment.members?.find(m => String(m.id) === String(leaderId));
                 if (leader) {
                     member = leader.team_members?.find(tm => tm.user_id === currentUser.userId);
                 }
             }
 
             if (!member) {
+                console.error('找不到成員:', { role, leaderId, assignment });
                 showToast('您不在該派遣階段中', 'error');
                 return;
             }
 
             openProgressModalForStage(missionId, assignment, member, role, leaderId);
         }
-
         // ✅ 新增：为特定阶段打开进度回报
         function openProgressModalForStage(missionId, assignment, member, role, leaderId) {
             const mission = allMissions.find(m => m.id === missionId);
