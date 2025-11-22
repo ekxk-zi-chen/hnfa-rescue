@@ -733,23 +733,40 @@
 
     <!-- 指派人員 Modal -->
     <div id="assignModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
                 <h3 class="modal-title">指派人員</h3>
                 <button class="close" onclick="closeModal('assignModal')">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>選擇成員</label>
+                    <label>選擇隊長及小隊成員</label>
+                    <p style="font-size: 0.875rem; color: #666; margin-bottom: 1rem;">
+                        💡 隊長可回報任務完成，小隊成員只能回報進度
+                    </p>
                     <div id="memberSelector" class="member-selector"></div>
                 </div>
+                
                 <div class="form-group">
                     <label for="assignNote">指派說明</label>
-                    <textarea id="assignNote" class="form-control"></textarea>
+                    <textarea id="assignNote" class="form-control" rows="3" placeholder="選填：派遣說明或注意事項"></textarea>
                 </div>
-                <div style="text-align: right; margin-top: 2rem;">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('assignModal')">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="confirmAssign()" style="margin-left: 0.5rem;">確認指派</button>
+                
+                <!-- ✅ Email 通知選項 -->
+                <div class="form-group" id="emailNotifySection" style="display: none;">
+                    <label>📧 Email 通知</label>
+                    <p style="font-size: 0.875rem; color: #666; margin-bottom: 0.5rem;">
+                        勾選要發送 Email 通知的隊長（不會發送給小隊成員）
+                    </p>
+                    <div id="emailNotifyList" style="display: grid; gap: 0.5rem;"></div>
+                </div>
+                
+                <div style="text-align: right; margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div id="assignSummary" style="font-size: 0.875rem; color: #666;"></div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('assignModal')">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmAssign()" style="margin-left: 0.5rem;">確認指派</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -832,7 +849,18 @@
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
     </div>
-
+    <!-- ✅ 1. 參與成員列表 Modal (在 HTML body 最後加入) -->
+    <div id="participantModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">參與成員</h3>
+                <button class="close" onclick="closeModal('participantModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="participantModalContent"></div>
+            </div>
+        </div>
+    </div>
     <script>
         const CONFIG = {
             API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
@@ -1388,20 +1416,19 @@
             saveUIState();
         }
         // ✅ 新版：支援多階段派遣的卡片內容
+        // 修改任務卡片內容，加入人數統計 
         function createMissionCardContent(mission, myParticipation) {
             const isCompleted = mission.status === 'completed';
+            const participantCount = getUniqueParticipantCount(mission);
             
-            // 取得所有派遣階段（按編號倒序，最新的在前）
             const assignments = (mission.assignments || []).sort((a, b) => 
                 b.assignment_number - a.assignment_number
             );
             
-            // 判斷我是否在當前派遣階段中
             let currentAssignment = null;
             let myCurrentMember = null;
             
             if (assignments.length > 0) {
-                // 找到我尚未完成的最新派遣階段
                 for (const assignment of assignments) {
                     const member = assignment.members?.find(m => 
                         m.user_id === currentUser.userId && !m.completed_at
@@ -1414,7 +1441,6 @@
                 }
             }
             
-            // 檢查我是否已完成當前派遣
             const hasCompletedCurrentAssignment = myCurrentMember?.completed_at !== null;
             
             return `
@@ -1426,6 +1452,11 @@
                     <div class="info-item">
                         <span class="info-icon">👤</span>
                         發起人: ${mission.created_by}
+                    </div>
+                    <div class="info-item">
+                        <span class="participant-count" onclick="event.stopPropagation(); showParticipantsModal('${mission.id}')">
+                            👥 參與人數: ${participantCount}
+                        </span>
                     </div>
                     ${mission.recruitment_deadline ? `
                         <div class="info-item">
@@ -1476,7 +1507,6 @@
                     ` : ''}
                     
                     ${(() => {
-                        // 只有在當前派遣階段且尚未完成時才顯示回報按鈕
                         if (!myCurrentMember || isCompleted || hasCompletedCurrentAssignment) {
                             return '';
                         }
@@ -1507,6 +1537,8 @@
                 </div>
             `;
         }
+
+        
         // ✅ 新增：渲染派遣階段摘要
         function renderAssignmentsSummary(assignments) {
             return assignments.map((assignment, index) => {
@@ -1697,14 +1729,11 @@
             showModal('assignModal');
         }
 
-        // 渲染指派選擇器
+        // ============ 指派人員選擇器渲染（完整版）============
         function renderAssignmentSelector() {
             const container = document.getElementById('memberSelector');
             
-            let html = '<div style="margin-bottom: 1rem;">';
-            html += '<h4 style="margin-bottom: 0.5rem;">選擇隊長及小隊成員</h4>';
-            html += '<p style="font-size: 0.875rem; color: #666;">隊長可回報任務完成，小隊成員只能回報進度</p>';
-            html += '</div>';
+            let html = '';
 
             // 按單位分組顯示
             Object.keys(membersByUnit).sort().forEach(unit => {
@@ -1729,18 +1758,150 @@
                             </div>
                         </div>
                         <div id="unit-content-${unitId}" class="unit-content" style="display: none;">
-                            ${members.map(member => renderMemberCard(member, unitId)).join('')}
+                            ${members.map(member => renderMemberCardHtml(member, unitId)).join('')}
                         </div>
                     </div>
                 `;
             });
 
-            // 顯示已選擇的摘要
-            html += '<div id="selectedSummary" style="margin-top: 1.5rem; padding: 1rem; background: var(--gray-100); border-radius: 8px;"></div>';
-
             container.innerHTML = html;
             updateSelectedSummary();
+            updateEmailNotifySection();
         }
+        // ✅ 渲染單個成員卡片（防止重新渲染整個列表）
+        function renderMemberCardHtml(member, unitId) {
+            const selection = selectedLeaders.get(member.user_id);
+            const isLeader = selection && selection.role === 'leader';
+            
+            return `
+                <div class="member-card" data-member-id="${member.user_id}" style="padding: 0.75rem; border-bottom: 1px solid var(--gray-200);">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" 
+                                    class="btn ${isLeader ? 'btn-primary' : 'btn-secondary'} btn-sm leader-btn"
+                                    onclick="selectAsLeader('${member.user_id}', '${member.display_name}', '${member.unit}', '${member.email || ''}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                ${isLeader ? '✓ 隊長' : '隊長'}
+                            </button>
+                        </div>
+                        <div style="flex: 1;">
+                            <strong>${member.display_name}</strong>
+                            ${member.email ? `<span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">📧</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- 小隊成員選擇區域 -->
+                    <div class="team-area" style="display: ${isLeader ? 'block' : 'none'};">
+                        ${isLeader ? renderTeamMemberSelectorHtml(member.user_id, unitId) : ''}
+                    </div>
+                </div>
+            `;
+        }
+        // ✅ 小隊成員選擇器 HTML
+        function renderTeamMemberSelectorHtml(leaderId, unitId) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return '';
+            
+            const unit = leader.unit || '未分組';
+            const unitMembers = membersByUnit[unit] || [];
+            const availableMembers = unitMembers.filter(m => 
+                m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
+            );
+            
+            return `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 0.875rem;">選擇小隊成員:</strong>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="selectAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                全選
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="clearAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                清除
+                            </button>
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
+                        ${availableMembers.map(m => {
+                            const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
+                            return `
+                                <label class="team-member-checkbox" style="cursor: pointer;">
+                                    <input type="checkbox" 
+                                        value="${m.user_id}"
+                                        ${isSelected ? 'checked' : ''}
+                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')">
+                                    <span>${m.display_name}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div class="team-count" style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                        已選: ${leader.members.length} 人
+                    </div>
+                </div>
+            `;
+        }
+        // ✅ 更新 Email 通知區域
+        function updateEmailNotifySection() {
+            const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
+            const section = document.getElementById('emailNotifySection');
+            const list = document.getElementById('emailNotifyList');
+            
+            if (leaders.length === 0 || leaders.every(l => !l.email)) {
+                section.style.display = 'none';
+                return;
+            }
+            
+            section.style.display = 'block';
+            
+            let html = '';
+            leaders.forEach(leader => {
+                if (leader.email) {
+                    html += `
+                        <label class="email-notify-checkbox" onclick="this.classList.toggle('will-send')">
+                            <input type="checkbox" value="${leader.user_id}">
+                            <div style="flex: 1;">
+                                <strong>${leader.display_name}</strong>
+                                <span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📧 ${leader.email}</span>
+                            </div>
+                            <span style="font-size: 0.75rem; color: var(--info);">✉️ 將發送通知</span>
+                        </label>
+                    `;
+                }
+            });
+            
+            list.innerHTML = html;
+        }
+        // 渲染小隊成員複選框
+        function renderTeamMemberCheckboxes(leaderId, unitId) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return '';
+            
+            const unit = leader.unit || '未分組';
+            const unitMembers = membersByUnit[unit] || [];
+            const availableMembers = unitMembers.filter(m => 
+                m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
+            );
+            
+            return availableMembers.map(m => {
+                const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
+                return `
+                    <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-radius: 4px; transition: background 0.2s ease;">
+                        <input type="checkbox" 
+                            value="${m.user_id}"
+                            ${isSelected ? 'checked' : ''}
+                            onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')"
+                            style="width: 16px; height: 16px;">
+                        <span>${m.display_name}</span>
+                    </label>
+                `;
+            }).join('');
+        }
+
         // 渲染成員卡片
         function renderMemberCard(member, unitId) {
             const isSelected = selectedLeaders.has(member.user_id);
@@ -1791,15 +1952,13 @@
             `;
         }
         
-        // 選擇為隊長
+        // 指派人員 - 防止自動收合 
         function selectAsLeader(userId, displayName, unit, email) {
             const existing = selectedLeaders.get(userId);
             
             if (existing && existing.role === 'leader') {
-                // 取消選擇
                 selectedLeaders.delete(userId);
             } else {
-                // 設為隊長
                 selectedLeaders.set(userId, {
                     user_id: userId,
                     display_name: displayName,
@@ -1810,8 +1969,150 @@
                 });
             }
             
-            renderAssignmentSelector();
+            // ✅ 不重新渲染整個選擇器，只更新相關部分
+            updateMemberCard(userId);
+            updateSelectedSummary();
         }
+        // 更新單一成員卡片
+        function updateMemberCard(userId) {
+            const member = allMembers.find(m => m.user_id === userId);
+            if (!member) return;
+            
+            const cardElement = document.querySelector(`[data-member-id="${userId}"]`);
+            if (!cardElement) return;
+            
+            const selection = selectedLeaders.get(userId);
+            const isLeader = selection && selection.role === 'leader';
+            const isMember = selection && selection.role === 'member';
+            
+            // 只更新按鈕狀態
+            const leaderBtn = cardElement.querySelector('.leader-btn');
+            const memberBtn = cardElement.querySelector('.member-btn');
+            
+            if (leaderBtn) {
+                leaderBtn.className = `btn ${isLeader ? 'btn-primary' : 'btn-secondary'} btn-sm leader-btn`;
+                leaderBtn.textContent = isLeader ? '✓ 隊長' : '隊長';
+            }
+            
+            if (memberBtn) {
+                memberBtn.className = `btn ${isMember ? 'btn-success' : 'btn-secondary'} btn-sm member-btn`;
+                memberBtn.textContent = isMember ? '✓ 成員' : '成員';
+            }
+            
+            // 更新小隊成員區域
+            const teamArea = cardElement.querySelector('.team-area');
+            if (teamArea && isLeader) {
+                teamArea.style.display = 'block';
+                renderTeamMemberSelector(userId, teamArea);
+            } else if (teamArea) {
+                teamArea.style.display = 'none';
+            }
+        }
+        // 小隊成員多選功能 
+        function renderTeamMemberSelector(leaderId, container) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return;
+            
+            const unit = leader.unit || '未分組';
+            const unitMembers = membersByUnit[unit] || [];
+            const availableMembers = unitMembers.filter(m => 
+                m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
+            );
+            
+            let html = `
+                <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 0.875rem;">選擇小隊成員:</strong>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="selectAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                全選
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="clearAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                清除
+                            </button>
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
+                        ${availableMembers.map(m => {
+                            const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
+                            return `
+                                <label class="team-member-checkbox" style="cursor: pointer;">
+                                    <input type="checkbox" 
+                                        value="${m.user_id}"
+                                        ${isSelected ? 'checked' : ''}
+                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')">
+                                    <span>${m.display_name}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                        已選: ${leader.members.length} 人
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        // 切換小隊成員選擇
+        function toggleTeamMember(leaderId, memberId, memberName) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return;
+            
+            const index = leader.members.findIndex(m => m.user_id === memberId);
+            
+            if (index >= 0) {
+                leader.members.splice(index, 1);
+            } else {
+                leader.members.push({ user_id: memberId, display_name: memberName });
+            }
+            
+            updateSelectedSummary();
+            // 更新計數
+            const teamArea = document.querySelector(`[data-member-id="${leaderId}"] .team-area`);
+            if (teamArea) {
+                const countSpan = teamArea.querySelector('.team-count');
+                if (countSpan) {
+                    countSpan.textContent = `已選: ${leader.members.length} 人`;
+                }
+            }
+        }
+        // 全選小隊成員
+        function selectAllTeamMembers(leaderId) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return;
+            
+            const unit = leader.unit || '未分組';
+            const unitMembers = membersByUnit[unit] || [];
+            
+            leader.members = unitMembers
+                .filter(m => m.user_id !== leaderId && !selectedLeaders.has(m.user_id))
+                .map(m => ({ user_id: m.user_id, display_name: m.display_name }));
+            
+            const teamArea = document.querySelector(`[data-member-id="${leaderId}"] .team-area`);
+            if (teamArea) {
+                renderTeamMemberSelector(leaderId, teamArea);
+            }
+            updateSelectedSummary();
+        }
+        // 清除所有小隊成員
+        function clearAllTeamMembers(leaderId) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return;
+            
+            leader.members = [];
+            
+            const teamArea = document.querySelector(`[data-member-id="${leaderId}"] .team-area`);
+            if (teamArea) {
+                renderTeamMemberSelector(leaderId, teamArea);
+            }
+            updateSelectedSummary();
+        }
+
         // 切換成員選擇
         function toggleMemberSelection(userId, displayName, unit) {
             // 成員不能獨立存在，需要先有隊長
@@ -1898,42 +2199,26 @@
             }
         }
 
-        // 更新選擇摘要
+        // ✅ 更新選擇摘要
         function updateSelectedSummary() {
-            const summary = document.getElementById('selectedSummary');
+            const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
+            const summary = document.getElementById('assignSummary');
+            
             if (!summary) return;
             
-            const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
-            
             if (leaders.length === 0) {
-                summary.innerHTML = '<p style="color: #666; text-align: center;">尚未選擇任何隊長</p>';
+                summary.textContent = '尚未選擇隊長';
                 return;
             }
             
-            let html = '<h4 style="margin-bottom: 0.75rem;">已選擇的隊長與小隊:</h4>';
+            const totalMembers = leaders.reduce((sum, l) => sum + l.members.length, 0);
+            summary.textContent = `已選 ${leaders.length} 位隊長，共 ${totalMembers} 位小隊成員`;
             
-            leaders.forEach(leader => {
-                html += `
-                    <div style="margin-bottom: 0.75rem; padding: 0.5rem; background: white; border-radius: 6px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong>${leader.display_name}</strong>
-                            <span style="font-size: 0.875rem; color: #666;">
-                                小隊 ${leader.members.length} 人
-                            </span>
-                        </div>
-                        ${leader.members.length > 0 ? `
-                            <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #666;">
-                                ${leader.members.map(m => m.display_name).join(', ')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            });
-            
-            summary.innerHTML = html;
+            // 同時更新 Email 區域
+            updateEmailNotifySection();
         }
 
-        // 確認指派
+        // 確認指派(多email通知)
         async function confirmAssign() {
             const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
             
@@ -1944,6 +2229,12 @@
             
             const note = document.getElementById('assignNote').value;
             
+            // 收集要發送 Email 的隊長
+            const sendEmailTo = [];
+            document.querySelectorAll('.email-notify-checkbox input[type="checkbox"]:checked').forEach(cb => {
+                sendEmailTo.push(cb.value);
+            });
+            
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
@@ -1953,9 +2244,10 @@
                         action: 'assignMembers',
                         sessionToken,
                         missionId: currentMissionId,
-                        leaders: leaders,  // 包含隊長和小隊成員
+                        leaders: leaders,
                         note,
-                        assignedBy: currentUser.displayName
+                        assignedBy: currentUser.displayName,
+                        sendEmailTo: sendEmailTo  // ✅ 傳送要發 Email 的隊長列表
                     })
                 });
 
@@ -1963,7 +2255,7 @@
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    showToast('指派成功', 'success');
+                    showToast(data.message, 'success');
                     closeModal('assignModal');
                     await loadMissions();
                 } else {
@@ -1974,6 +2266,7 @@
                 showToast('指派失敗: ' + error.message, 'error');
             }
         }
+
         // ✅ 修改：支援多階段派遣的進度回報
         function showProgressModal(missionId) {
             console.log('🔔 [showProgressModal] 打開進度回報視窗, missionId:', missionId);
@@ -2380,10 +2673,11 @@
             
             return html;
         }
-        // ✅ 新增：渲染成員詳情卡片
-        function renderMemberDetailCard(member, isCurrentPhase) {
-            const progressList = member.progress_history || [];
-            const completedThisPhase = member.completed_at !== null;
+        // 詳細頁面只顯示隊長框框，內含小隊成員進度
+        function renderMemberDetailCard(leader, isCurrentPhase) {
+            const progressList = leader.progress_history || [];
+            const completedThisPhase = leader.completed_at !== null;
+            const teamMembers = leader.team_members || [];
             
             return `
                 <div style="background: white; padding: 1.25rem; border-radius: 8px; 
@@ -2391,12 +2685,30 @@
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <div>
-                            <strong style="font-size: 1.1rem;">${member.display_name}</strong>
+                            <strong style="font-size: 1.1rem;">👨‍✈️ ${leader.display_name} (隊長)</strong>
+                            ${teamMembers.length > 0 ? `
+                                <span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">
+                                    帶領 ${teamMembers.length} 位成員
+                                </span>
+                            ` : ''}
                         </div>
                         <span class="status-badge ${completedThisPhase ? 'status-completed' : 'status-active'}">
                             ${completedThisPhase ? '✓ 已完成此次派遣' : '進行中'}
                         </span>
                     </div>
+                    
+                    ${teamMembers.length > 0 ? `
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--gray-100); border-radius: 6px;">
+                            <strong style="font-size: 0.9rem; color: var(--gray-700);">小隊成員：</strong>
+                            <div style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${teamMembers.map(m => `
+                                    <span style="padding: 0.25rem 0.75rem; background: white; border-radius: 50px; font-size: 0.875rem;">
+                                        ${m.display_name}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
                     
                     ${progressList.length > 0 ? `
                         <div style="margin-bottom: 1rem;">
@@ -2423,7 +2735,7 @@
                                             📝 ${prog.note}
                                         </div>
                                         <div style="font-size: 0.75rem; color: #666;">
-                                            👤 回報者: ${prog.reporter_name || member.display_name || '未知'}
+                                            👤 回報者: ${prog.reporter_name || leader.display_name || '未知'}
                                         </div>
                                     </div>
                                 `).join('')}
@@ -2437,7 +2749,8 @@
                 </div>
             `;
         }
-                
+
+        
         // 編輯任務
         function editMission(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
@@ -2559,6 +2872,136 @@
                 select.innerHTML += `<option value="${name}">${name}</option>`;
             });
         }
+
+        // 計算不重複的參與人數
+        function getUniqueParticipantCount(mission) {
+            const uniqueUsers = new Set();
+            
+            // 加入報名者
+            if (mission.participants) {
+                mission.participants.forEach(p => uniqueUsers.add(p.user_id));
+            }
+            
+            // 加入所有被指派者（包含隊長和成員）
+            if (mission.assignments) {
+                mission.assignments.forEach(assignment => {
+                    if (assignment.members) {
+                        assignment.members.forEach(m => {
+                            uniqueUsers.add(m.user_id);
+                            // 加入小隊成員
+                            if (m.team_members) {
+                                m.team_members.forEach(tm => uniqueUsers.add(tm.user_id));
+                            }
+                        });
+                    }
+                });
+            }
+            
+            return uniqueUsers.size;
+        }
+        // 查看參與成員 Modal 
+        async function showParticipantsModal(missionId) {
+            const mission = allMissions.find(m => m.id === missionId);
+            if (!mission) return;
+            
+            const uniqueUsers = new Map();
+            
+            // 收集所有參與者資訊
+            if (mission.participants) {
+                mission.participants.forEach(p => {
+                    uniqueUsers.set(p.user_id, {
+                        display_name: p.display_name,
+                        role: '報名',
+                        is_assigned: p.is_assigned,
+                        phone: null,
+                        unit: null
+                    });
+                });
+            }
+            
+            // 收集被指派者（需要從 users 表取得職稱和電話）
+            const assignedUserIds = new Set();
+            if (mission.assignments) {
+                mission.assignments.forEach(assignment => {
+                    if (assignment.members) {
+                        assignment.members.forEach(m => {
+                            assignedUserIds.add(m.user_id);
+                            // 加入小隊成員
+                            if (m.team_members) {
+                                m.team_members.forEach(tm => assignedUserIds.add(tm.user_id));
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // 查詢用戶詳細資訊
+            const sessionToken = sessionStorage.getItem('sessionToken');
+            const response = await fetch(CONFIG.API_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'getMembers',
+                    sessionToken
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const allUsers = data.members || [];
+                
+                // 更新被指派者的資訊
+                assignedUserIds.forEach(userId => {
+                    const userInfo = allUsers.find(u => u.user_id === userId);
+                    if (userInfo) {
+                        uniqueUsers.set(userId, {
+                            display_name: userInfo.display_name,
+                            role: userInfo.role,
+                            unit: userInfo.unit,
+                            phone: currentUser.role === '管理' ? userInfo.電話 : null,
+                            is_assigned: true
+                        });
+                    }
+                });
+            }
+            
+            // 生成參與者列表 HTML
+            let html = `
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <h3 style="margin-bottom: 1rem;">參與成員列表 (共 ${uniqueUsers.size} 人)</h3>
+                    <div style="display: grid; gap: 0.75rem;">
+            `;
+            
+            Array.from(uniqueUsers.entries()).forEach(([userId, info]) => {
+                html += `
+                    <div style="padding: 1rem; background: ${info.is_assigned ? 'rgba(0, 195, 0, 0.1)' : 'var(--gray-100)'}; 
+                                border-radius: 8px; border-left: 3px solid ${info.is_assigned ? 'var(--primary)' : 'var(--gray-400)'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="font-size: 1.1rem;">${info.display_name}</strong>
+                                ${info.unit ? `<span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📍 ${info.unit}</span>` : ''}
+                            </div>
+                            <span class="status-badge ${info.is_assigned ? 'status-active' : 'status-recruiting'}">
+                                ${info.is_assigned ? '✓ 已指派' : '報名中'}
+                            </span>
+                        </div>
+                        <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #666;">
+                            <span>💼 ${info.role}</span>
+                            ${info.phone ? `<span style="margin-left: 1rem;">📞 ${info.phone}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('participantModalContent').innerHTML = html;
+            showModal('participantModal');
+        }
+
 
         // 套用篩選
         function applyHistoryFilters() {
