@@ -629,7 +629,7 @@
             <button class="btn btn-secondary btn-sm" onclick="expandAll()">全部展開</button>
             <button class="btn btn-secondary btn-sm" onclick="collapseAll()">全部收合</button>
             <!-- ✅ 確保刷新按鈕有正確的 ID -->
-            <button class="btn btn-secondary btn-sm" id="refreshBtn" style="display: none;">🔄 刷新資料</button>
+            <button class="btn btn-secondary btn-sm" onclick="refreshData()" style="display: inline-block;">🔄 刷新資料</button>
             
         </div>
         <div id="activeTab" class="tab-content active">
@@ -910,9 +910,6 @@
 
                 setupEventListeners();
                 
-                // ✅ 簡單設置刷新按鈕（不影響原有邏輯）
-                setupRefreshButton();
-                
                 // 修復：確保初始狀態正確
                 setTimeout(() => {
                     restoreUIState();
@@ -924,7 +921,6 @@
                 setTimeout(() => window.location.href = 'index.html', 2000);
             }
         }
-
         // ✅ 簡單的刷新按鈕設置
         function setupRefreshButton() {
             const refreshBtn = document.getElementById('refreshBtn');
@@ -3271,7 +3267,18 @@
         function goBack() {
             window.location.href = 'navigation.html';
         }
-
+        // 獨立的刷新函數
+        async function refreshData() {
+            const refreshBtn = document.querySelector('.btn-secondary[onclick="refreshData()"]');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = '刷新中...';
+                await loadMissions();
+                showToast('資料已更新', 'success');
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 刷新資料';
+            }
+        }
         document.addEventListener('click', function(event) {
             if (event.target.classList.contains('modal')) {
                 closeModal(event.target.id);
