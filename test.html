@@ -850,6 +850,7 @@
                         <button class="btn btn-primary" onclick="showAddEquipmentModal()">新增裝備</button>
                         <button class="btn btn-secondary" onclick="showBatchOperationModal()">批次操作</button>
                         <button class="btn btn-secondary" onclick="showBatchReturnModal()">批次返隊</button>
+                        <button class="btn btn-warning" onclick="showBatchTransferModal()">批次轉借</button>
                     </div>
                 </div>
 
@@ -881,9 +882,13 @@
                             <label for="equipmentName">器材名稱 *</label>
                             <input type="text" id="equipmentName" class="form-control" required>
                         </div>
+                        <!-- 找到 equipmentGroup 欄位，改成這樣： -->
                         <div class="form-group">
                             <label for="equipmentGroup">分群組 *</label>
-                            <input type="text" id="equipmentGroup" class="form-control" required>
+                            <input type="text" id="equipmentGroup" class="form-control" list="groupList" required placeholder="選擇或輸入新群組">
+                            <datalist id="groupList">
+                                <!-- 選項會動態生成 -->
+                            </datalist>
                         </div>
                     </div>
                     <div class="form-row">
@@ -1056,32 +1061,32 @@
     <div id="toast" class="toast">
         <div id="toastMessage"></div>
     </div>
+    <!-- 轉借 Modal -->
     <div id="transferModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
                 <h3 class="modal-title">轉借裝備</h3>
                 <button class="close" onclick="closeModal('transferModal')">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="transferForm">
-                    <input type="hidden" id="transferEquipmentId">
-                    
                     <div class="form-group">
-                        <label>當前借出資訊</label>
-                        <div id="currentBorrowInfo" style="background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
-                            <!-- 動態顯示當前借出資訊 -->
+                        <label>選擇要轉借的裝備</label>
+                        <div style="margin-bottom: 1rem;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllTransfer()">全選</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="deselectAllTransfer()">全部取消</button>
+                        </div>
+                        
+                        <div id="transferEquipmentSelector" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
+                            <!-- 裝備選擇器 -->
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label for="transferTo">轉借給 *</label>
-                        <input type="text" id="transferTo" class="form-control" required placeholder="輸入轉借對象姓名">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="transferQuantity">轉借數量</label>
-                        <input type="number" id="transferQuantity" class="form-control" min="1" value="1">
-                        <small style="color: #666;">部分轉借：填寫要轉借的數量</small>
+                        <select id="transferTo" class="form-control" required>
+                            <option value="">請選擇轉借對象</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -1763,6 +1768,7 @@
                             <p><strong>型號：</strong>${equipment.型號 || '未指定'}</p>
                             <p><strong>數量：</strong>${equipment.數量 ?? '未知'}</p>
                             <p><strong>位置：</strong>${equipment.特別位置 || '未指定'}</p>
+                            ${equipment.出勤車輛 ? `<p><strong>🚗 出勤車輛：</strong>${equipment.出勤車輛}</p>` : ''}
                             <p><strong>填表人：</strong>${equipment.填表人 || '未知'}</p>
                             ${equipment.狀態 ? `<p><strong>狀態備註：</strong>${equipment.狀態}</p>` : ''}
                         </div>
@@ -2064,16 +2070,10 @@
             document.getElementById('equipmentForm').reset();
             document.getElementById('equipmentId').value = '';
 
-            // 填充現有群組到選擇器
+            // ✅ 填充現有群組到 datalist
             const groups = [...new Set(equipmentData.map(e => e.分群組))].filter(Boolean);
-            const groupSelect = document.getElementById('equipmentGroup');
-            groupSelect.innerHTML = '<option value="">選擇或輸入新群組</option>';
-            groups.forEach(group => {
-                const option = document.createElement('option');
-                option.value = group;
-                option.textContent = group;
-                groupSelect.appendChild(option);
-            });
+            const groupList = document.getElementById('groupList');
+            groupList.innerHTML = groups.map(group => `<option value="${group}">`).join('');
 
             showModal('equipmentModal');
         }
@@ -3104,6 +3104,140 @@
             }
         });
         
+        // 顯示批量轉借 Modal
+        async function showBatchTransferModal() {
+            // 載入所有借出中的裝備
+            const borrowedEquipment = equipmentData.filter(e => e.目前狀態 === '借出');
+            
+            if (borrowedEquipment.length === 0) {
+                showToast('目前沒有借出中的裝備', 'info');
+                return;
+            }
+
+            // 渲染裝備選擇器
+            const container = document.getElementById('transferEquipmentSelector');
+            container.innerHTML = borrowedEquipment.map(equipment => `
+                <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 6px;">
+                    <input type="checkbox" id="transfer-${equipment.id}" 
+                        name="transferEquipmentIds" value="${equipment.id}"
+                        style="margin-right: 0.75rem;">
+                    <label for="transfer-${equipment.id}" style="cursor: pointer; margin: 0; flex: 1;">
+                        <strong>${equipment.器材名稱}</strong> (${equipment.裝備編號})<br>
+                        <small style="color: #666;">
+                            數量: ${equipment.數量} • ${equipment.狀態 || '無備註'}
+                        </small>
+                    </label>
+                </div>
+            `).join('');
+
+            // 載入成員列表
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMembers',
+                        sessionToken
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        const memberSelect = document.getElementById('transferTo');
+                        memberSelect.innerHTML = '<option value="">請選擇轉借對象</option>';
+                        
+                        // 按單位分組顯示
+                        const groupedMembers = data.groupedByUnit || {};
+                        Object.keys(groupedMembers).forEach(unit => {
+                            const optgroup = document.createElement('optgroup');
+                            optgroup.label = unit;
+                            
+                            groupedMembers[unit].forEach(member => {
+                                const option = document.createElement('option');
+                                option.value = member.display_name;
+                                option.textContent = `${member.display_name} (${member.unit})`;
+                                optgroup.appendChild(option);
+                            });
+                            
+                            memberSelect.appendChild(optgroup);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('載入成員失敗:', error);
+            }
+
+            showModal('transferModal');
+        }
+
+        // 全選轉借裝備
+        function selectAllTransfer() {
+            document.querySelectorAll('#transferEquipmentSelector input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+        }
+
+        // 取消全選轉借裝備
+        function deselectAllTransfer() {
+            document.querySelectorAll('#transferEquipmentSelector input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+        }
+
+        // 處理轉借表單提交
+        document.getElementById('transferForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const selectedCheckboxes = document.querySelectorAll('#transferEquipmentSelector input[name="transferEquipmentIds"]:checked');
+            if (selectedCheckboxes.length === 0) {
+                showToast('請選擇至少一個要轉借的裝備', 'error');
+                return;
+            }
+
+            const equipmentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+            const transferTo = document.getElementById('transferTo').value;
+            const transferNote = document.getElementById('transferNote').value;
+
+            if (!transferTo) {
+                showToast('請選擇轉借對象', 'error');
+                return;
+            }
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                
+                // 批量更新裝備的借出狀態
+                const updatePromises = equipmentIds.map(equipmentId => {
+                    const equipment = equipmentData.find(e => e.id === equipmentId);
+                    return fetch(CONFIG.API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'updateEquipment',
+                            sessionToken,
+                            equipmentData: {
+                                ...equipment,
+                                狀態: `轉借給 ${transferTo}${transferNote ? ` - ${transferNote}` : ''}`,
+                                填表人: currentUser.displayName
+                            }
+                        })
+                    });
+                });
+
+                await Promise.all(updatePromises);
+
+                showToast(`已將 ${equipmentIds.length} 個裝備轉借給 ${transferTo}`, 'success');
+                closeModal('transferModal');
+                await loadEquipmentData();
+
+            } catch (error) {
+                console.error('轉借失敗:', error);
+                showToast('轉借失敗: ' + error.message, 'error');
+            }
+        });
+
         // 更新表單事件監聽器
         function setupEventListeners() {
             // 現有的事件監聽器...
