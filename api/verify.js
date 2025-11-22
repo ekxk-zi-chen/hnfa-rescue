@@ -1120,16 +1120,29 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
   // ====== 提交任務進度 ======
   if (action === 'submitProgress') {
       try {
-          const { missionId, userId, status, note, timestamp, assignmentId } = body;
+          const { missionId, userId, status, note, timestamp, assignmentNumber } = body;
 
           console.log('[提交進度] 開始:', { 
-              missionId, userId, status, assignmentId
+              missionId, userId, status, assignmentNumber
           });
 
-          let targetAssignmentId = assignmentId;
-
-          // 如果沒有指定 assignmentId，找最新未完成的
-          if (!targetAssignmentId) {
+          // ✅ 關鍵修正：根據階段編號找到對應的派遣
+          let targetAssignmentId = null;
+          
+          if (assignmentNumber) {
+              // 如果有指定階段編號，找到對應的派遣
+              const { data: assignment } = await supabase
+                  .from('mission_assignments')
+                  .select('id')
+                  .eq('mission_id', missionId)
+                  .eq('assignment_number', assignmentNumber)
+                  .single();
+                  
+              if (assignment) {
+                  targetAssignmentId = assignment.id;
+              }
+          } else {
+              // 如果沒有指定階段編號，找最新未完成的
               const { data: memberRecords } = await supabase
                   .from('assignment_members')
                   .select('assignment_id, completed_at, role, id')
@@ -1167,7 +1180,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               });
           }
 
-          // 檢查用戶角色和完成狀態
+          // ✅ 關鍵修正：檢查用戶在當前階段的角色
           const { data: memberInfo } = await supabase
               .from('assignment_members')
               .select('id, role, completed_at, leader_id')
@@ -1190,7 +1203,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               });
           }
 
-          // ✅ 修正：隊員不能回報「已完成」
+          // ✅ 關鍵修正：隊員不能回報「已完成」
           if (memberInfo.role === 'member' && status === '已完成') {
               return res.status(403).json({ 
                   status: "error", 
@@ -1213,7 +1226,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           if (progressError) throw progressError;
 
-          // ✅ 修正：只有隊長可以完成任務，且完成整個小隊
+          // ✅ 關鍵修正：只有隊長可以完成任務，且完成整個小隊
           if (memberInfo.role === 'leader' && status === '已完成') {
               const completionTime = new Date().toISOString();
               
