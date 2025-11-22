@@ -890,7 +890,7 @@
         // 指派人員 Modal（支援小隊長+成員）
         let membersByUnit = {};  // 按單位分組的成員
         let selectedLeaders = new Map();  // 選中的隊長及其成員
-
+        let currentUnitStates = new Map(); // 記錄單位的展開狀態
         document.addEventListener('DOMContentLoaded', async function() {
             await initializeApp();
         });
@@ -909,7 +909,9 @@
 
                 setupEventListeners();
                 
-                // 修復：確保初始狀態正確
+                // ✅ 初始化刷新按鈕
+                initRealtimeOrRefresh(currentUser);
+                
                 setTimeout(() => {
                     restoreUIState();
                 }, 500);
@@ -1454,8 +1456,10 @@
                         發起人: ${mission.created_by}
                     </div>
                     <div class="info-item">
-                        <span class="participant-count" onclick="event.stopPropagation(); showParticipantsModal('${mission.id}')">
-                            👥 參與人數: ${participantCount}
+                        <span class="participant-count" 
+                            onclick="event.stopPropagation(); showParticipantsModal('${mission.id}')"
+                            style="cursor: pointer; color: var(--primary); text-decoration: underline;">
+                            👥 參與人數: ${participantCount} (點擊查看)
                         </span>
                     </div>
                     ${mission.recruitment_deadline ? `
@@ -1720,11 +1724,9 @@
         async function showAssignModal(missionId) {
             currentMissionId = missionId;
             selectedLeaders.clear();
+            currentUnitStates.clear();
             
-            // ✅ 先載入成員資料
             await loadMembersForAssignment();
-            
-            // ✅ 然後再渲染選擇器
             renderAssignmentSelector();
             showModal('assignModal');
         }
@@ -1735,10 +1737,10 @@
             
             let html = '';
 
-            // 按單位分組顯示
             Object.keys(membersByUnit).sort().forEach(unit => {
                 const members = membersByUnit[unit];
                 const unitId = unit.replace(/\s+/g, '-');
+                const isExpanded = currentUnitStates.get(unitId) || false;
                 
                 html += `
                     <div class="unit-group" style="margin-bottom: 1rem; border: 1px solid var(--gray-300); border-radius: 8px; overflow: hidden;">
@@ -1754,11 +1756,11 @@
                                         style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                     全選為隊長
                                 </button>
-                                <span class="unit-toggle-icon" id="unit-icon-${unitId}">▼</span>
+                                <span class="unit-toggle-icon" id="unit-icon-${unitId}">${isExpanded ? '▲' : '▼'}</span>
                             </div>
                         </div>
-                        <div id="unit-content-${unitId}" class="unit-content" style="display: none;">
-                            ${members.map(member => renderMemberCardHtml(member, unitId)).join('')}
+                        <div id="unit-content-${unitId}" class="unit-content" style="display: ${isExpanded ? 'block' : 'none'};">
+                            ${members.map(member => renderMemberCard(member, unitId)).join('')}
                         </div>
                     </div>
                 `;
@@ -1768,6 +1770,7 @@
             updateSelectedSummary();
             updateEmailNotifySection();
         }
+
         // ✅ 渲染單個成員卡片（防止重新渲染整個列表）
         function renderMemberCardHtml(member, unitId) {
             const selection = selectedLeaders.get(member.user_id);
@@ -1845,13 +1848,13 @@
                 </div>
             `;
         }
-        // ✅ 更新 Email 通知區域
+        // 更新 Email 通知區域
         function updateEmailNotifySection() {
             const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
             const section = document.getElementById('emailNotifySection');
             const list = document.getElementById('emailNotifyList');
             
-            if (leaders.length === 0 || leaders.every(l => !l.email)) {
+            if (leaders.length === 0) {
                 section.style.display = 'none';
                 return;
             }
@@ -1860,21 +1863,28 @@
             
             let html = '';
             leaders.forEach(leader => {
-                if (leader.email) {
-                    html += `
-                        <label class="email-notify-checkbox" onclick="this.classList.toggle('will-send')">
-                            <input type="checkbox" value="${leader.user_id}">
-                            <div style="flex: 1;">
-                                <strong>${leader.display_name}</strong>
-                                <span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📧 ${leader.email}</span>
-                            </div>
-                            <span style="font-size: 0.75rem; color: var(--info);">✉️ 將發送通知</span>
-                        </label>
-                    `;
-                }
+                const isChecked = leader.email ? 'checked' : '';
+                html += `
+                    <label class="email-notify-checkbox" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--gray-100); border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" value="${leader.user_id}" ${isChecked} 
+                            onchange="toggleEmailNotification('${leader.user_id}', this.checked)"
+                            style="width: 16px; height: 16px;">
+                        <div style="flex: 1;">
+                            <strong>${leader.display_name}</strong>
+                            ${leader.email ? `<span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📧 ${leader.email}</span>` : ''}
+                        </div>
+                        <span style="font-size: 0.75rem; color: var(--info);">${isChecked ? '✉️ 將發送通知' : '📧 無Email'}</span>
+                    </label>
+                `;
             });
             
             list.innerHTML = html;
+        }
+        function toggleEmailNotification(userId, willSend) {
+            const leader = selectedLeaders.get(userId);
+            if (leader) {
+                leader.sendEmail = willSend;
+            }
         }
         // 渲染小隊成員複選框
         function renderTeamMemberCheckboxes(leaderId, unitId) {
@@ -1904,50 +1914,30 @@
 
         // 渲染成員卡片
         function renderMemberCard(member, unitId) {
-            const isSelected = selectedLeaders.has(member.user_id);
             const selection = selectedLeaders.get(member.user_id);
+            const isLeader = selection && selection.role === 'leader';
             
             return `
-                <div class="member-card" style="padding: 0.75rem; border-bottom: 1px solid var(--gray-200);">
+                <div class="member-card" data-member-id="${member.user_id}" style="padding: 0.75rem; border-bottom: 1px solid var(--gray-200);">
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                         <div style="display: flex; gap: 0.5rem;">
                             <button type="button" 
-                                    class="btn ${isSelected && selection.role === 'leader' ? 'btn-primary' : 'btn-secondary'} btn-sm"
+                                    class="btn ${isLeader ? 'btn-primary' : 'btn-secondary'} btn-sm leader-btn"
                                     onclick="selectAsLeader('${member.user_id}', '${member.display_name}', '${member.unit}', '${member.email || ''}')"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                ${isSelected && selection.role === 'leader' ? '✓ 隊長' : '隊長'}
-                            </button>
-                            <button type="button" 
-                                    class="btn ${isSelected && selection.role === 'member' ? 'btn-success' : 'btn-secondary'} btn-sm"
-                                    onclick="toggleMemberSelection('${member.user_id}', '${member.display_name}', '${member.unit}')"
-                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                ${isSelected && selection.role === 'member' ? '✓ 成員' : '成員'}
+                                ${isLeader ? '✓ 隊長' : '隊長'}
                             </button>
                         </div>
                         <div style="flex: 1;">
                             <strong>${member.display_name}</strong>
-                            ${member.email ? `<span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">${member.email}</span>` : ''}
+                            ${member.email ? `<span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">📧</span>` : ''}
                         </div>
                     </div>
                     
-                    <!-- 如果選為隊長，顯示小隊成員選擇器 -->
-                    ${isSelected && selection.role === 'leader' ? `
-                        <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <strong style="font-size: 0.875rem;">小隊成員:</strong>
-                                <button type="button" class="btn btn-secondary btn-sm" 
-                                        onclick="selectUnitAsTeam('${member.user_id}', '${unitId}')"
-                                        style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                    選擇同單位成員
-                                </button>
-                            </div>
-                            <div id="team-members-${member.user_id}" style="font-size: 0.875rem; color: #666;">
-                                ${selection.members.length > 0 
-                                    ? selection.members.map(m => `<span style="display: inline-block; margin: 0.25rem; padding: 0.25rem 0.5rem; background: white; border-radius: 4px;">${m.display_name}</span>`).join('')
-                                    : '尚未選擇小隊成員'}
-                            </div>
-                        </div>
-                    ` : ''}
+                    <!-- 小隊成員選擇區域 -->
+                    <div class="team-area" style="display: ${isLeader ? 'block' : 'none'};">
+                        ${isLeader ? renderTeamMemberSelector(member.user_id, unitId) : ''}
+                    </div>
                 </div>
             `;
         }
@@ -2009,9 +1999,9 @@
             }
         }
         // 小隊成員多選功能 
-        function renderTeamMemberSelector(leaderId, container) {
+        function renderTeamMemberSelector(leaderId, unitId) {
             const leader = selectedLeaders.get(leaderId);
-            if (!leader) return;
+            if (!leader) return '';
             
             const unit = leader.unit || '未分組';
             const unitMembers = membersByUnit[unit] || [];
@@ -2019,13 +2009,16 @@
                 m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
             );
             
-            let html = `
+            const selectedCount = leader.members.length;
+            const totalCount = availableMembers.length;
+            
+            return `
                 <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <strong style="font-size: 0.875rem;">選擇小隊成員:</strong>
+                        <strong style="font-size: 0.875rem;">選擇小隊成員 (${selectedCount}/${totalCount})：</strong>
                         <div style="display: flex; gap: 0.25rem;">
                             <button type="button" class="btn btn-secondary btn-sm" 
-                                    onclick="selectAllTeamMembers('${leaderId}')"
+                                    onclick="selectAllTeamMembers('${leaderId}', '${unitId}')"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
                                 全選
                             </button>
@@ -2040,23 +2033,19 @@
                         ${availableMembers.map(m => {
                             const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
                             return `
-                                <label class="team-member-checkbox" style="cursor: pointer;">
+                                <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem;">
                                     <input type="checkbox" 
                                         value="${m.user_id}"
                                         ${isSelected ? 'checked' : ''}
-                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')">
+                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')"
+                                        style="width: 16px; height: 16px;">
                                     <span>${m.display_name}</span>
                                 </label>
                             `;
                         }).join('')}
                     </div>
-                    <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
-                        已選: ${leader.members.length} 人
-                    </div>
                 </div>
             `;
-            
-            container.innerHTML = html;
         }
         // 切換小隊成員選擇
         function toggleTeamMember(leaderId, memberId, memberName) {
@@ -2190,13 +2179,13 @@
             const content = document.getElementById(`unit-content-${unitId}`);
             const icon = document.getElementById(`unit-icon-${unitId}`);
             
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                icon.textContent = '▲';
-            } else {
-                content.style.display = 'none';
-                icon.textContent = '▼';
-            }
+            const isCurrentlyExpanded = content.style.display === 'block';
+            const newState = !isCurrentlyExpanded;
+            
+            content.style.display = newState ? 'block' : 'none';
+            icon.textContent = newState ? '▲' : '▼';
+            
+            currentUnitStates.set(unitId, newState);
         }
 
         // ✅ 更新選擇摘要
@@ -2679,6 +2668,9 @@
             const completedThisPhase = leader.completed_at !== null;
             const teamMembers = leader.team_members || [];
             
+            // 收集隊長和所有小隊成員的進度
+            const allProgress = [...progressList];
+            
             return `
                 <div style="background: white; padding: 1.25rem; border-radius: 8px; 
                             border: 2px solid ${completedThisPhase ? 'var(--success)' : 'var(--gray-300)'};">
@@ -2710,13 +2702,13 @@
                         </div>
                     ` : ''}
                     
-                    ${progressList.length > 0 ? `
+                    ${allProgress.length > 0 ? `
                         <div style="margin-bottom: 1rem;">
                             <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary-dark); font-size: 0.95rem;">
-                                📊 ${isCurrentPhase ? '本次' : '此次'}派遣回報記錄 (${progressList.length} 筆)：
+                                📊 ${isCurrentPhase ? '本次' : '此次'}派遣回報記錄 (${allProgress.length} 筆)：
                             </strong>
                             <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem;">
-                                ${progressList.map(prog => `
+                                ${allProgress.map(prog => `
                                     <div style="padding: 0.75rem; background: ${prog.status === '已完成' ? 'rgba(76, 175, 80, 0.1)' : 'var(--gray-100)'}; 
                                         border-radius: 6px; margin-bottom: 0.5rem;
                                         border-left: 4px solid ${prog.status === '已完成' ? 'var(--success)' : 'var(--info)'};">
@@ -2749,8 +2741,7 @@
                 </div>
             `;
         }
-
-        
+                
         // 編輯任務
         function editMission(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
@@ -2914,19 +2905,19 @@
                         role: '報名',
                         is_assigned: p.is_assigned,
                         phone: null,
-                        unit: null
+                        unit: null,
+                        job_title: null
                     });
                 });
             }
             
-            // 收集被指派者（需要從 users 表取得職稱和電話）
+            // 收集被指派者資訊
             const assignedUserIds = new Set();
             if (mission.assignments) {
                 mission.assignments.forEach(assignment => {
                     if (assignment.members) {
                         assignment.members.forEach(m => {
                             assignedUserIds.add(m.user_id);
-                            // 加入小隊成員
                             if (m.team_members) {
                                 m.team_members.forEach(tm => assignedUserIds.add(tm.user_id));
                             }
@@ -2950,7 +2941,7 @@
                 const data = await response.json();
                 const allUsers = data.members || [];
                 
-                // 更新被指派者的資訊
+                // 更新被指派者的詳細資訊
                 assignedUserIds.forEach(userId => {
                     const userInfo = allUsers.find(u => u.user_id === userId);
                     if (userInfo) {
@@ -2958,11 +2949,27 @@
                             display_name: userInfo.display_name,
                             role: userInfo.role,
                             unit: userInfo.unit,
-                            phone: currentUser.role === '管理' ? userInfo.電話 : null,
+                            phone: userInfo.電話,
+                            job_title: userInfo.職稱,
                             is_assigned: true
                         });
                     }
                 });
+                
+                // 更新報名者的詳細資訊
+                if (mission.participants) {
+                    mission.participants.forEach(p => {
+                        const userInfo = allUsers.find(u => u.user_id === p.user_id);
+                        if (userInfo) {
+                            uniqueUsers.set(p.user_id, {
+                                ...uniqueUsers.get(p.user_id),
+                                unit: userInfo.unit,
+                                job_title: userInfo.職稱,
+                                phone: userInfo.電話
+                            });
+                        }
+                    });
+                }
             }
             
             // 生成參與者列表 HTML
@@ -2973,6 +2980,8 @@
             `;
             
             Array.from(uniqueUsers.entries()).forEach(([userId, info]) => {
+                const showPhone = currentUser.role === '管理' && info.phone;
+                
                 html += `
                     <div style="padding: 1rem; background: ${info.is_assigned ? 'rgba(0, 195, 0, 0.1)' : 'var(--gray-100)'}; 
                                 border-radius: 8px; border-left: 3px solid ${info.is_assigned ? 'var(--primary)' : 'var(--gray-400)'};">
@@ -2980,14 +2989,15 @@
                             <div>
                                 <strong style="font-size: 1.1rem;">${info.display_name}</strong>
                                 ${info.unit ? `<span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📍 ${info.unit}</span>` : ''}
+                                ${info.job_title ? `<span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">💼 ${info.job_title}</span>` : ''}
                             </div>
                             <span class="status-badge ${info.is_assigned ? 'status-active' : 'status-recruiting'}">
                                 ${info.is_assigned ? '✓ 已指派' : '報名中'}
                             </span>
                         </div>
                         <div style="margin-top: 0.5rem; font-size: 0.875rem; color: #666;">
-                            <span>💼 ${info.role}</span>
-                            ${info.phone ? `<span style="margin-left: 1rem;">📞 ${info.phone}</span>` : ''}
+                            <span>👤 ${info.role}</span>
+                            ${showPhone ? `<span style="margin-left: 1rem;">📞 ${info.phone}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -3094,27 +3104,26 @@
         function initRealtimeOrRefresh(userData) {
             if (!userData || !userData.role) return;
 
+            // ✅ 所有人都顯示刷新按鈕
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.style.display = 'inline-block';
+                refreshBtn.onclick = async () => {
+                    refreshBtn.disabled = true;
+                    refreshBtn.textContent = '刷新中...';
+                    await loadMissions();
+                    showToast('資料已更新', 'success');
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 刷新資料';
+                };
+            }
+
+            // 管理員額外設置即時更新
             if (userData.role === '管理') {
                 setupRealtimeUpdates();
-                // 隱藏刷新按鈕
-                const refreshBtn = document.getElementById('refreshBtn');
-                if (refreshBtn) refreshBtn.style.display = 'none';
-            } else {
-                // ✅ 一般用戶：顯示刷新按鈕
-                const refreshBtn = document.getElementById('refreshBtn');
-                if (refreshBtn) {
-                    refreshBtn.style.display = 'inline-block';
-                    refreshBtn.onclick = async () => {
-                        refreshBtn.disabled = true;
-                        refreshBtn.textContent = '刷新中...';
-                        await loadMissions();
-                        showToast('資料已更新', 'success');
-                        refreshBtn.disabled = false;
-                        refreshBtn.textContent = '刷新資料';
-                    };
-                }
             }
         }
+
         // 保存 UI 狀態
         // 改進的 saveUIState 函數
         function saveUIState() {
