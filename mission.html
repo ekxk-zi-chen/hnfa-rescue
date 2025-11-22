@@ -1914,7 +1914,7 @@
             return availableMembers.map(m => {
                 const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
                 return `
-                    <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-radius: 4px; transition: background 0.2s ease;">
+                    <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 4px; transition: background 0.2s ease;">
                         <input type="checkbox" 
                             value="${m.user_id}"
                             ${isSelected ? 'checked' : ''}
@@ -1925,6 +1925,7 @@
                 `;
             }).join('');
         }
+
 
         // ✅ 修正：渲染單個成員卡片（包含小隊成員選擇）
         function renderMemberCard(member, unitId) {
@@ -1949,12 +1950,36 @@
                     </div>
                     
                     <!-- ✅ 修正：小隊成員選擇區域 -->
-                    <div class="team-area" style="display: ${isLeader ? 'block' : 'none'}; margin-top: 0.75rem;">
-                        ${isLeader ? renderTeamMemberSelector(member.user_id, unitId) : ''}
-                    </div>
+                    ${isLeader ? `
+                        <div class="team-area" style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px; border: 1px solid rgba(0, 195, 0, 0.2);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <strong style="font-size: 0.875rem;">選擇小隊成員：</strong>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button type="button" class="btn btn-secondary btn-sm" 
+                                            onclick="selectAllTeamMembers('${member.user_id}')"
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                        全選
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" 
+                                            onclick="clearAllTeamMembers('${member.user_id}')"
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                        清除
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
+                                ${renderTeamMemberCheckboxes(member.user_id, unitId)}
+                            </div>
+                            <div class="team-count" style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                                已選: ${selection.members.length} 人
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
+
+        
         // 指派人員 - 防止自動收合 
         function selectAsLeader(userId, displayName, unit, email) {
             const existing = selectedLeaders.get(userId);
@@ -1972,10 +1997,12 @@
                 });
             }
             
-            // ✅ 不重新渲染整個選擇器，只更新相關部分
-            updateMemberCard(userId);
+            // 重新渲染整個選擇器以顯示小隊成員區域
+            renderAssignmentSelector();
             updateSelectedSummary();
+            updateEmailNotifySection();
         }
+
         // 更新單一成員卡片
         function updateMemberCard(userId) {
             const member = allMembers.find(m => m.user_id === userId);
@@ -2075,9 +2102,17 @@
                 leader.members.push({ user_id: memberId, display_name: memberName });
             }
             
+            // 重新渲染該隊長的卡片以更新計數
+            const unitId = leader.unit.replace(/\s+/g, '-');
+            const memberCardElement = document.querySelector(`[data-member-id="${leaderId}"]`);
+            if (memberCardElement) {
+                const member = allMembers.find(m => m.user_id === leaderId);
+                if (member) {
+                    memberCardElement.outerHTML = renderMemberCard(member, unitId);
+                }
+            }
+            
             updateSelectedSummary();
-            // 更新計數顯示
-            updateTeamMemberCount(leaderId);
         }
         // ✅ 更新小隊成員計數顯示
         function updateTeamMemberCount(leaderId) {
@@ -2093,7 +2128,7 @@
             }
         }
 
-        // ✅ 全選小隊成員
+        // ✅ 修正：全選小隊成員
         function selectAllTeamMembers(leaderId) {
             const leader = selectedLeaders.get(leaderId);
             if (!leader) return;
@@ -2105,33 +2140,37 @@
                 .filter(m => m.user_id !== leaderId && !selectedLeaders.has(m.user_id))
                 .map(m => ({ user_id: m.user_id, display_name: m.display_name }));
             
-            updateSelectedSummary();
-            updateTeamMemberCount(leaderId);
-            
-            // 重新渲染小隊成員選擇器
-            const teamArea = document.querySelector(`[data-member-id="${leaderId}"] .team-area`);
-            if (teamArea) {
-                const newSelector = renderTeamMemberSelector(leaderId);
-                teamArea.innerHTML = newSelector;
+            // 重新渲染該隊長的卡片
+            const unitId = leader.unit.replace(/\s+/g, '-');
+            const memberCardElement = document.querySelector(`[data-member-id="${leaderId}"]`);
+            if (memberCardElement) {
+                const member = allMembers.find(m => m.user_id === leaderId);
+                if (member) {
+                    memberCardElement.outerHTML = renderMemberCard(member, unitId);
+                }
             }
+            
+            updateSelectedSummary();
         }
 
-        // ✅ 清除所有小隊成員
+        // ✅ 修正：清除所有小隊成員
         function clearAllTeamMembers(leaderId) {
             const leader = selectedLeaders.get(leaderId);
             if (!leader) return;
             
             leader.members = [];
             
-            updateSelectedSummary();
-            updateTeamMemberCount(leaderId);
-            
-            // 重新渲染小隊成員選擇器
-            const teamArea = document.querySelector(`[data-member-id="${leaderId}"] .team-area`);
-            if (teamArea) {
-                const newSelector = renderTeamMemberSelector(leaderId);
-                teamArea.innerHTML = newSelector;
+            // 重新渲染該隊長的卡片
+            const unitId = leader.unit.replace(/\s+/g, '-');
+            const memberCardElement = document.querySelector(`[data-member-id="${leaderId}"]`);
+            if (memberCardElement) {
+                const member = allMembers.find(m => m.user_id === leaderId);
+                if (member) {
+                    memberCardElement.outerHTML = renderMemberCard(member, unitId);
+                }
             }
+            
+            updateSelectedSummary();
         }
 
         // 切換成員選擇
