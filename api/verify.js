@@ -3,6 +3,103 @@ import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
 
+// ------------------- 發送 Email -------------------
+// ✅ 在 import 語句之後新增
+async function sendEmail(to, subject, htmlContent) {
+  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+  const FROM_EMAIL = process.env.FROM_EMAIL || 'asd8641646@gmail.com';
+  
+  if (!SENDGRID_API_KEY) {
+    console.warn('⚠️ SendGrid API Key 未設定，無法發送 Email');
+    return { success: false, message: 'Email 服務未設定' };
+  }
+  
+  try {
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SENDGRID_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{
+          to: [{ email: to }]
+        }],
+        from: {
+          email: FROM_EMAIL,
+          name: '花蓮特搜任務派遣系統'
+        },
+        subject: subject,
+        content: [{
+          type: 'text/html',
+          value: htmlContent
+        }]
+      })
+    });
+    
+    if (response.ok) {
+      console.log(`✅ Email 已發送至 ${to}`);
+      return { success: true };
+    } else {
+      const error = await response.text();
+      console.error('❌ Email 發送失敗:', error);
+      return { success: false, message: error };
+    }
+  } catch (error) {
+    console.error('❌ Email 發送異常:', error);
+    return { success: false, message: error.message };
+  }
+}
+// ✅ 在 sendEmail 函數之後新增
+function generateAssignmentEmailHtml(leaderName, missionTitle, missionDate, assignmentNote) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .info-box { background: white; padding: 15px; margin: 15px 0; border-left: 4px solid #00C300; border-radius: 4px; }
+        .button { display: inline-block; padding: 12px 30px; background: #00C300; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🎯 任務指派通知</h1>
+        </div>
+        <div class="content">
+          <p>親愛的 <strong>${leaderName}</strong> 隊長，您好：</p>
+          <p>您已被指派為以下任務的小隊長：</p>
+          <div class="info-box">
+            <h3>📋 ${missionTitle}</h3>
+            <p><strong>📅 任務日期：</strong>${new Date(missionDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
+            ${assignmentNote ? `<p><strong>📝 備註：</strong>${assignmentNote}</p>` : ''}
+          </div>
+          <p><strong>您的職責：</strong></p>
+          <ul>
+            <li>帶領小隊成員執行任務</li>
+            <li>定期回報任務進度</li>
+            <li>任務完成後回報「已完成」狀態</li>
+          </ul>
+          <p style="text-align: center;">
+            <a href="https://liff.line.me/2006653018-YqL83LAN" class="button">立即查看任務詳情</a>
+          </p>
+          <div class="footer">
+            <p>此為系統自動發送郵件，請勿直接回覆</p>
+            <p>花蓮特搜任務派遣系統</p>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
   const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
@@ -651,7 +748,6 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       try {
           console.log('[getMissions] 開始查詢任務...');
           
-          // ✅ 同時查詢新舊結構
           const { data: missions, error } = await supabase
               .from('missions')
               .select(`
@@ -666,7 +762,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
                           id,
                           user_id,
                           display_name,
-                          completed_at
+                          completed_at,
+                          role,
+                          leader_id
                       )
                   ),
                   participants:mission_participants(
@@ -684,35 +782,39 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
               return res.status(500).json({ status: "error", message: "Failed to fetch missions" });
           }
 
-          console.log(`✅ 成功查詢到 ${missions?.length || 0} 個任務`);
-
-          // ✅ 為每個派遣階段的成員載入進度記錄
+          // ✅ 只保留隊長的記錄，並附加小隊成員
           if (missions && missions.length > 0) {
               for (const mission of missions) {
                   if (mission.assignments && mission.assignments.length > 0) {
                       for (const assignment of mission.assignments) {
                           if (assignment.members && assignment.members.length > 0) {
-                              // 取得這個派遣階段的所有進度
                               const { data: allProgress } = await supabase
                                   .from('mission_progress')
                                   .select('*')
                                   .eq('assignment_id', assignment.id)
                                   .order('timestamp', { ascending: false });
 
-                              // 分配給對應的成員
-                              assignment.members = assignment.members.map(member => ({
-                                  ...member,
-                                  progress_history: allProgress 
-                                      ? allProgress.filter(p => p.user_id === member.user_id)
-                                      : []
-                              }));
+                              const allMembers = assignment.members;
+                              assignment.members = allMembers
+                                  .filter(m => m.role === 'leader')
+                                  .map(leader => ({
+                                      ...leader,
+                                      progress_history: allProgress 
+                                          ? allProgress.filter(p => {
+                                              if (p.user_id === leader.user_id) return true;
+                                              const teamMember = allMembers.find(m => 
+                                                  m.user_id === p.user_id && m.leader_id === leader.id
+                                              );
+                                              return !!teamMember;
+                                          })
+                                          : [],
+                                      team_members: allMembers.filter(m => m.leader_id === leader.id)
+                                  }));
                           }
                       }
                   }
               }
           }
-
-          console.log('✅ [getMissions] 最終返回:', missions?.length, '個任務');
 
           return res.status(200).json({
               status: "ok",
@@ -881,37 +983,23 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
   }
 
-  // ====== 指派成員（新版：支援小隊長+成員）======
+// ====== 指派成員 ======
   if (action === 'assignMembers') {
       if (userRole !== '管理') {
-          return res.status(403).json({ 
-              status: "error", 
-              message: "沒有權限指派成員" 
-          });
+          return res.status(403).json({ status: "error", message: "沒有權限指派成員" });
       }
 
       try {
-          const { missionId, leaders, note, assignedBy, emailNotifications } = body;
-          
-          // leaders 格式：
-          // [
-          //   {
-          //     user_id: 'xxx',
-          //     display_name: 'xxx',
-          //     email: 'xxx@example.com',
-          //     emailContent: '自訂內容...',
-          //     members: [  // 小隊成員
-          //       { user_id: 'yyy', display_name: 'yyy' }
-          //     ]
-          //   }
-          // ]
+          const { missionId, leaders, note, assignedBy, sendEmailTo } = body;
 
-          console.log('[指派成員] 開始處理:', { 
-              missionId, 
-              leaderCount: leaders.length 
-          });
+          // 取得任務資料
+          const { data: mission } = await supabase
+              .from('missions')
+              .select('mission_title, mission_date')
+              .eq('id', missionId)
+              .single();
 
-          // 1. 計算新的派遣編號
+          // 計算派遣編號
           const { data: lastAssignment } = await supabase
               .from('mission_assignments')
               .select('assignment_number')
@@ -922,7 +1010,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           const nextNumber = (lastAssignment?.assignment_number || 0) + 1;
 
-          // 2. 建立新派遣階段
+          // 建立派遣階段
           const { data: assignment, error: assignError } = await supabase
               .from('mission_assignments')
               .insert({
@@ -937,11 +1025,11 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
           if (assignError) throw assignError;
 
-          console.log(`[指派成員] 派遣階段已建立，ID: ${assignment.id}`);
+          const emailResults = [];
 
-          // 3. 依序處理每個隊長及其小隊成員
+          // 處理每個隊長
           for (const leader of leaders) {
-              // 3.1 插入隊長
+              // 插入隊長
               const { data: leaderRecord, error: leaderError } = await supabase
                   .from('assignment_members')
                   .insert({
@@ -955,14 +1043,16 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
                   .select()
                   .single();
 
-              if (leaderError) {
-                  console.error('[指派成員] 插入隊長失敗:', leaderError);
-                  throw leaderError;
-              }
+              if (leaderError) throw leaderError;
 
-              console.log(`[指派成員] 隊長 ${leader.display_name} 已加入`);
+              // 標記為已指派
+              await supabase
+                  .from('mission_participants')
+                  .update({ is_assigned: true })
+                  .eq('mission_id', missionId)
+                  .eq('user_id', leader.user_id);
 
-              // 3.2 插入小隊成員
+              // 插入小隊成員
               if (leader.members && leader.members.length > 0) {
                   const memberInserts = leader.members.map(m => ({
                       assignment_id: assignment.id,
@@ -970,41 +1060,59 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
                       display_name: m.display_name,
                       role: 'member',
                       completed_at: null,
-                      leader_id: leaderRecord.id  // ✅ 關聯到隊長
+                      leader_id: leaderRecord.id
                   }));
 
-                  const { error: membersError } = await supabase
-                      .from('assignment_members')
-                      .insert(memberInserts);
+                  await supabase.from('assignment_members').insert(memberInserts);
 
-                  if (membersError) {
-                      console.error('[指派成員] 插入成員失敗:', membersError);
-                      throw membersError;
+                  for (const m of leader.members) {
+                      await supabase
+                          .from('mission_participants')
+                          .update({ is_assigned: true })
+                          .eq('mission_id', missionId)
+                          .eq('user_id', m.user_id);
                   }
-
-                  console.log(`[指派成員] 隊長 ${leader.display_name} 的 ${leader.members.length} 位成員已加入`);
               }
 
-              // 3.3 發送 Email 通知（如果有提供）
-              if (emailNotifications && leader.email && leader.emailContent) {
-                  // TODO: 實作 Email 發送功能
-                  // 可以使用 SendGrid、Mailgun 等服務
-                  console.log(`[Email] 需要發送給 ${leader.email}:`, leader.emailContent);
+              // 發送 Email
+              if (sendEmailTo && sendEmailTo.includes(leader.user_id) && leader.email) {
+                  const emailHtml = generateAssignmentEmailHtml(
+                      leader.display_name,
+                      mission.mission_title,
+                      mission.mission_date,
+                      note
+                  );
+                  
+                  const emailResult = await sendEmail(
+                      leader.email,
+                      `【任務指派】${mission.mission_title}`,
+                      emailHtml
+                  );
+                  
+                  emailResults.push({
+                      name: leader.display_name,
+                      email: leader.email,
+                      success: emailResult.success
+                  });
               }
+          }
+
+          let message = `第 ${nextNumber} 次派遣完成`;
+          if (emailResults.length > 0) {
+              const successCount = emailResults.filter(r => r.success).length;
+              message += `，已發送 ${successCount}/${emailResults.length} 封 Email 通知`;
           }
 
           return res.status(200).json({
               status: "ok",
-              message: `第 ${nextNumber} 次派遣完成`,
-              assignmentNumber: nextNumber
+              message: message,
+              assignmentNumber: nextNumber,
+              emailResults: emailResults
           });
 
       } catch (error) {
           console.error('assignMembers 錯誤:', error);
-          return res.status(500).json({ 
-              status: "error", 
-              message: error.message 
-          });
+          return res.status(500).json({ status: "error", message: error.message });
       }
   }
 
