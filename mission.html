@@ -1542,12 +1542,13 @@
                         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); cancelJoin('${mission.id}')">取消報名</button>
                     ` : ''}
                     
+                    // 在任務卡片的行動按鈕部分修改：
                     ${(() => {
                         if (!myCurrentMember || isCompleted) {
                             return '';
                         }
                         
-                        // 计算用户参与的未完成阶段数量
+                        // 計算使用者參與的未完成階段數量
                         const myActiveAssignments = (mission.assignments || []).filter(assignment => {
                             const member = assignment.members?.find(m => m.user_id === currentUser.userId);
                             return member && !member.completed_at;
@@ -1564,6 +1565,7 @@
                             </button>
                         `;
                     })()}
+
 
                     ${currentUser.role === '管理' && !isCompleted ? `
                         <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); showAssignModal('${mission.id}')">指派人員</button>
@@ -2698,15 +2700,15 @@
             }
         }
         
-        // ✅ 新增：显示阶段选择 Modal
+        // ✅ 修正：顯示階段選擇 Modal（支援多階段獨立）
         function showStageSelectionModal(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) {
-                showToast('找不到该任务', 'error');
+                showToast('找不到該任務', 'error');
                 return;
             }
 
-            // 找到用户参与的所有阶段（未完成的）
+            // 找到使用者參與的所有階段（未完成的）
             const assignments = (mission.assignments || []).sort((a, b) => 
                 b.assignment_number - a.assignment_number
             );
@@ -2716,14 +2718,14 @@
             assignments.forEach(assignment => {
                 const member = assignment.members?.find(m => m.user_id === currentUser.userId);
                 if (member && !member.completed_at) {
-                    // ✅ 关键修正：精确判断在当前阶段的角色
+                    // ✅ 關鍵修正：精確判斷在當前階段的角色
                     let role = 'member';
                     
-                    // 检查是否是队长（有带领小队成员）
+                    // 檢查是否是隊長（有帶領小隊成員）
                     if (member.team_members && member.team_members.length > 0) {
                         role = 'leader';
                     } else {
-                        // 检查是否被其他队长带领（成员身份）
+                        // 檢查是否被其他隊長帶領（成員身份）
                         const isTeamMember = assignment.members?.some(leader => 
                             leader.team_members?.some(tm => tm.user_id === currentUser.userId)
                         );
@@ -2739,11 +2741,11 @@
             });
 
             if (myAssignments.length === 0) {
-                showToast('您没有可回报的派遣阶段', 'warning');
+                showToast('您沒有可回報的派遣階段', 'warning');
                 return;
             }
 
-            // 构建阶段选择界面
+            // 建構階段選擇介面
             let html = `
                 <div style="text-align: center; margin-bottom: 1.5rem;">
                     <h3>選擇要回報的派遣階段</h3>
@@ -2784,7 +2786,7 @@
 
             html += `</div>`;
 
-            // 创建或更新阶段选择 Modal
+            // 創建或更新階段選擇 Modal
             let stageModal = document.getElementById('stageSelectionModal');
             if (!stageModal) {
                 stageModal = document.createElement('div');
@@ -2809,7 +2811,7 @@
             showModal('stageSelectionModal');
         }
 
-        // ✅ 新增：选择特定阶段进行回报
+        // ✅ 修正：選擇特定階段進行回報
         function selectStage(missionId, assignmentNumber) {
             closeModal('stageSelectionModal');
             
@@ -2828,24 +2830,23 @@
                 return;
             }
 
-            // ✅ 关键修正：精确判断在当前阶段的角色
+            // ✅ 關鍵修正：精確判斷在當前階段的角色
             let role = 'member';
             
-            // 检查是否是队长（有带领小队成员）
+            // 檢查是否是隊長（有帶領小隊成員）
             if (member.team_members && member.team_members.length > 0) {
                 role = 'leader';
             } else {
-                // 检查是否被其他队长带领（成员身份）
+                // 檢查是否被其他隊長帶領
                 const isTeamMember = assignment.members?.some(leader => 
                     leader.team_members?.some(tm => tm.user_id === currentUser.userId)
                 );
                 role = isTeamMember ? 'member' : 'leader';
             }
 
-            // 打开进度回报 Modal，传入特定阶段
+            // 打開進度回報 Modal
             openProgressModalForStage(missionId, assignment, member, role);
         }
-                
 
         // ✅ 新增：为特定阶段打开进度回报
         function openProgressModalForStage(missionId, assignment, member, role) {
