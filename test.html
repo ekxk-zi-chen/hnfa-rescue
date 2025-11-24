@@ -2999,21 +2999,70 @@
         }
         
         // 顯示轉借 Modal
-        function showTransferModal(equipmentId) {
+        // 顯示單一裝備轉借 Modal
+        async function showTransferModal(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
 
-            document.getElementById('transferEquipmentId').value = equipmentId;
-            document.getElementById('transferQuantity').max = equipment.數量;
-            document.getElementById('transferQuantity').value = equipment.數量;
-            
-            document.getElementById('currentBorrowInfo').innerHTML = `
-                <strong>${equipment.器材名稱}</strong> (${equipment.裝備編號})<br>
-                目前狀態：${equipment.目前狀態}<br>
-                ${equipment.狀態 ? `備註：${equipment.狀態}<br>` : ''}
-                數量：${equipment.數量}
+            // 清空並準備單一裝備的選擇器
+            const container = document.getElementById('transferEquipmentSelector');
+            container.innerHTML = `
+                <div style="display: flex; align-items: center; margin-bottom: 0.5rem; padding: 0.75rem; background: #e8f5e8; border-radius: 6px;">
+                    <input type="checkbox" id="transfer-${equipment.id}" 
+                        name="transferEquipmentIds" value="${equipment.id}"
+                        checked disabled
+                        style="margin-right: 0.75rem;">
+                    <label style="margin: 0; flex: 1;">
+                        <strong>${equipment.器材名稱}</strong> (${equipment.裝備編號})<br>
+                        <small style="color: #666;">
+                            數量: ${equipment.數量} • ${equipment.狀態 || '無備註'}
+                        </small>
+                    </label>
+                </div>
             `;
 
+            // 載入成員列表
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMembers',
+                        sessionToken
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        const memberSelect = document.getElementById('transferTo');
+                        memberSelect.innerHTML = '<option value="">請選擇轉借對象</option>';
+                        
+                        // 按單位分組顯示
+                        const groupedMembers = data.groupedByUnit || {};
+                        Object.keys(groupedMembers).forEach(unit => {
+                            const optgroup = document.createElement('optgroup');
+                            optgroup.label = unit;
+                            
+                            groupedMembers[unit].forEach(member => {
+                                const option = document.createElement('option');
+                                option.value = member.display_name;
+                                option.textContent = `${member.display_name} (${member.unit})`;
+                                optgroup.appendChild(option);
+                            });
+                            
+                            memberSelect.appendChild(optgroup);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('載入成員失敗:', error);
+            }
+
+            // 清空備註欄位
+            document.getElementById('transferNote').value = '';
+            
             showModal('transferModal');
         }
 
