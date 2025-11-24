@@ -877,24 +877,24 @@
             <div class="modal-body">
                 <form id="equipmentForm">
                     <input type="hidden" id="equipmentId">
+                    <!-- 第一行：編號 + 分群組 -->
                     <div class="form-row">
                         <div class="form-group">
                             <label for="equipmentNumber">裝備編號</label>
                             <input type="text" id="equipmentNumber" class="form-control" readonly style="background: #f0f0f0;">
                         </div>
-                        <!-- 找到 equipmentGroup 欄位，改成這樣： -->
                         <div class="form-group">
                             <label for="equipmentGroup">分群組 *</label>
-                            <input type="text" id="equipmentGroup" class="form-control" list="groupList" required placeholder="選擇或輸入新群組">
-                            <datalist id="groupList">
-                                <!-- 選項會動態生成 -->
-                            </datalist>
+                            <input type="text" id="equipmentGroup" class="form-control" list="groupList" required>
+                            <datalist id="groupList"></datalist>
                         </div>
                     </div>
+                    
+                    <!-- 第二行：器材名稱 + 型號 -->
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="equipmentNumber">裝備編號 *</label>
-                            <input type="text" id="equipmentNumber" class="form-control" required>
+                            <label for="equipmentName">器材名稱 *</label>
+                            <input type="text" id="equipmentName" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="equipmentModel">型號</label>
