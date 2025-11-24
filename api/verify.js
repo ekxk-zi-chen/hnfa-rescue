@@ -183,12 +183,13 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
     const { equipmentData } = body;
 
-    // 先獲取該群組的所有裝備
+    // 獲取該群組的所有裝備，找出最大編號
     const { data: groupEquipments, error: groupError } = await supabase
       .from("equipment")
-      .select("id, 裝備編號")
+      .select("裝備編號")
       .eq("分群組", equipmentData.分群組)
-      .order("裝備編號", { ascending: true });
+      .order("裝備編號", { ascending: false })
+      .limit(1);
 
     if (groupError) {
       console.error("獲取群組裝備錯誤:", groupError);
@@ -196,42 +197,26 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
 
     let newNumber;
-    const prefix = equipmentData.分群組.substring(0, 3).toUpperCase() || "EQP";
 
-    // 如果該群組已有裝備
     if (groupEquipments && groupEquipments.length > 0) {
-      const lastEquipment = groupEquipments[groupEquipments.length - 1];
-      const lastNumber = String(lastEquipment.裝備編號); // ✅ 強制轉字串
-      const match = lastNumber.match(/\d+/);
-      
-      if (match) {
-        newNumber = parseInt(match[0]) + 1;
-      } else {
-        newNumber = 1;
-      }
+      // 該群組已有裝備，取最大編號+1
+      newNumber = parseInt(groupEquipments[0].裝備編號) + 1;
     } else {
-      // 新群組，從全部裝備最大編號+1
+      // 新群組，從全部裝備找最大編號+1
       const { data: allEquipments } = await supabase
         .from("equipment")
         .select("裝備編號")
-        .order("裝備編號", { ascending: true });
+        .order("裝備編號", { ascending: false })
+        .limit(1);
 
       if (allEquipments && allEquipments.length > 0) {
-        let maxNumber = 0;
-        allEquipments.forEach(eq => {
-          const match = String(eq.裝備編號).match(/\d+/);
-          if (match) {
-            const num = parseInt(match[0]);
-            if (num > maxNumber) maxNumber = num;
-          }
-        });
-        newNumber = maxNumber + 1;
+        newNumber = parseInt(allEquipments[0].裝備編號) + 1;
       } else {
         newNumber = 1;
       }
     }
 
-    equipmentData.裝備編號 = `${prefix}-${newNumber.toString().padStart(3, '0')}`;
+    equipmentData.裝備編號 = newNumber; // ✅ 直接用數字
     equipmentData.填表人 = userData.display_name || userData.姓名;
     
     const now = new Date();
@@ -259,7 +244,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     return res.status(200).json({
       status: "ok",
       equipmentId: data.id,
-      equipmentNumber: equipmentData.裝備編號, // ✅ 回傳編號
+      equipmentNumber: newNumber,
       message: "裝備創建成功",
     });
   }
