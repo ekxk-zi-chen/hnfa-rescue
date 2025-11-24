@@ -879,8 +879,8 @@
                     <input type="hidden" id="equipmentId">
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="equipmentName">器材名稱 *</label>
-                            <input type="text" id="equipmentName" class="form-control" required>
+                            <label for="equipmentNumber">裝備編號</label>
+                            <input type="text" id="equipmentNumber" class="form-control" readonly style="background: #f0f0f0;">
                         </div>
                         <!-- 找到 equipmentGroup 欄位，改成這樣： -->
                         <div class="form-group">
@@ -2070,10 +2070,12 @@
             document.getElementById('equipmentForm').reset();
             document.getElementById('equipmentId').value = '';
 
-            // ✅ 填充現有群組到 datalist
             const groups = [...new Set(equipmentData.map(e => e.分群組))].filter(Boolean);
             const groupList = document.getElementById('groupList');
             groupList.innerHTML = groups.map(group => `<option value="${group}">`).join('');
+
+            // ✅ 編號完全不給填
+            document.getElementById('equipmentNumber').value = '(自動生成)';
 
             showModal('equipmentModal');
         }
@@ -2846,7 +2848,7 @@
             }
         }
         
-        // 渲染返隊日期篩選器（現在顯示批次資訊）
+        // 渲染返隊日期篩選器<label for="equipmentNumber">裝備編號 *</label>（現在顯示批次資訊）
         function renderReturnDateFilter(batches) {
             const select = document.getElementById('returnDateFilter');
             select.innerHTML = '<option value="">請選擇借出事件</option>';
@@ -2854,10 +2856,10 @@
             Object.keys(batches).forEach(batchId => {
                 const batch = batches[batchId];
                 
-                // ✅ 完整的時間驗證
+                // ✅ batch_date 是 text，需要解析
                 let formattedDate = '未知時間';
-                try {
-                    if (batch.batch_date) {
+                if (batch.batch_date && batch.batch_date !== 'null') {
+                    try {
                         const date = new Date(batch.batch_date);
                         if (!isNaN(date.getTime())) {
                             formattedDate = date.toLocaleString('zh-TW', {
@@ -2868,10 +2870,13 @@
                                 minute: '2-digit',
                                 timeZone: 'Asia/Taipei'
                             });
+                        } else {
+                            // 如果轉換失敗，直接顯示原始文字
+                            formattedDate = batch.batch_date;
                         }
+                    } catch (error) {
+                        formattedDate = batch.batch_date;
                     }
-                } catch (error) {
-                    console.error('日期錯誤:', error);
                 }
 
                 const option = document.createElement('option');
@@ -2908,10 +2913,10 @@
                     String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
                 );
 
-            // ✅ 安全的時間顯示
+            // 在 renderBatchReturnSelector 函數開頭加入
             let batchDateDisplay = '未知時間';
-            try {
-                if (selectedBatch.batch_date) {
+            if (selectedBatch.batch_date && selectedBatch.batch_date !== 'null') {
+                try {
                     const date = new Date(selectedBatch.batch_date);
                     if (!isNaN(date.getTime())) {
                         batchDateDisplay = date.toLocaleString('zh-TW', { 
@@ -2922,10 +2927,12 @@
                             hour: '2-digit',
                             minute: '2-digit'
                         });
+                    } else {
+                        batchDateDisplay = selectedBatch.batch_date;
                     }
+                } catch (error) {
+                    batchDateDisplay = selectedBatch.batch_date;
                 }
-            } catch (error) {
-                console.error('批次日期錯誤:', error);
             }
 
             let html = `
