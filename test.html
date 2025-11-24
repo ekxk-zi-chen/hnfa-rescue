@@ -2087,6 +2087,11 @@
             document.getElementById('equipmentName').value = equipment.器材名稱;
             document.getElementById('equipmentGroup').value = equipment.分群組;
             document.getElementById('equipmentNumber').value = equipment.裝備編號;
+            
+            // ✅ 編輯時可修改編號
+            document.getElementById('equipmentNumber').readOnly = false;
+            document.getElementById('equipmentNumber').style.background = '';
+            
             document.getElementById('equipmentModel').value = equipment.型號 || '';
             document.getElementById('equipmentLocation').value = equipment.特別位置 || '';
             document.getElementById('equipmentQuantity').value = equipment.數量;
@@ -2094,7 +2099,7 @@
             document.getElementById('equipmentManual').value = equipment.說明書連結 || '';
             document.getElementById('equipmentVideo').value = equipment.教學影片相關 || '';
             document.getElementById('equipmentNote').value = equipment.狀態 || '';
-            document.getElementById('equipmentVehicle').value = equipment.出勤車輛
+            document.getElementById('equipmentVehicle').value = equipment.出勤車輛 || '';
             document.getElementById('equipmentStatus').value = equipment.目前狀態;
 
             showModal('equipmentModal');
@@ -2103,72 +2108,69 @@
         async function handleEquipmentSubmit(event) {
             event.preventDefault();
 
+            const equipmentId = document.getElementById('equipmentId').value;
+            const isNewEquipment = !equipmentId;
+
             const formData = {
-                id: document.getElementById('equipmentId').value,
                 器材名稱: document.getElementById('equipmentName').value,
                 分群組: document.getElementById('equipmentGroup').value,
-                裝備編號: document.getElementById('equipmentNumber').value,
                 型號: document.getElementById('equipmentModel').value,
                 特別位置: document.getElementById('equipmentLocation').value,
-                數量: parseInt(document.getElementById('equipmentQuantity').value) || 1, // ✅ 加預設值
+                數量: parseInt(document.getElementById('equipmentQuantity').value) || 1,
                 圖片檔案位置: document.getElementById('equipmentImage').value,
                 說明書連結: document.getElementById('equipmentManual').value,
                 教學影片相關: document.getElementById('equipmentVideo').value,
                 目前狀態: document.getElementById('equipmentStatus').value,
-                出勤車輛: document.getElementById('equipmentVehicle').value, // ✅ 新增
+                出勤車輛: document.getElementById('equipmentVehicle').value,
                 狀態: document.getElementById('equipmentNote').value || '',
                 填表人: currentUser.displayName,
                 updated_at: new Date().toISOString()
             };
 
+            // ✅ 編輯時才加入 id 和編號
+            if (!isNewEquipment) {
+                formData.id = equipmentId;
+                formData.裝備編號 = document.getElementById('equipmentNumber').value;
+            }
+
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: formData.id ? 'updateEquipment' : 'createEquipment',
+                        action: isNewEquipment ? 'createEquipment' : 'updateEquipment',
                         sessionToken,
                         equipmentData: formData
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error('儲存失敗');
-                }
+                if (!response.ok) throw new Error('儲存失敗');
 
                 const data = await response.json();
                 if (data.status === 'ok') {
-                    // ✅ 改為局部更新
-                    if (formData.id) {
-                        // 編輯現有裝備
-                        const index = equipmentData.findIndex(item => item.id === formData.id);
+                    if (isNewEquipment) {
+                        formData.id = data.equipmentId;
+                        formData.裝備編號 = data.equipmentNumber; // ✅ 用後端回傳的編號
+                        equipmentData.push(formData);
+                        addSingleEquipmentCard(formData);
+                        showToast(`新增成功 (編號: ${data.equipmentNumber})`, 'success');
+                    } else {
+                        const index = equipmentData.findIndex(item => item.id === equipmentId);
                         if (index !== -1) {
                             equipmentData[index] = { ...equipmentData[index], ...formData };
-                            // 只更新這一筆卡片
                             updateSingleEquipmentCard(formData);
                         }
-                        showToast('裝備更新成功', 'success');
-                    } else {
-                        // 新增裝備
-                        formData.id = data.equipmentId || generateId();
-                        equipmentData.push(formData);
-                        // 只新增這一筆卡片
-                        addSingleEquipmentCard(formData);
-                        showToast('裝備新增成功', 'success');
+                        showToast('更新成功', 'success');
                     }
 
-                    // 只需要更新分類篩選器（因為可能有新的分群組）
                     updateCategoryFilter();
                     closeModal('equipmentModal');
-
                 } else {
                     throw new Error(data.message || '儲存失敗');
                 }
             } catch (error) {
-                console.error('儲存裝備失敗:', error);
+                console.error('儲存失敗:', error);
                 showToast('儲存失敗: ' + error.message, 'error');
             }
         }
