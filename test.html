@@ -2847,24 +2847,34 @@
         // 渲染返隊日期篩選器（現在顯示批次資訊）
         function renderReturnDateFilter(batches) {
             const select = document.getElementById('returnDateFilter');
-
             select.innerHTML = '<option value="">請選擇借出事件</option>';
 
             Object.keys(batches).forEach(batchId => {
                 const batch = batches[batchId];
-                const date = new Date(batch.batch_date);
-                const formattedDate = date.toLocaleString('zh-TW', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'Asia/Taipei'
-                });
+                
+                // ✅ 完整的時間驗證
+                let formattedDate = '未知時間';
+                try {
+                    if (batch.batch_date) {
+                        const date = new Date(batch.batch_date);
+                        if (!isNaN(date.getTime())) {
+                            formattedDate = date.toLocaleString('zh-TW', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                timeZone: 'Asia/Taipei'
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error('日期錯誤:', error);
+                }
 
                 const option = document.createElement('option');
                 option.value = batchId;
-                option.textContent = `${formattedDate} - ${batch.batch_operator} - ${batch.batch_note || '無備註'} (${batch.equipment.length}項)`;
+                option.textContent = `${formattedDate} - ${batch.batch_operator || '未知'} - ${batch.batch_note || '無備註'} (${batch.equipment?.length || 0}項)`;
                 select.appendChild(option);
             });
         }
@@ -2896,14 +2906,34 @@
                     String(a.裝備編號).localeCompare(String(b.裝備編號), 'zh-Hant', { numeric: true })
                 );
 
+            // ✅ 安全的時間顯示
+            let batchDateDisplay = '未知時間';
+            try {
+                if (selectedBatch.batch_date) {
+                    const date = new Date(selectedBatch.batch_date);
+                    if (!isNaN(date.getTime())) {
+                        batchDateDisplay = date.toLocaleString('zh-TW', { 
+                            timeZone: 'Asia/Taipei',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('批次日期錯誤:', error);
+            }
+
             let html = `
-        <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
-            <strong>批次資訊：</strong><br>
-            📅 ${new Date(selectedBatch.batch_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}<br>
-            👤 操作人員：${selectedBatch.batch_operator}<br>
-            📝 備註：${selectedBatch.batch_note || '無備註'}
-        </div>
-    `;
+            <div style="background: #e8f5e8; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+                <strong>批次資訊：</strong><br>
+                📅 ${batchDateDisplay}<br>
+                👤 操作人員：${selectedBatch.batch_operator}<br>
+                📝 備註：${selectedBatch.batch_note || '無備註'}
+            </div>
+            `;
 
             if (availableEquipment.length === 0) {
                 html += '<div style="text-align: center; color: #666; padding: 2rem;">此批次所有裝備已返隊</div>';
