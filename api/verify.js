@@ -601,6 +601,98 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     }
   }
 
+  // ====== 批量轉借裝備 ======
+  if (action === "batchTransferEquipment") {
+    if (userRole === "一般用戶") {
+      return res.status(403).json({ status: "error", message: "沒有權限批量操作裝備" });
+    }
+
+    const { equipmentIds, transferTo, note, operator, originalBatchId } = body;
+
+    if (!equipmentIds || !Array.isArray(equipmentIds) || equipmentIds.length === 0) {
+      return res.status(400).json({ status: "error", message: "請選擇要轉借的裝備" });
+    }
+
+    if (!transferTo) {
+      return res.status(400).json({ status: "error", message: "請指定轉借對象" });
+    }
+
+    try {
+      // ✅ 先查詢所有要轉借的裝備
+      const { data: oldEquipmentList, error: fetchError } = await supabase
+        .from("equipment")
+        .select("*")
+        .in("id", equipmentIds);
+
+      if (fetchError) {
+        console.error("批量查詢裝備失敗:", fetchError);
+        return res.status(500).json({ status: "error", message: "批量查詢裝備失敗" });
+      }
+
+      // ✅ 生成新的批次標識符
+      const now = new Date();
+      const newBatchIdentifier = `transfer_${Date.now()}`;
+      const batchDate = new Date().toISOString();
+
+      // ✅ 準備更新資料
+      const updatePromises = oldEquipmentList.map((oldData) => {
+        const timestamp = now.toLocaleString('zh-TW', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+
+        const historyEntry = `[${timestamp}] ${operator} 轉借給 ${transferTo}${note ? ` - ${note}` : ''} (原批次: ${originalBatchId})`;
+        const currentHistory = oldData.歷史更新紀錄 || '';
+        const newHistory = currentHistory
+          ? `${historyEntry}\n${currentHistory}`
+          : historyEntry;
+
+        const historyLines = newHistory.split('\n').slice(0, 30);
+        const trimmedHistory = historyLines.join('\n');
+
+        return supabase
+          .from("equipment")
+          .update({
+            狀態: `轉借給 ${transferTo}${note ? ` - ${note}` : ''}`,
+            歷史更新紀錄: trimmedHistory,
+            填表人: operator,
+            updated_at: new Date().toISOString(),
+            // ✅ 創建新的批次記錄
+            batch_date: batchDate,
+            batch_identifier: newBatchIdentifier
+          })
+          .eq("id", oldData.id);
+      });
+
+      // ✅ 執行所有更新操作
+      const updateResults = await Promise.all(updatePromises);
+
+      const hasError = updateResults.some(result => result.error);
+      if (hasError) {
+        console.error("部分裝備轉借失敗");
+        return res.status(500).json({ status: "error", message: "部分裝備轉借失敗" });
+      }
+
+      console.log(`✅ 成功批量轉借 ${updateResults.length} 個裝備，新批次: ${newBatchIdentifier}`);
+
+      return res.status(200).json({
+        status: "ok",
+        message: `批量轉借操作完成 (轉借了 ${updateResults.length} 個裝備給 ${transferTo})`,
+        newBatchId: newBatchIdentifier
+      });
+
+    } catch (error) {
+      console.error("批量轉借錯誤:", error);
+      return res.status(500).json({ status: "error", message: "批量轉借失敗" });
+    }
+  }
+
   // ====== 獲取批量記錄 ======
   if (action === "getBatchRecords") {
     // 獲取有批次日期的裝備記錄，按批次分組
