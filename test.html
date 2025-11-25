@@ -783,7 +783,7 @@
                 <button class="back-btn" onclick="goBack()" title="返回導航頁面">←</button>
                 <h1>花蓮特搜裝備管理系統</h1>
             </div>
-            
+
             <div class="user-info">
                 <div class="online-users">
                     <span class="online-indicator"></span>
@@ -881,7 +881,8 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="equipmentNumber">裝備編號</label>
-                            <input type="text" id="equipmentNumber" class="form-control" readonly style="background: #f0f0f0;">
+                            <input type="text" id="equipmentNumber" class="form-control" readonly
+                                style="background: #f0f0f0;">
                         </div>
                         <div class="form-group">
                             <label for="equipmentGroup">分群組 *</label>
@@ -889,7 +890,7 @@
                             <datalist id="groupList"></datalist>
                         </div>
                     </div>
-                    
+
                     <!-- 第二行：器材名稱 + 型號 -->
                     <div class="form-row">
                         <div class="form-group">
@@ -1073,11 +1074,14 @@
                     <div class="form-group">
                         <label>選擇要轉借的裝備</label>
                         <div style="margin-bottom: 1rem;">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllTransfer()">全選</button>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="deselectAllTransfer()">全部取消</button>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="selectAllTransfer()">全選</button>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="deselectAllTransfer()">全部取消</button>
                         </div>
-                        
-                        <div id="transferEquipmentSelector" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
+
+                        <div id="transferEquipmentSelector"
+                            style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
                             <!-- 裝備選擇器 -->
                         </div>
                     </div>
@@ -1095,7 +1099,8 @@
                     </div>
 
                     <div style="text-align: right; margin-top: 2rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('transferModal')">取消</button>
+                        <button type="button" class="btn btn-secondary"
+                            onclick="closeModal('transferModal')">取消</button>
                         <button type="submit" class="btn btn-primary" style="margin-left: 0.5rem;">確認轉借</button>
                     </div>
                 </form>
@@ -2089,11 +2094,11 @@
             document.getElementById('equipmentName').value = equipment.器材名稱;
             document.getElementById('equipmentGroup').value = equipment.分群組;
             document.getElementById('equipmentNumber').value = equipment.裝備編號;
-            
+
             // ✅ 編輯時可修改編號
             document.getElementById('equipmentNumber').readOnly = false;
             document.getElementById('equipmentNumber').style.background = '';
-            
+
             document.getElementById('equipmentModel').value = equipment.型號 || '';
             document.getElementById('equipmentLocation').value = equipment.特別位置 || '';
             document.getElementById('equipmentQuantity').value = equipment.數量;
@@ -2847,23 +2852,44 @@
                 currentBatches = {}; // 失敗時清空
             }
         }
-        
+
         // 渲染返隊日期篩選器<label for="equipmentNumber">裝備編號 *</label>（現在顯示批次資訊）
         function renderReturnDateFilter(batches) {
-        const select = document.getElementById('returnDateFilter');
-        select.innerHTML = '<option value="">請選擇借出事件</option>';
+            const select = document.getElementById('returnDateFilter');
+            select.innerHTML = '<option value="">請選擇借出事件</option>';
 
-        Object.keys(batches).forEach(batchId => {
-            const batch = batches[batchId];
-            
-            // ✅ 修正：batch_date 現在是台灣時間格式的字串，直接使用
-            let formattedDate = batch.batch_date || '未知時間';
+            Object.keys(batches).forEach(batchId => {
+                const batch = batches[batchId];
 
-            const option = document.createElement('option');
-            option.value = batchId;
-            option.textContent = `${formattedDate} - ${batch.batch_operator || '未知'} - ${batch.batch_note || '無備註'} (${batch.equipment?.length || 0}項)`;
-            select.appendChild(option);
-        });
+                // ✅ 修正：正确处理日期格式
+                let formattedDate = '未知時間';
+                if (batch.batch_date) {
+                    try {
+                        // 尝试解析日期（支持多种格式）
+                        const date = new Date(batch.batch_date);
+                        if (!isNaN(date.getTime())) {
+                            formattedDate = date.toLocaleString('zh-TW', {
+                                timeZone: 'Asia/Taipei',
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        } else {
+                            // 如果无法解析，直接显示原始字符串
+                            formattedDate = batch.batch_date;
+                        }
+                    } catch (e) {
+                        formattedDate = batch.batch_date;
+                    }
+                }
+
+                const option = document.createElement('option');
+                option.value = batchId;
+                option.textContent = `${formattedDate} - ${batch.batch_operator || '未知'} - ${batch.batch_note || '無備註'} (${batch.equipment?.length || 0}項)`;
+                select.appendChild(option);
+            });
         }
 
         // 渲染批量返隊選擇器
@@ -2996,7 +3022,7 @@
                 showToast('批量返隊失敗: ' + error.message, 'error');
             }
         }
-        
+
         // 顯示轉借 Modal
         // 顯示單一裝備轉借 Modal
         async function showTransferModal(equipmentId) {
@@ -3037,20 +3063,20 @@
                     if (data.status === 'ok') {
                         const memberSelect = document.getElementById('transferTo');
                         memberSelect.innerHTML = '<option value="">請選擇轉借對象</option>';
-                        
+
                         // 按單位分組顯示
                         const groupedMembers = data.groupedByUnit || {};
                         Object.keys(groupedMembers).forEach(unit => {
                             const optgroup = document.createElement('optgroup');
                             optgroup.label = unit;
-                            
+
                             groupedMembers[unit].forEach(member => {
                                 const option = document.createElement('option');
                                 option.value = member.display_name;
                                 option.textContent = `${member.display_name} (${member.unit})`;
                                 optgroup.appendChild(option);
                             });
-                            
+
                             memberSelect.appendChild(optgroup);
                         });
                     }
@@ -3061,12 +3087,12 @@
 
             // 清空備註欄位
             document.getElementById('transferNote').value = '';
-            
+
             showModal('transferModal');
         }
 
         // 處理轉借表單
-        document.getElementById('transferForm').addEventListener('submit', async function(event) {
+        document.getElementById('transferForm').addEventListener('submit', async function (event) {
             event.preventDefault();
 
             const equipmentId = document.getElementById('transferEquipmentId').value;
@@ -3079,12 +3105,12 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                
+
                 // 如果是部分轉借
                 if (transferQuantity < equipment.數量) {
                     // 需要分成兩筆裝備記錄
                     const remainQuantity = equipment.數量 - transferQuantity;
-                    
+
                     // 1. 更新原裝備數量
                     await fetch(CONFIG.API_BASE, {
                         method: 'POST',
@@ -3151,12 +3177,12 @@
                 showToast('轉借失敗: ' + error.message, 'error');
             }
         });
-        
+
         // 顯示批量轉借 Modal
         async function showBatchTransferModal() {
             // 載入所有借出中的裝備
             const borrowedEquipment = equipmentData.filter(e => e.目前狀態 === '借出');
-            
+
             if (borrowedEquipment.length === 0) {
                 showToast('目前沒有借出中的裝備', 'info');
                 return;
@@ -3195,20 +3221,20 @@
                     if (data.status === 'ok') {
                         const memberSelect = document.getElementById('transferTo');
                         memberSelect.innerHTML = '<option value="">請選擇轉借對象</option>';
-                        
+
                         // 按單位分組顯示
                         const groupedMembers = data.groupedByUnit || {};
                         Object.keys(groupedMembers).forEach(unit => {
                             const optgroup = document.createElement('optgroup');
                             optgroup.label = unit;
-                            
+
                             groupedMembers[unit].forEach(member => {
                                 const option = document.createElement('option');
                                 option.value = member.display_name;
                                 option.textContent = `${member.display_name} (${member.unit})`;
                                 optgroup.appendChild(option);
                             });
-                            
+
                             memberSelect.appendChild(optgroup);
                         });
                     }
@@ -3235,7 +3261,7 @@
         }
 
         // 處理轉借表單提交
-        document.getElementById('transferForm').addEventListener('submit', async function(event) {
+        document.getElementById('transferForm').addEventListener('submit', async function (event) {
             event.preventDefault();
 
             const selectedCheckboxes = document.querySelectorAll('#transferEquipmentSelector input[name="transferEquipmentIds"]:checked');
@@ -3255,7 +3281,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                
+
                 // 批量更新裝備的借出狀態
                 const updatePromises = equipmentIds.map(equipmentId => {
                     const equipment = equipmentData.find(e => e.id === equipmentId);
