@@ -773,14 +773,7 @@
                     <textarea id="assignNote" class="form-control" rows="3" placeholder="選填：派遣說明或注意事項"></textarea>
                 </div>
                 
-                <!-- ✅ Email 通知選項 -->
-                <div class="form-group" id="emailNotifySection" style="display: none !important;">
-                    <label>📧 Email 通知</label>
-                    <p style="font-size: 0.875rem; color: #666; margin-bottom: 0.5rem;">
-                        勾選要發送 Email 通知的隊長（不會發送給小隊成員）
-                    </p>
-                    <div id="emailNotifyList" style="display: grid; gap: 0.5rem;"></div>
-                </div>
+
                 
                 <div style="text-align: right; margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
                     <div id="assignSummary" style="font-size: 0.875rem; color: #666;"></div>
@@ -1832,7 +1825,7 @@
 
             container.innerHTML = html;
             updateSelectedSummary();
-            updateEmailNotifySection();
+
         }
 
         // ✅ 渲染單個成員卡片（防止重新渲染整個列表）
@@ -1853,7 +1846,6 @@
                         </div>
                         <div style="flex: 1;">
                             <strong>${member.display_name}</strong>
-                            ${member.email ? `<span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">📧</span>` : ''}
                         </div>
                     </div>
                     
@@ -1912,44 +1904,8 @@
                 </div>
             `;
         }
-        // 更新 Email 通知區域
-        function updateEmailNotifySection() {
-            const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
-            const section = document.getElementById('emailNotifySection');
-            const list = document.getElementById('emailNotifyList');
-            
-            if (leaders.length === 0) {
-                section.style.display = 'none';
-                return;
-            }
-            
-            section.style.display = 'block';
-            
-            let html = '';
-            leaders.forEach(leader => {
-                const isChecked = leader.email ? 'checked' : '';
-                html += `
-                    <label class="email-notify-checkbox" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--gray-100); border-radius: 6px; cursor: pointer;">
-                        <input type="checkbox" value="${leader.user_id}" ${isChecked} 
-                            onchange="toggleEmailNotification('${leader.user_id}', this.checked)"
-                            style="width: 16px; height: 16px;">
-                        <div style="flex: 1;">
-                            <strong>${leader.display_name}</strong>
-                            ${leader.email ? `<span style="color: #666; font-size: 0.875rem; margin-left: 0.5rem;">📧 ${leader.email}</span>` : ''}
-                        </div>
-                        <span style="font-size: 0.75rem; color: var(--info);">${isChecked ? '✉️ 將發送通知' : '📧 無Email'}</span>
-                    </label>
-                `;
-            });
-            
-            list.innerHTML = html;
-        }
-        function toggleEmailNotification(userId, willSend) {
-            const leader = selectedLeaders.get(userId);
-            if (leader) {
-                leader.sendEmail = willSend;
-            }
-        }
+
+        
         // 渲染小隊成員複選框
         function renderTeamMemberCheckboxes(leaderId, unitId) {
             const leader = selectedLeaders.get(leaderId);
@@ -1995,7 +1951,6 @@
                         </div>
                         <div style="flex: 1;">
                             <strong>${member.display_name}</strong>
-                            ${member.email ? `<span style="color: #666; font-size: 0.75rem; margin-left: 0.5rem;">📧 ${member.email}</span>` : ''}
                         </div>
                     </div>
                     
@@ -2050,7 +2005,7 @@
             // 重新渲染整個選擇器以顯示小隊成員區域
             renderAssignmentSelector();
             updateSelectedSummary();
-            updateEmailNotifySection();
+
         }
 
         // 更新單一成員卡片
@@ -2324,11 +2279,10 @@
             const totalMembers = leaders.reduce((sum, l) => sum + l.members.length, 0);
             summary.textContent = `已選 ${leaders.length} 位隊長，共 ${totalMembers} 位小隊成員`;
             
-            // 同時更新 Email 區域
-            updateEmailNotifySection();
+
         }
 
-        // 確認指派(多email通知)
+        // 確認指派人員
         async function confirmAssign() {
             const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
             
@@ -2339,11 +2293,7 @@
             
             const note = document.getElementById('assignNote').value;
             
-            // 收集要發送 Email 的隊長
-            const sendEmailTo = [];
-            document.querySelectorAll('.email-notify-checkbox input[type="checkbox"]:checked').forEach(cb => {
-                sendEmailTo.push(cb.value);
-            });
+
             
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
@@ -2357,7 +2307,7 @@
                         leaders: leaders,
                         note,
                         assignedBy: currentUser.displayName,
-                        sendEmailTo: sendEmailTo  // ✅ 傳送要發 Email 的隊長列表
+                        
                     })
                 });
 
