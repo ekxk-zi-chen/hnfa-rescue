@@ -3024,7 +3024,7 @@
         }
 
         // 顯示轉借 Modal
-        // 顯示單一裝備轉借 Modal
+        
         async function showTransferModal(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
@@ -3044,6 +3044,9 @@
                         </small>
                     </label>
                 </div>
+                <!-- 添加這行：隱藏的裝備ID輸入框 -->
+                <input type="hidden" id="transferEquipmentId" value="${equipment.id}">
+
             `;
 
             // 載入成員列表
@@ -3177,6 +3180,8 @@
                 showToast('轉借失敗: ' + error.message, 'error');
             }
         });
+        
+        
         // 顯示批量轉借 Modal
         async function showBatchTransferModal() {
             // ✅ 重置表單和選擇狀態
