@@ -439,16 +439,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     // ✅ 修正：使用台湾时间格式
     const now = new Date();
     const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const batchDate = taiwanTime.toLocaleString('zh-TW', {
-      timeZone: 'Asia/Taipei',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
+    const batchDate = new Date().toISOString(); // 存储标准 ISO 时间
     
     const batchIdentifier = `batch_${Date.now()}`;
 
