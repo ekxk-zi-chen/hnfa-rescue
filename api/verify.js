@@ -3,103 +3,8 @@ import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
 
 
-// ------------------- 發送 Email -------------------
-// ✅ 在 import 語句之後新增
-// 在後端的 sendEmail 函數中確保配置正確
-async function sendEmail(to, subject, htmlContent) {
-  const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-  const FROM_EMAIL = process.env.FROM_EMAIL || 'asd8641646@gmail.com';
 
-  if (!SENDGRID_API_KEY) {
-    console.warn('⚠️ SendGrid API Key 未設定，無法發送 Email');
-    return { success: false, message: 'Email 服務未設定' };
-  }
 
-  try {
-    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SENDGRID_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        personalizations: [{
-          to: [{ email: to }],
-          subject: subject
-        }],
-        from: {
-          email: FROM_EMAIL,
-          name: '花蓮特搜任務派遣系統'
-        },
-        content: [{
-          type: 'text/html',
-          value: htmlContent
-        }]
-      })
-    });
-
-    if (response.ok) {
-      console.log(`✅ Email 已發送至 ${to}`);
-      return { success: true };
-    } else {
-      const error = await response.text();
-      console.error('❌ Email 發送失敗:', error);
-      return { success: false, message: error };
-    }
-  } catch (error) {
-    console.error('❌ Email 發送異常:', error);
-    return { success: false, message: error.message };
-  }
-}
-// ✅ 在 sendEmail 函數之後新增
-function generateAssignmentEmailHtml(leaderName, missionTitle, missionDate, assignmentNote) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-        .info-box { background: white; padding: 15px; margin: 15px 0; border-left: 4px solid #00C300; border-radius: 4px; }
-        .button { display: inline-block; padding: 12px 30px; background: #00C300; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
-        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🎯 任務指派通知</h1>
-        </div>
-        <div class="content">
-          <p>親愛的 <strong>${leaderName}</strong> 隊長，您好：</p>
-          <p>您已被指派為以下任務的小隊長：</p>
-          <div class="info-box">
-            <h3>📋 ${missionTitle}</h3>
-            <p><strong>📅 任務日期：</strong>${new Date(missionDate).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
-            ${assignmentNote ? `<p><strong>📝 備註：</strong>${assignmentNote}</p>` : ''}
-          </div>
-          <p><strong>您的職責：</strong></p>
-          <ul>
-            <li>帶領小隊成員執行任務</li>
-            <li>定期回報任務進度</li>
-            <li>任務完成後回報「已完成」狀態</li>
-          </ul>
-          <p style="text-align: center;">
-            <a href="https://liff.line.me/2006653018-YqL83LAN" class="button">立即查看任務詳情</a>
-          </p>
-          <div class="footer">
-            <p>此為系統自動發送郵件，請勿直接回覆</p>
-            <p>花蓮特搜任務派遣系統</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
 
 // ------------------- 驗證 LINE idToken -------------------
 async function verifyIdToken(idToken, clientId) {
@@ -531,7 +436,16 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       return res.status(400).json({ status: "error", message: "請選擇要操作的裝備" });
     }
 
-    const batchDate = new Date().toISOString();
+    const batchDate = new Date().toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
@@ -579,7 +493,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
             歷史更新紀錄: trimmedHistory,
             填表人: operator,
             updated_at: new Date().toISOString(),
-            batch_date: batchDate,
+            batch_date: batchDate,// ✅ 確保這行存在且格式正確
             batch_identifier: batchIdentifier
           })
           .eq("id", oldData.id);
@@ -1081,40 +995,15 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           }
         }
 
-        // 發送 Email
-        if (sendEmailTo && sendEmailTo.includes(leader.user_id) && leader.email) {
-          const emailHtml = generateAssignmentEmailHtml(
-            leader.display_name,
-            mission.mission_title,
-            mission.mission_date,
-            note
-          );
-
-          const emailResult = await sendEmail(
-            leader.email,
-            `【任務指派】${mission.mission_title}`,
-            emailHtml
-          );
-
-          emailResults.push({
-            name: leader.display_name,
-            email: leader.email,
-            success: emailResult.success
-          });
-        }
       }
 
       let message = `第 ${nextNumber} 次派遣完成`;
-      if (emailResults.length > 0) {
-        const successCount = emailResults.filter(r => r.success).length;
-        message += `，已發送 ${successCount}/${emailResults.length} 封 Email 通知`;
-      }
+
 
       return res.status(200).json({
         status: "ok",
         message: message,
         assignmentNumber: nextNumber,
-        emailResults: emailResults
       });
 
     } catch (error) {
