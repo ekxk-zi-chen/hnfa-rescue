@@ -1555,7 +1555,7 @@
                     ` : ''}
                     
                     ${(() => {
-                        if (!myCurrentMember || isCompleted) return '';
+                        if (isCompleted) return '';
                         
                         const myActiveAssignments = (mission.assignments || []).filter(assignment => {
                             const member = assignment.members?.find(m => m.user_id === currentUser.userId);
