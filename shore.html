@@ -3811,6 +3811,7 @@
 
     // 直接截取預覽畫面的分享功能
     // 精確的合成截圖功能 - 保持預覽效果
+    // 精確的合成截圖功能 - 真正保持預覽效果
     function shareComposite() {
       const container = document.getElementById('compositeViewer');
       const backgroundImage = document.getElementById('backgroundImage');
@@ -3827,47 +3828,82 @@
     </div>
   `;
 
-      // 創建與預覽區域相同尺寸的 canvas
+      // 創建 canvas - 使用背景圖片的自然尺寸或容器尺寸
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // 使用預覽區域的實際尺寸
-      const containerRect = container.getBoundingClientRect();
-      canvas.width = containerRect.width;
-      canvas.height = containerRect.height;
+      // 決定 canvas 尺寸
+      let canvasWidth, canvasHeight;
+
+      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
+        // 使用背景圖片的自然尺寸，保持原始比例
+        canvasWidth = backgroundImage.naturalWidth;
+        canvasHeight = backgroundImage.naturalHeight;
+      } else {
+        // 沒有背景圖片時使用容器尺寸
+        const containerRect = container.getBoundingClientRect();
+        canvasWidth = containerRect.width;
+        canvasHeight = containerRect.height;
+      }
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      console.log('Canvas 尺寸:', canvasWidth, canvasHeight);
 
       // 白色背景
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 如果有背景圖片，按照預覽方式繪製
-      if (backgroundImage && backgroundImage.style.display !== 'none') {
-        // 獲取背景圖片在預覽區域中的實際顯示位置和尺寸
-        const imgRect = backgroundImage.getBoundingClientRect();
+      // 如果有背景圖片，按照 object-fit: contain 邏輯繪製
+      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
+        const img = backgroundImage;
 
-        // 計算相對位置（背景圖片相對於 compositeViewer 的位置）
-        const relativeX = imgRect.left - containerRect.left;
-        const relativeY = imgRect.top - containerRect.top;
+        // 計算 object-fit: contain 的顯示邏輯
+        const containerRatio = canvasWidth / canvasHeight;
+        const imgRatio = img.naturalWidth / img.naturalHeight;
 
-        // 使用背景圖片的實際顯示尺寸
-        const displayWidth = imgRect.width;
-        const displayHeight = imgRect.height;
+        let drawWidth, drawHeight, offsetX, offsetY;
 
-        console.log('背景圖片位置:', { relativeX, relativeY, displayWidth, displayHeight });
+        if (imgRatio > containerRatio) {
+          // 圖片較寬，以寬度為基準
+          drawWidth = canvasWidth;
+          drawHeight = canvasWidth / imgRatio;
+          offsetX = 0;
+          offsetY = (canvasHeight - drawHeight) / 2;
+        } else {
+          // 圖片較高，以高度為基準
+          drawHeight = canvasHeight;
+          drawWidth = canvasHeight * imgRatio;
+          offsetX = (canvasWidth - drawWidth) / 2;
+          offsetY = 0;
+        }
 
-        // 繪製背景圖片（保持預覽時的顯示方式）
-        ctx.drawImage(
-          backgroundImage,
-          relativeX,
-          relativeY,
-          displayWidth,
-          displayHeight
-        );
+        console.log('背景圖片繪製參數:', { offsetX, offsetY, drawWidth, drawHeight });
+
+        // 繪製背景圖片（保持原始比例，不拉伸）
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
-      // 繪製 3D 內容
-      const threeCanvas = compositeRenderer.domElement;
-      ctx.drawImage(threeCanvas, 0, 0, canvas.width, canvas.height);
+      // 繪製 3D 內容 - 需要重新計算 3D 內容的位置和尺寸
+      if (compositeRenderer) {
+        const threeCanvas = compositeRenderer.domElement;
+
+        // 重新渲染一次確保 3D 內容是最新的
+        compositeRenderer.render(compositeScene, compositeCamera);
+
+        // 計算 3D 內容在 canvas 上的位置和尺寸
+        const containerRect = container.getBoundingClientRect();
+        const scaleX = canvasWidth / containerRect.width;
+        const scaleY = canvasHeight / containerRect.height;
+
+        // 繪製 3D 內容，保持與預覽相同的相對位置
+        ctx.drawImage(
+          threeCanvas,
+          0, 0, threeCanvas.width, threeCanvas.height, // 源圖像區域
+          0, 0, canvasWidth, canvasHeight // 目標區域（鋪滿整個 canvas）
+        );
+      }
 
       // 轉換為 Blob 進行分享
       canvas.toBlob(function (blob) {
@@ -3888,7 +3924,8 @@
             <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
               ✅ 分享成功!<br>
               📐 尺寸: ${canvas.width}x${canvas.height}<br>
-              💾 大小: ${sizeMB}MB
+              💾 大小: ${sizeMB}MB<br>
+              🖼️ 背景圖片保持原始比例
             </div>
           `;
             }).catch(error => {
@@ -3903,44 +3940,66 @@
         }
       }, 'image/png', 0.95);
     }
-
-    // 同樣修正匯出功能
+    // 修正匯出功能
     function exportComposite() {
       const container = document.getElementById('compositeViewer');
       const backgroundImage = document.getElementById('backgroundImage');
 
-      if (!container || !compositeRenderer) return;
+      if (!container) return;
 
       // 創建 canvas
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      const containerRect = container.getBoundingClientRect();
-      canvas.width = containerRect.width;
-      canvas.height = containerRect.height;
+      // 決定 canvas 尺寸
+      let canvasWidth, canvasHeight;
+
+      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
+        canvasWidth = backgroundImage.naturalWidth;
+        canvasHeight = backgroundImage.naturalHeight;
+      } else {
+        const containerRect = container.getBoundingClientRect();
+        canvasWidth = containerRect.width;
+        canvasHeight = containerRect.height;
+      }
+
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
 
       // 白色背景
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 繪製背景圖片（保持預覽顯示方式）
-      if (backgroundImage && backgroundImage.style.display !== 'none') {
-        const imgRect = backgroundImage.getBoundingClientRect();
-        const relativeX = imgRect.left - containerRect.left;
-        const relativeY = imgRect.top - containerRect.top;
+      // 繪製背景圖片（保持原始比例）
+      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
+        const img = backgroundImage;
+        const containerRatio = canvasWidth / canvasHeight;
+        const imgRatio = img.naturalWidth / img.naturalHeight;
 
-        ctx.drawImage(
-          backgroundImage,
-          relativeX,
-          relativeY,
-          imgRect.width,
-          imgRect.height
-        );
+        let drawWidth, drawHeight, offsetX, offsetY;
+
+        if (imgRatio > containerRatio) {
+          drawWidth = canvasWidth;
+          drawHeight = canvasWidth / imgRatio;
+          offsetX = 0;
+          offsetY = (canvasHeight - drawHeight) / 2;
+        } else {
+          drawHeight = canvasHeight;
+          drawWidth = canvasHeight * imgRatio;
+          offsetX = (canvasWidth - drawWidth) / 2;
+          offsetY = 0;
+        }
+
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
       // 繪製 3D 內容
-      const threeCanvas = compositeRenderer.domElement;
-      ctx.drawImage(threeCanvas, 0, 0, canvas.width, canvas.height);
+      if (compositeRenderer) {
+        compositeRenderer.render(compositeScene, compositeCamera);
+        const threeCanvas = compositeRenderer.domElement;
+
+        ctx.drawImage(threeCanvas, 0, 0, canvasWidth, canvasHeight);
+      }
 
       // 下載
       const format = document.getElementById('exportFormat').value;
@@ -3955,28 +4014,10 @@
     <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
       ✅ 完美匯出！<br>
       📐 完全匹配預覽效果<br>
-      🖼️ 背景圖片保持原樣顯示
+      🖼️ 背景圖片保持原始比例不拉伸
     </div>
   `;
     }
-
-    // 下載圖片的輔助函數
-    function downloadImage(canvas, sizeMB) {
-      const link = document.createElement('a');
-      link.download = `支撐合成圖_${new Date().getTime()}.png`;
-      link.href = canvas.toDataURL('image/png', 0.95);
-      link.click();
-
-      document.getElementById('compositeResult').innerHTML = `
-    <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
-      📱 圖片已下載,請使用Line或其他應用分享<br>
-      📐 尺寸: ${canvas.width}x${canvas.height}<br>
-      💾 大小: ${sizeMB}MB<br>
-      🖼️ 背景圖片保持預覽顯示方式
-    </div>
-  `;
-    }
-
     // 加載最近的計算結果
     function loadCalculationResult() {
       if (!currentCalculationData) {
