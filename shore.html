@@ -3808,135 +3808,100 @@
         document.getElementById("sidebar").classList.remove("open");
       }
     }
-    // 修改後的分享功能 - 完美匹配預覽效果
+
+    // 直接截取預覽畫面的分享功能
     function shareComposite() {
-      if (!compositeRenderer || !compositeScene || !compositeCamera) {
+      const container = document.getElementById('compositeViewer');
+
+      if (!container) {
         alert('請先初始化合成場景!');
         return;
       }
 
-      // 強制渲染一次
-      compositeRenderer.render(compositeScene, compositeCamera);
+      // 顯示處理中訊息
+      document.getElementById('compositeResult').innerHTML = `
+    <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+      ⏳ 正在截取畫面...
+    </div>
+  `;
 
-      const threeCanvas = compositeRenderer.domElement;
+      // 使用 html2canvas 截取整個預覽區域
+      html2canvas(container, {
+        backgroundColor: '#ffffff',
+        scale: 2, // 提高解析度 (1=原始, 2=兩倍, 3=三倍)
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: container.offsetWidth,
+        height: container.offsetHeight
+      }).then(function (canvas) {
 
-      // ✅ 提高解析度,目標檔案大小 5-8MB
-      const container = document.getElementById('compositeViewer');
-      const maxSize = 3840; // 提高到 4K 解析度
-      const containerRatio = container.clientWidth / container.clientHeight;
+        // 轉換為 Blob
+        canvas.toBlob(function (blob) {
+          const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+          console.log(`圖片大小: ${sizeMB}MB, 尺寸: ${canvas.width}x${canvas.height}`);
 
-      let targetWidth, targetHeight;
-      if (containerRatio > 1) {
-        targetWidth = Math.min(maxSize, threeCanvas.width * 2);
-        targetHeight = targetWidth / containerRatio;
-      } else {
-        targetHeight = Math.min(maxSize, threeCanvas.height * 2);
-        targetWidth = targetHeight * containerRatio;
-      }
+          // 檢查是否支援分享
+          if (navigator.share && navigator.canShare) {
+            const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
 
-      const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = Math.round(targetWidth);
-      finalCanvas.height = Math.round(targetHeight);
-      const ctx = finalCanvas.getContext('2d');
+            // 檢查是否可以分享檔案
+            if (navigator.canShare({ files: [file] })) {
+              navigator.share({
+                files: [file],
+                title: '支撐合成圖',
+                text: '這是我的支撐設計合成圖'
+              }).then(() => {
+                document.getElementById('compositeResult').innerHTML = `
+              <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+                ✅ 分享成功!<br>
+                📐 尺寸: ${canvas.width}x${canvas.height}<br>
+                💾 大小: ${sizeMB}MB
+              </div>
+            `;
+              }).catch(error => {
+                console.log('分享取消或失敗:', error);
+                // 如果分享失敗,改用下載
+                downloadImage(canvas, sizeMB);
+              });
+            } else {
+              // 不支援檔案分享,直接下載
+              downloadImage(canvas, sizeMB);
+            }
+          } else {
+            // 不支援 Web Share API,直接下載
+            downloadImage(canvas, sizeMB);
+          }
+        }, 'image/png', 0.95);
 
-      // 白色背景
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-
-      // ✅ 背景圖片 - 保持 object-fit: contain
-      let bgOffsetX = 0, bgOffsetY = 0, bgDrawWidth = finalCanvas.width, bgDrawHeight = finalCanvas.height;
-
-      if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
-        const img = backgroundImageElement;
-
-        const containerRatio = finalCanvas.width / finalCanvas.height;
-        const imgRatio = img.naturalWidth / img.naturalHeight;
-
-        if (imgRatio > containerRatio) {
-          bgDrawWidth = finalCanvas.width;
-          bgDrawHeight = finalCanvas.width / imgRatio;
-          bgOffsetX = 0;
-          bgOffsetY = (finalCanvas.height - bgDrawHeight) / 2;
-        } else {
-          bgDrawHeight = finalCanvas.height;
-          bgDrawWidth = finalCanvas.height * imgRatio;
-          bgOffsetX = (finalCanvas.width - bgDrawWidth) / 2;
-          bgOffsetY = 0;
-        }
-
-        ctx.drawImage(img, bgOffsetX, bgOffsetY, bgDrawWidth, bgDrawHeight);
-      }
-
-      // ✅ 關鍵修正:3D 內容 - 使用臨時高解析度渲染
-      // 創建臨時渲染器,使用更高解析度
-      const tempRenderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true,
-        preserveDrawingBuffer: true
+      }).catch(function (error) {
+        console.error('截圖失敗:', error);
+        document.getElementById('compositeResult').innerHTML = `
+      <div style="color: red; padding: 10px; background: #fff0f0; border-radius: 5px;">
+        ❌ 截圖失敗: ${error.message}
+      </div>
+    `;
       });
-
-      tempRenderer.setSize(targetWidth, targetHeight);
-      tempRenderer.setClearColor(0x000000, 0);
-
-      // 複製相機設定
-      const tempCamera = compositeCamera.clone();
-      tempCamera.aspect = targetWidth / targetHeight;
-      tempCamera.updateProjectionMatrix();
-
-      // 渲染高解析度版本
-      tempRenderer.render(compositeScene, tempCamera);
-
-      // 繪製 3D 內容
-      ctx.drawImage(tempRenderer.domElement, 0, 0, finalCanvas.width, finalCanvas.height);
-
-      // 清理臨時渲染器
-      tempRenderer.dispose();
-
-      // 轉換為 Blob 並分享
-      finalCanvas.toBlob(function (blob) {
-        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-        console.log(`圖片大小: ${sizeMB}MB, 尺寸: ${finalCanvas.width}x${finalCanvas.height}`);
-
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'test.png', { type: 'image/png' })] })) {
-          const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
-          navigator.share({
-            files: [file],
-            title: '支撐合成圖',
-            text: '這是我的支撐設計合成圖'
-          }).then(() => {
-            document.getElementById('compositeResult').innerHTML = `
-          <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-            ✅ 分享成功!<br>
-            📐 尺寸: ${finalCanvas.width}x${finalCanvas.height}<br>
-            💾 大小: ${sizeMB}MB
-          </div>
-        `;
-          }).catch(error => {
-            console.log('分享取消或失敗:', error);
-            fallbackShare(finalCanvas);
-          });
-        } else {
-          fallbackShare(finalCanvas);
-        }
-      }, 'image/png', 0.95); // ✅ 提高品質到 95%
     }
-    // 降級分享方案
-    function fallbackShare(canvas) {
+
+    // 下載圖片的輔助函數
+    function downloadImage(canvas, sizeMB) {
       const link = document.createElement('a');
-      link.download = '支撐合成圖.png';
+      link.download = `支撐合成圖_${new Date().getTime()}.png`;
       link.href = canvas.toDataURL('image/png', 0.95);
       link.click();
-
-      const sizeMB = (canvas.toDataURL('image/png', 0.95).length * 0.75 / 1024 / 1024).toFixed(2);
 
       document.getElementById('compositeResult').innerHTML = `
     <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
       📱 圖片已下載,請使用Line或其他應用分享<br>
       📐 尺寸: ${canvas.width}x${canvas.height}<br>
-      💾 約 ${sizeMB}MB
+      💾 大小: ${sizeMB}MB
     </div>
   `;
     }
+
+
+
     // 加載最近的計算結果
     function loadCalculationResult() {
       if (!currentCalculationData) {
