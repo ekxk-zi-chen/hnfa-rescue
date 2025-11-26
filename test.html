@@ -817,9 +817,10 @@
                     <label for="statusFilter">狀態</label>
                     <select id="statusFilter" class="form-control">
                         <option value="">全部狀態</option>
-                        <option value="可用">可用</option>
+                        <option value="在隊">在隊</option>
+                        <option value="借出">借出</option>
                         <option value="維修中">維修中</option>
-                        <option value="不可用">不可用</option>
+                        
                     </select>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
@@ -3046,7 +3047,8 @@
                 </div>
                 <!-- 添加這行：隱藏的裝備ID輸入框 -->
                 <input type="hidden" id="transferEquipmentId" value="${equipment.id}">
-
+                <!-- 添加這行：transferQuantity 隱藏輸入框 -->
+                <input type="hidden" id="transferQuantity" value="${equipment.數量}">
             `;
 
             // 載入成員列表
@@ -3184,17 +3186,59 @@
         
         // 顯示批量轉借 Modal
         async function showBatchTransferModal() {
-            // ✅ 重置表單和選擇狀態
+            // 重置表單
             document.getElementById('transferForm').reset();
             document.getElementById('transferTo').value = '';
             document.getElementById('transferNote').value = '';
-            document.getElementById('transferEquipmentSelector').innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;">請選擇借出事件</div>';
-
-            // ✅ 載入批量記錄
+            
+            // 載入成員列表
+            await loadMemberListForTransfer();
+            
+            // 載入批量記錄
             await loadBatchTransferRecords();
             showModal('transferModal');
         }
+        // 新增載入成員列表的函數
+        async function loadMemberListForTransfer() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMembers',
+                        sessionToken
+                    })
+                });
 
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        const memberSelect = document.getElementById('transferTo');
+                        memberSelect.innerHTML = '<option value="">請選擇轉借對象</option>';
+
+                        // 按單位分組顯示
+                        const groupedMembers = data.groupedByUnit || {};
+                        Object.keys(groupedMembers).forEach(unit => {
+                            const optgroup = document.createElement('optgroup');
+                            optgroup.label = unit;
+
+                            groupedMembers[unit].forEach(member => {
+                                const option = document.createElement('option');
+                                option.value = member.display_name;
+                                option.textContent = `${member.display_name} (${member.unit})`;
+                                optgroup.appendChild(option);
+                            });
+
+                            memberSelect.appendChild(optgroup);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('載入成員失敗:', error);
+                showToast('載入成員列表失敗', 'error');
+            }
+        }
         // 載入批量轉借記錄
         async function loadBatchTransferRecords() {
             try {
