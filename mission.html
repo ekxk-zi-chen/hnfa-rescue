@@ -671,9 +671,11 @@
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">參與成員</label>
-                        <select id="historyMemberFilter" class="form-control">
-                            <option value="">全部成員</option>
-                        </select>
+                        <input type="text" id="historyMemberFilter" class="form-control" list="memberOptions" 
+                            placeholder="輸入成員名稱或從下拉選擇">
+                        <datalist id="memberOptions">
+                            <!-- 選項由 JavaScript 動態生成 -->
+                        </datalist>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">開始日期</label>
@@ -3168,18 +3170,35 @@
         
         // 載入成員選項
         function loadHistoryMemberOptions() {
-            const select = document.getElementById('historyMemberFilter');
+            const datalist = document.getElementById('memberOptions');
             const allParticipants = new Set();
             
+            // 收集所有參與過的成員
             allMissions.forEach(m => {
                 if (m.participants) {
                     m.participants.forEach(p => allParticipants.add(p.display_name));
                 }
+                // 也收集被指派的成員
+                if (m.assignments) {
+                    m.assignments.forEach(assignment => {
+                        if (assignment.members) {
+                            assignment.members.forEach(member => {
+                                allParticipants.add(member.display_name);
+                                if (member.team_members) {
+                                    member.team_members.forEach(tm => allParticipants.add(tm.display_name));
+                                }
+                            });
+                        }
+                    });
+                }
             });
             
-            select.innerHTML = '<option value="">全部成員</option>';
+            // 清空並重新填充選項
+            datalist.innerHTML = '';
             Array.from(allParticipants).sort().forEach(name => {
-                select.innerHTML += `<option value="${name}">${name}</option>`;
+                if (name && name.trim()) {
+                    datalist.innerHTML += `<option value="${name}">`;
+                }
             });
         }
 
@@ -3369,7 +3388,7 @@
             renderMissionList('historyMissions', filtered);
         }
 
-        // 清除篩選
+        // 清除篩選時也要清空輸入框
         function clearHistoryFilters() {
             document.getElementById('historySearchInput').value = '';
             document.getElementById('historyMemberFilter').value = '';
