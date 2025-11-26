@@ -3810,12 +3810,12 @@
     }
 
     // 直接截取預覽畫面的分享功能
-    // 修改分享功能，截取整個合成區域
+    // 精確的合成截圖功能 - 保持預覽效果
     function shareComposite() {
-      // 獲取整個合成區域的容器（包含背景圖片和3D模型）
-      const compositeContainer = document.querySelector('.main-content').querySelector('div[style*="position: relative"]');
+      const container = document.getElementById('compositeViewer');
+      const backgroundImage = document.getElementById('backgroundImage');
 
-      if (!compositeContainer) {
+      if (!container) {
         alert('請先初始化合成場景!');
         return;
       }
@@ -3823,101 +3823,143 @@
       // 顯示處理中訊息
       document.getElementById('compositeResult').innerHTML = `
     <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
-      ⏳ 正在截取畫面...
+      ⏳ 正在生成合成圖片...
     </div>
   `;
 
-      // 使用 html2canvas 截取整個合成區域（包含背景和3D模型）
-      html2canvas(compositeContainer, {
-        backgroundColor: '#ffffff',
-        scale: 2, // 提高解析度
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        width: compositeContainer.offsetWidth,
-        height: compositeContainer.offsetHeight
-      }).then(function (canvas) {
-        // 轉換為 Blob
-        canvas.toBlob(function (blob) {
-          const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-          console.log(`圖片大小: ${sizeMB}MB, 尺寸: ${canvas.width}x${canvas.height}`);
+      // 創建與預覽區域相同尺寸的 canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
 
-          // 檢查是否支援分享
-          if (navigator.share && navigator.canShare) {
-            const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
+      // 使用預覽區域的實際尺寸
+      const containerRect = container.getBoundingClientRect();
+      canvas.width = containerRect.width;
+      canvas.height = containerRect.height;
 
-            if (navigator.canShare({ files: [file] })) {
-              navigator.share({
-                files: [file],
-                title: '支撐合成圖',
-                text: '這是我的支撐設計合成圖'
-              }).then(() => {
-                document.getElementById('compositeResult').innerHTML = `
-              <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-                ✅ 分享成功!<br>
-                📐 尺寸: ${canvas.width}x${canvas.height}<br>
-                💾 大小: ${sizeMB}MB
-              </div>
-            `;
-              }).catch(error => {
-                console.log('分享取消或失敗:', error);
-                downloadImage(canvas, sizeMB);
-              });
-            } else {
+      // 白色背景
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 如果有背景圖片，按照預覽方式繪製
+      if (backgroundImage && backgroundImage.style.display !== 'none') {
+        // 獲取背景圖片在預覽區域中的實際顯示位置和尺寸
+        const imgRect = backgroundImage.getBoundingClientRect();
+
+        // 計算相對位置（背景圖片相對於 compositeViewer 的位置）
+        const relativeX = imgRect.left - containerRect.left;
+        const relativeY = imgRect.top - containerRect.top;
+
+        // 使用背景圖片的實際顯示尺寸
+        const displayWidth = imgRect.width;
+        const displayHeight = imgRect.height;
+
+        console.log('背景圖片位置:', { relativeX, relativeY, displayWidth, displayHeight });
+
+        // 繪製背景圖片（保持預覽時的顯示方式）
+        ctx.drawImage(
+          backgroundImage,
+          relativeX,
+          relativeY,
+          displayWidth,
+          displayHeight
+        );
+      }
+
+      // 繪製 3D 內容
+      const threeCanvas = compositeRenderer.domElement;
+      ctx.drawImage(threeCanvas, 0, 0, canvas.width, canvas.height);
+
+      // 轉換為 Blob 進行分享
+      canvas.toBlob(function (blob) {
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        console.log(`合成圖片大小: ${sizeMB}MB, 尺寸: ${canvas.width}x${canvas.height}`);
+
+        // 分享或下載
+        if (navigator.share && navigator.canShare) {
+          const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
+
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({
+              files: [file],
+              title: '支撐合成圖',
+              text: '這是我的支撐設計合成圖'
+            }).then(() => {
+              document.getElementById('compositeResult').innerHTML = `
+            <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+              ✅ 分享成功!<br>
+              📐 尺寸: ${canvas.width}x${canvas.height}<br>
+              💾 大小: ${sizeMB}MB
+            </div>
+          `;
+            }).catch(error => {
+              console.log('分享取消或失敗:', error);
               downloadImage(canvas, sizeMB);
-            }
+            });
           } else {
             downloadImage(canvas, sizeMB);
           }
-        }, 'image/png', 0.95);
-
-      }).catch(function (error) {
-        console.error('截圖失敗:', error);
-        document.getElementById('compositeResult').innerHTML = `
-      <div style="color: red; padding: 10px; background: #fff0f0; border-radius: 5px;">
-        ❌ 截圖失敗: ${error.message}
-      </div>
-    `;
-      });
+        } else {
+          downloadImage(canvas, sizeMB);
+        }
+      }, 'image/png', 0.95);
     }
 
-    // 同時修改匯出功能，確保一致性
+    // 同樣修正匯出功能
     function exportComposite() {
-      if (!compositeRenderer) return;
+      const container = document.getElementById('compositeViewer');
+      const backgroundImage = document.getElementById('backgroundImage');
 
-      // 獲取整個合成區域
-      const compositeContainer = document.querySelector('.main-content').querySelector('div[style*="position: relative"]');
+      if (!container || !compositeRenderer) return;
 
-      if (!compositeContainer) {
-        alert('找不到合成區域!');
-        return;
+      // 創建 canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const containerRect = container.getBoundingClientRect();
+      canvas.width = containerRect.width;
+      canvas.height = containerRect.height;
+
+      // 白色背景
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 繪製背景圖片（保持預覽顯示方式）
+      if (backgroundImage && backgroundImage.style.display !== 'none') {
+        const imgRect = backgroundImage.getBoundingClientRect();
+        const relativeX = imgRect.left - containerRect.left;
+        const relativeY = imgRect.top - containerRect.top;
+
+        ctx.drawImage(
+          backgroundImage,
+          relativeX,
+          relativeY,
+          imgRect.width,
+          imgRect.height
+        );
       }
 
-      // 使用 html2canvas 截取整個合成區域
-      html2canvas(compositeContainer, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false
-      }).then(function (canvas) {
-        const format = document.getElementById('exportFormat').value;
-        const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      // 繪製 3D 內容
+      const threeCanvas = compositeRenderer.domElement;
+      ctx.drawImage(threeCanvas, 0, 0, canvas.width, canvas.height);
 
-        const link = document.createElement('a');
-        link.download = `支撐合成圖_${new Date().getTime()}.${format}`;
-        link.href = canvas.toDataURL(mimeType, format === 'jpg' ? 0.9 : 1.0);
-        link.click();
+      // 下載
+      const format = document.getElementById('exportFormat').value;
+      const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
 
-        document.getElementById('compositeResult').innerHTML = `
-      <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-        ✅ 完美匯出！<br>
-        📐 完整合成圖片（背景 + 3D模型）<br>
-        🖼️ 無拉伸變形
-      </div>
-    `;
-      });
+      const link = document.createElement('a');
+      link.download = `支撐合成圖_${new Date().getTime()}.${format}`;
+      link.href = canvas.toDataURL(mimeType, format === 'jpg' ? 0.9 : 1.0);
+      link.click();
+
+      document.getElementById('compositeResult').innerHTML = `
+    <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+      ✅ 完美匯出！<br>
+      📐 完全匹配預覽效果<br>
+      🖼️ 背景圖片保持原樣顯示
+    </div>
+  `;
     }
+
     // 下載圖片的輔助函數
     function downloadImage(canvas, sizeMB) {
       const link = document.createElement('a');
@@ -3929,12 +3971,11 @@
     <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
       📱 圖片已下載,請使用Line或其他應用分享<br>
       📐 尺寸: ${canvas.width}x${canvas.height}<br>
-      💾 大小: ${sizeMB}MB
+      💾 大小: ${sizeMB}MB<br>
+      🖼️ 背景圖片保持預覽顯示方式
     </div>
   `;
     }
-
-
 
     // 加載最近的計算結果
     function loadCalculationResult() {
