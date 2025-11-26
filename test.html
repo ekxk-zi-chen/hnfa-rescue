@@ -817,10 +817,9 @@
                     <label for="statusFilter">狀態</label>
                     <select id="statusFilter" class="form-control">
                         <option value="">全部狀態</option>
-                        <option value="在隊">在隊</option>
-                        <option value="借出">借出</option>
+                        <option value="可用">可用</option>
                         <option value="維修中">維修中</option>
-                        
+                        <option value="不可用">不可用</option>
                     </select>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
@@ -3047,8 +3046,7 @@
                 </div>
                 <!-- 添加這行：隱藏的裝備ID輸入框 -->
                 <input type="hidden" id="transferEquipmentId" value="${equipment.id}">
-                <!-- 添加這行：transferQuantity 隱藏輸入框 -->
-                <input type="hidden" id="transferQuantity" value="${equipment.數量}">
+
             `;
 
             // 載入成員列表
