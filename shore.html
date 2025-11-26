@@ -354,7 +354,7 @@
       <ul>
         <li onclick="showCalculationForm()">計算</li>
         <li onclick="showBackgroundComposite()">背景合成</li> <!-- 新增这行 -->
-              <!-- 添加返回按钮 -->
+        <!-- 添加返回按钮 -->
         <li class="back-button" onclick="goBackToNavigation()">← 返回選擇頁面</button>
 
       </ul>
@@ -379,7 +379,7 @@
   <!-- ...existing code... -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.124.0/examples/js/controls/OrbitControls.min.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- ...existing code... -->
   <script>
 
@@ -2036,33 +2036,32 @@
       const container = document.getElementById('compositeViewer');
       if (!container) return;
 
-      // 如果已經初始化，先清理
+      // 清理舊的
       if (compositeRenderer) {
         compositeRenderer.dispose();
       }
 
-      // 創建場景（透明背景）
       compositeScene = new THREE.Scene();
       compositeScene.background = null;
 
-      // 創建相機
       compositeCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
       compositeCamera.position.set(5, 5, 5);
 
-      // 創建渲染器（透明背景）
+      // ✅ 重要：確保渲染器尺寸與容器完全一致
       compositeRenderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
-        preserveDrawingBuffer: true, // 重要：用於後續導出
-        powerPreference: "high-performance" // 新增這行
+        preserveDrawingBuffer: true
       });
-      compositeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 新增這行，提高解析度
+
+      // ✅ 設定精確的尺寸
       compositeRenderer.setSize(container.clientWidth, container.clientHeight);
       compositeRenderer.setClearColor(0x000000, 0);
 
-      // 清除容器並添加渲染器
       container.innerHTML = '';
       container.appendChild(compositeRenderer.domElement);
+
+      console.log(`Three.js 渲染器初始化: ${container.clientWidth}x${container.clientHeight}`);
 
       // 添加光源
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -2337,49 +2336,76 @@
     }
 
     // 导出合成图片
-    function exportComposite() {
-      if (!compositeRenderer || !compositeScene || !compositeCamera) {
+    function exportCompositeExact() {
+      if (!compositeRenderer) {
         alert('請先初始化合成場景！');
         return;
       }
 
-      // 強制渲染一次
       compositeRenderer.render(compositeScene, compositeCamera);
-
       const format = document.getElementById('exportFormat').value;
       const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
-      const container = document.getElementById('compositeViewer');
 
-      // 創建臨時canvas
+      // ✅ 直接使用 Three.js 渲染器的當前尺寸
+      const renderCanvas = compositeRenderer.domElement;
+      const targetWidth = renderCanvas.width;
+      const targetHeight = renderCanvas.height;
+
+      console.log(`直接使用渲染器尺寸: ${targetWidth}x${targetHeight}`);
+
       const canvas = document.createElement('canvas');
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
 
-      // 填充白色背景
+      // 填充背景
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-      // 繪製背景圖片
+      // ✅ 背景圖片 - 使用與預覽完全相同的計算方式
       if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
-        ctx.drawImage(backgroundImageElement, 0, 0, canvas.width, canvas.height);
+        const img = backgroundImageElement;
+        const container = document.getElementById('compositeViewer');
+
+        const containerRatio = container.clientWidth / container.clientHeight;
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+
+        let drawWidth, drawHeight, offsetX, offsetY;
+
+        // 複製 CSS object-fit: contain 邏輯
+        if (imgRatio > containerRatio) {
+          drawWidth = targetWidth;
+          drawHeight = targetWidth / imgRatio;
+          offsetX = 0;
+          offsetY = (targetHeight - drawHeight) / 2;
+        } else {
+          drawHeight = targetHeight;
+          drawWidth = targetHeight * imgRatio;
+          offsetX = (targetWidth - drawWidth) / 2;
+          offsetY = 0;
+        }
+
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
-      // 繪製3D模型
-      ctx.drawImage(compositeRenderer.domElement, 0, 0, canvas.width, canvas.height);
+      // ✅ 3D 內容 - 直接複製（尺寸已經正確）
+      ctx.drawImage(renderCanvas, 0, 0);
 
-      // 創建下載鏈接
+      // 下載
       const link = document.createElement('a');
-      link.download = `支撐合成圖.${format}`;
-      link.href = canvas.toDataURL(mimeType);
+      link.download = `支撐合成圖_${new Date().getTime()}.${format}`;
+      link.href = canvas.toDataURL(mimeType, format === 'jpg' ? 0.9 : 1.0);
       link.click();
 
       document.getElementById('compositeResult').innerHTML = `
     <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-      ✅ 圖片匯出成功！已下載為「支撐合成圖.${format}」
+      ✅ 完美匯出！<br>
+      📐 完全匹配預覽效果<br>
+      🖼️ 無拉伸變形
     </div>
   `;
     }
+
     // 直接重用現有的計算函數，但修改它們以返回模型組
     function createBoxScene(parsedData) {
       const group = new THREE.Group();
@@ -3786,50 +3812,54 @@
     `;
       }, 100);
     }
-
-    // 导出合成图片
+    // 匯出合成圖片
     function exportComposite() {
-      // 先渲染一次確保3D內容是最新的
-      compositeRenderer.render(compositeScene, compositeCamera);
+      if (!compositeRenderer) return;
 
-      const format = document.getElementById('exportFormat').value;
-      const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      // ✅ 關鍵：完全保持預覽時的狀態，不重新設定尺寸
+      const threeCanvas = compositeRenderer.domElement;
 
-      // 創建臨時canvas
-      const canvas = document.createElement('canvas');
-      const container = document.getElementById('compositeViewer');
-      // 使用固定比例確保不變形，同時提高解析度
-      const targetWidth = 1920; // 提高輸出解析度
-      const targetHeight = Math.round(targetWidth * (container.clientHeight / container.clientWidth));
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      const ctx = canvas.getContext('2d');
+      // ✅ 直接使用當前渲染的 canvas，不做任何修改
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = threeCanvas.width;
+      finalCanvas.height = threeCanvas.height;
+      const ctx = finalCanvas.getContext('2d');
 
-      // 先填充白色背景
+      // 白色背景
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-      // 如果有背景圖片，繪製背景
-      if (backgroundImageElement.style.display !== 'none') {
-        ctx.drawImage(backgroundImageElement, 0, 0, canvas.width, canvas.height);
+      // ✅ 背景圖片 - 使用與預覽完全相同的邏輯
+      if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
+        const img = backgroundImageElement;
+        const container = document.getElementById('compositeViewer');
+
+        // 計算預覽區的顯示比例
+        const containerRect = container.getBoundingClientRect();
+        const imgRect = backgroundImageElement.getBoundingClientRect();
+
+        // ✅ 直接複製預覽時的顯示位置和尺寸
+        const scaleX = finalCanvas.width / containerRect.width;
+        const scaleY = finalCanvas.height / containerRect.height;
+
+        const drawX = (imgRect.left - containerRect.left) * scaleX;
+        const drawY = (imgRect.top - containerRect.top) * scaleY;
+        const drawWidth = imgRect.width * scaleX;
+        const drawHeight = imgRect.height * scaleY;
+
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
       }
 
-      // 繪製3D模型（關鍵：確保渲染完成）
-      ctx.drawImage(compositeRenderer.domElement, 0, 0, canvas.width, canvas.height);
+      // ✅ 3D 內容 - 直接複製，保持原樣
+      ctx.drawImage(threeCanvas, 0, 0);
 
-      // 創建下載鏈接
+      // 下載
       const link = document.createElement('a');
-      link.download = `支撐合成圖.${format}`;
-      link.href = canvas.toDataURL(mimeType, 0.9);
+      link.download = `支撐合成圖.png`;
+      link.href = finalCanvas.toDataURL('image/png');
       link.click();
-
-      // 顯示成功消息
-      document.getElementById('compositeResult').innerHTML = `
-      <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-        ✅ 圖片匯出成功！已下載為「支撐合成圖.${format}」
-      </div>
-      `;
     }
+
   </script>
 </body>
 
