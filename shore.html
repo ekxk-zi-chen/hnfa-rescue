@@ -3709,62 +3709,83 @@
     }
     // 新增分享功能
     function shareComposite() {
-      if (!compositeRenderer || !compositeScene || !compositeCamera) {
+      if (!compositeRenderer) {
         alert('請先初始化合成場景！');
         return;
       }
 
-      // 強制渲染一次
-      compositeRenderer.render(compositeScene, compositeCamera);
+      // ✅ 完全忽略虛線框框，直接使用背景圖片原始尺寸
+      const bgImg = document.getElementById('backgroundImage');
 
-      // 創建高品質canvas
-      const canvas = document.createElement('canvas');
-      const container = document.getElementById('compositeViewer');
-      const targetWidth = 1200; // 適合分享的尺寸
-      const targetHeight = Math.round(targetWidth * (container.clientHeight / container.clientWidth));
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-
-      const ctx = canvas.getContext('2d');
-
-      // 填充白色背景
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 繪製背景圖片（如果存在）
-      if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
-        ctx.drawImage(backgroundImageElement, 0, 0, canvas.width, canvas.height);
+      if (!bgImg || bgImg.style.display === 'none') {
+        alert('請先上傳背景圖片！');
+        return;
       }
 
-      // 繪製3D模型
-      ctx.drawImage(compositeRenderer.domElement, 0, 0, canvas.width, canvas.height);
+      // ✅ 使用背景圖片的原始尺寸
+      const outputWidth = bgImg.naturalWidth;
+      const outputHeight = bgImg.naturalHeight;
 
-      // 轉換為Data URL
+      console.log('分享尺寸:', outputWidth, 'x', outputHeight);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const ctx = canvas.getContext('2d');
+
+      // 1. 繪製背景圖片（原始尺寸，不拉伸）
+      ctx.drawImage(bgImg, 0, 0, outputWidth, outputHeight);
+
+      // 2. 重新渲染 3D 到正確尺寸
+      const tempRenderer = new THREE.WebGLRenderer({
+        preserveDrawingBuffer: true,
+        alpha: true
+      });
+      tempRenderer.setSize(outputWidth, outputHeight);
+      tempRenderer.setClearColor(0x000000, 0);
+
+      const tempCamera = compositeCamera.clone();
+      tempCamera.aspect = outputWidth / outputHeight;
+      tempCamera.updateProjectionMatrix();
+
+      tempRenderer.render(compositeScene, tempCamera);
+      ctx.drawImage(tempRenderer.domElement, 0, 0);
+
+      tempRenderer.dispose();
+
+      // ✅ 分享
       canvas.toBlob(function (blob) {
         if (navigator.share) {
-          // 使用Web Share API（現代瀏覽器）
           const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
           navigator.share({
             files: [file],
             title: '支撐合成圖',
-            text: '這是我的支撐設計合成圖'
-          }).then(() => {
-            document.getElementById('compositeResult').innerHTML = `
-          <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-            ✅ 分享成功！
-          </div>
-        `;
+            text: '支撐設計合成圖'
           }).catch(error => {
-            console.log('分享取消或失敗:', error);
-            fallbackShare(canvas);
+            console.log('分享取消:', error);
+            // 降級方案：下載
+            downloadImage(canvas);
           });
         } else {
-          // 降級方案：下載圖片
-          fallbackShare(canvas);
+          // 不支援分享，直接下載
+          downloadImage(canvas);
         }
-      }, 'image/png', 0.9);
+      }, 'image/png');
     }
 
+    // ✅ 輔助函數：下載圖片
+    function downloadImage(canvas) {
+      const link = document.createElement('a');
+      link.download = '支撐合成圖.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+
+      document.getElementById('compositeResult').innerHTML = `
+    <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+      📱 圖片已下載，請使用其他應用分享
+    </div>
+  `;
+    }
     // 降級分享方案
     function fallbackShare(canvas) {
       const link = document.createElement('a');
@@ -3818,21 +3839,21 @@
         return;
       }
 
-      // ✅ 使用背景圖片的原始尺寸
+      // ✅ 使用背景圖片原始尺寸
       const outputWidth = bgImg.naturalWidth;
       const outputHeight = bgImg.naturalHeight;
 
-      console.log('輸出尺寸:', outputWidth, 'x', outputHeight);
+      console.log('匯出尺寸:', outputWidth, 'x', outputHeight);
 
-      const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = outputWidth;
-      finalCanvas.height = outputHeight;
-      const ctx = finalCanvas.getContext('2d');
+      const canvas = document.createElement('canvas');
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const ctx = canvas.getContext('2d');
 
-      // 1. 繪製背景圖片（原始尺寸）
+      // 背景圖片（原始尺寸）
       ctx.drawImage(bgImg, 0, 0, outputWidth, outputHeight);
 
-      // 2. 重新渲染 3D 到照片尺寸
+      // 3D 內容
       const tempRenderer = new THREE.WebGLRenderer({
         preserveDrawingBuffer: true,
         alpha: true
@@ -3852,14 +3873,8 @@
       // 下載
       const link = document.createElement('a');
       link.download = `支撐合成圖.png`;
-      link.href = finalCanvas.toDataURL('image/png');
+      link.href = canvas.toDataURL('image/png');
       link.click();
-
-      document.getElementById('compositeResult').innerHTML = `
-    <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-      ✅ 匯出成功！使用照片原始尺寸：${outputWidth} × ${outputHeight}
-    </div>
-  `;
     }
   </script>
 </body>
