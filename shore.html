@@ -3712,57 +3712,83 @@
         document.getElementById("sidebar").classList.remove("open");
       }
     }
-    // 修改後的分享功能
+    // 修改後的分享功能 - 完美匹配預覽效果
     function shareComposite() {
       if (!compositeRenderer || !compositeScene || !compositeCamera) {
         alert('請先初始化合成場景!');
         return;
       }
 
-      // ✅ 強制渲染一次
+      // 強制渲染一次
       compositeRenderer.render(compositeScene, compositeCamera);
 
-      // ✅ 直接使用當前渲染的 canvas,不重新設定尺寸
       const threeCanvas = compositeRenderer.domElement;
 
-      // ✅ 創建最終 canvas,使用與預覽相同的尺寸
+      // ✅ 使用較高解析度,但不會太大(適合 LINE 分享)
+      const container = document.getElementById('compositeViewer');
+      const maxSize = 2048; // LINE 建議的最大尺寸
+      const containerRatio = container.clientWidth / container.clientHeight;
+
+      let targetWidth, targetHeight;
+      if (containerRatio > 1) {
+        // 橫向圖片
+        targetWidth = Math.min(maxSize, threeCanvas.width * 1.5);
+        targetHeight = targetWidth / containerRatio;
+      } else {
+        // 直向圖片
+        targetHeight = Math.min(maxSize, threeCanvas.height * 1.5);
+        targetWidth = targetHeight * containerRatio;
+      }
+
       const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = threeCanvas.width;
-      finalCanvas.height = threeCanvas.height;
+      finalCanvas.width = Math.round(targetWidth);
+      finalCanvas.height = Math.round(targetHeight);
       const ctx = finalCanvas.getContext('2d');
 
       // 白色背景
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-      // ✅ 背景圖片 - 使用與預覽完全相同的邏輯
+      // ✅ 關鍵修正:背景圖片 - 完全複製 CSS object-fit: contain 的邏輯
       if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
         const img = backgroundImageElement;
-        const container = document.getElementById('compositeViewer');
 
-        // 計算預覽區的顯示比例
-        const containerRect = container.getBoundingClientRect();
-        const imgRect = backgroundImageElement.getBoundingClientRect();
+        // 計算圖片在 contain 模式下的實際顯示尺寸
+        const containerRatio = finalCanvas.width / finalCanvas.height;
+        const imgRatio = img.naturalWidth / img.naturalHeight;
 
-        // ✅ 直接複製預覽時的顯示位置和尺寸
-        const scaleX = finalCanvas.width / containerRect.width;
-        const scaleY = finalCanvas.height / containerRect.height;
+        let drawWidth, drawHeight, offsetX, offsetY;
 
-        const drawX = (imgRect.left - containerRect.left) * scaleX;
-        const drawY = (imgRect.top - containerRect.top) * scaleY;
-        const drawWidth = imgRect.width * scaleX;
-        const drawHeight = imgRect.height * scaleY;
+        // ✅ 複製 object-fit: contain 的邏輯
+        if (imgRatio > containerRatio) {
+          // 圖片比容器寬 -> 以寬度為準
+          drawWidth = finalCanvas.width;
+          drawHeight = finalCanvas.width / imgRatio;
+          offsetX = 0;
+          offsetY = (finalCanvas.height - drawHeight) / 2;
+        } else {
+          // 圖片比容器高 -> 以高度為準
+          drawHeight = finalCanvas.height;
+          drawWidth = finalCanvas.height * imgRatio;
+          offsetX = (finalCanvas.width - drawWidth) / 2;
+          offsetY = 0;
+        }
 
-        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        // 繪製背景圖片,保持比例不變形
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
-      // ✅ 3D 內容 - 直接複製,保持原樣
-      ctx.drawImage(threeCanvas, 0, 0);
+      // ✅ 3D 內容 - 放大繪製以匹配更高的解析度
+      ctx.drawImage(threeCanvas, 0, 0, finalCanvas.width, finalCanvas.height);
 
       // 轉換為 Blob 並分享
       finalCanvas.toBlob(function (blob) {
-        if (navigator.share) {
-          // 使用 Web Share API(現代瀏覽器)
+        // 檢查檔案大小(LINE 限制約 10MB)
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+        console.log(`圖片大小: ${sizeMB}MB, 尺寸: ${finalCanvas.width}x${finalCanvas.height}`);
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'test.png', { type: 'image/png' })] })) {
+          // 使用 Web Share API
           const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
           navigator.share({
             files: [file],
@@ -3771,7 +3797,7 @@
           }).then(() => {
             document.getElementById('compositeResult').innerHTML = `
           <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-            ✅ 分享成功!
+            ✅ 分享成功! (${finalCanvas.width}x${finalCanvas.height}, ${sizeMB}MB)
           </div>
         `;
           }).catch(error => {
@@ -3782,19 +3808,20 @@
           // 降級方案:下載圖片
           fallbackShare(finalCanvas);
         }
-      }, 'image/png', 0.9);
+      }, 'image/png', 0.92); // 稍微壓縮以減小檔案大小
     }
 
-    // 降級分享方案 - 也使用相同的邏輯
+    // 降級分享方案
     function fallbackShare(canvas) {
       const link = document.createElement('a');
       link.download = '支撐合成圖.png';
-      link.href = canvas.toDataURL('image/png', 0.9);
+      link.href = canvas.toDataURL('image/png', 0.92);
       link.click();
 
       document.getElementById('compositeResult').innerHTML = `
     <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
-      📱 圖片已下載,請使用Line或其他應用分享
+      📱 圖片已下載,請使用Line或其他應用分享<br>
+      🖼️ 尺寸: ${canvas.width}x${canvas.height}
     </div>
   `;
     }
