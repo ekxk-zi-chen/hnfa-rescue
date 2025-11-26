@@ -2044,56 +2044,44 @@
       compositeScene = new THREE.Scene();
       compositeScene.background = null;
 
-      compositeCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+      // ✅ 使用容器的實際尺寸
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      compositeCamera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
       compositeCamera.position.set(5, 5, 5);
 
-      // ✅ 重要：確保渲染器尺寸與容器完全一致
       compositeRenderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
         preserveDrawingBuffer: true
       });
 
-      // ✅ 設定精確的尺寸
-      compositeRenderer.setSize(container.clientWidth, container.clientHeight);
+      compositeRenderer.setSize(width, height);
       compositeRenderer.setClearColor(0x000000, 0);
 
       container.innerHTML = '';
       container.appendChild(compositeRenderer.domElement);
 
-      console.log(`Three.js 渲染器初始化: ${container.clientWidth}x${container.clientHeight}`);
+      console.log('3D 渲染器初始化:', width, 'x', height);
 
-      // 添加光源
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      compositeScene.add(ambientLight);
+      // 光源
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(1, 2, 3);
+      compositeScene.add(light);
+      const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+      compositeScene.add(ambient);
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 20, 15);
-      compositeScene.add(directionalLight);
-
-      // 添加軌道控制
+      // 控制器
       const controls = new THREE.OrbitControls(compositeCamera, compositeRenderer.domElement);
       controls.enableDamping = true;
 
-      // 動畫循環
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
         compositeRenderer.render(compositeScene, compositeCamera);
       }
       animate();
-
-      // 響應窗口大小變化
-      window.addEventListener('resize', function () {
-        const container = document.getElementById('compositeViewer');
-        if (container && compositeCamera && compositeRenderer) {
-          compositeCamera.aspect = container.clientWidth / container.clientHeight;
-          compositeCamera.updateProjectionMatrix();
-          compositeRenderer.setSize(container.clientWidth, container.clientHeight);
-        }
-      });
-
-      backgroundImageElement = document.getElementById('backgroundImage');
     }
 
     // 為合成加載模型
@@ -2245,23 +2233,6 @@
       compositeScene.add(currentModel);
       centerModel();
     }
-    // 上传背景图片
-    document.addEventListener('DOMContentLoaded', function () {
-      // 文件上传处理
-      document.addEventListener('change', function (e) {
-        if (e.target.id === 'backgroundUpload') {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = function (event) {
-              backgroundImageElement.src = event.target.result;
-              backgroundImageElement.style.display = 'block';
-            };
-            reader.readAsDataURL(file);
-          }
-        }
-      });
-    });
 
     // 拍照功能（移动设备）
     function capturePhoto() {
@@ -2282,7 +2253,10 @@
 
     // 清除背景
     function clearBackground() {
-      backgroundImageElement.style.display = 'none';
+      if (backgroundImageElement) {
+        backgroundImageElement.style.display = 'none';
+        backgroundImageElement.src = '';
+      }
       document.getElementById('backgroundUpload').value = '';
     }
 
@@ -3656,7 +3630,6 @@
       <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
         <h3>1. 上傳背景圖片</h3>
         <input type="file" id="backgroundUpload" accept="image/*" style="margin-bottom: 10px;">
-        <button onclick="capturePhoto()" style="margin-left: 10px;">📷 拍照</button>
         <button onclick="clearBackground()" style="margin-left: 10px;">❌ 清除背景</button>
       </div>
 
@@ -3704,6 +3677,28 @@
 
       <div id="compositeResult" style="margin-top: 20px;"></div>
       `;
+      // ✅ 重要：在這裡初始化背景圖片元素和事件監聽
+      backgroundImageElement = document.getElementById('backgroundImage');
+
+      // ✅ 檔案上傳事件監聽
+      document.getElementById('backgroundUpload').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (event) {
+            backgroundImageElement.src = event.target.result;
+            backgroundImageElement.style.display = 'block';
+            console.log('背景圖片載入成功');
+
+            // 重新初始化 3D 渲染器
+            setTimeout(() => {
+              initCompositeViewer();
+            }, 100);
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
 
       // 初始化合成查看器
       initCompositeViewer();
@@ -3816,59 +3811,56 @@
     function exportComposite() {
       if (!compositeRenderer) return;
 
-      const threeCanvas = compositeRenderer.domElement;
-      const finalCanvas = document.createElement('canvas');
-      finalCanvas.width = threeCanvas.width;
-      finalCanvas.height = threeCanvas.height;
-      const ctx = finalCanvas.getContext('2d');
+      const bgImg = document.getElementById('backgroundImage');
 
-      // 白色背景
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-
-      // ✅ 關鍵：完全複製預覽時的 object-fit: contain 效果
-      if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
-        const img = backgroundImageElement;
-        const imgRatio = img.naturalWidth / img.naturalHeight;
-        const canvasRatio = finalCanvas.width / finalCanvas.height;
-
-        let drawWidth, drawHeight, offsetX, offsetY;
-
-        // ✅ 複製 CSS object-fit: contain 的邏輯
-        if (imgRatio > canvasRatio) {
-          // 圖片較寬 - 填滿寬度，高度自動（上下留白）
-          drawWidth = finalCanvas.width;
-          drawHeight = finalCanvas.width / imgRatio;
-          offsetX = 0;
-          offsetY = (finalCanvas.height - drawHeight) / 2;
-        } else {
-          // 圖片較高 - 填滿高度，寬度自動（左右留白）
-          drawHeight = finalCanvas.height;
-          drawWidth = finalCanvas.height * imgRatio;
-          offsetX = (finalCanvas.width - drawWidth) / 2;
-          offsetY = 0;
-        }
-
-        console.log('圖片繪製:', {
-          原始尺寸: `${img.naturalWidth}x${img.naturalHeight}`,
-          輸出尺寸: `${drawWidth}x${drawHeight}`,
-          位置: `(${offsetX}, ${offsetY})`,
-          留白: imgRatio > canvasRatio ? '上下留白' : '左右留白'
-        });
-
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+      if (!bgImg || bgImg.style.display === 'none') {
+        alert('請先上傳背景圖片！');
+        return;
       }
 
-      // 3D 內容
-      ctx.drawImage(threeCanvas, 0, 0);
+      // ✅ 使用背景圖片的原始尺寸
+      const outputWidth = bgImg.naturalWidth;
+      const outputHeight = bgImg.naturalHeight;
+
+      console.log('輸出尺寸:', outputWidth, 'x', outputHeight);
+
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = outputWidth;
+      finalCanvas.height = outputHeight;
+      const ctx = finalCanvas.getContext('2d');
+
+      // 1. 繪製背景圖片（原始尺寸）
+      ctx.drawImage(bgImg, 0, 0, outputWidth, outputHeight);
+
+      // 2. 重新渲染 3D 到照片尺寸
+      const tempRenderer = new THREE.WebGLRenderer({
+        preserveDrawingBuffer: true,
+        alpha: true
+      });
+      tempRenderer.setSize(outputWidth, outputHeight);
+      tempRenderer.setClearColor(0x000000, 0);
+
+      const tempCamera = compositeCamera.clone();
+      tempCamera.aspect = outputWidth / outputHeight;
+      tempCamera.updateProjectionMatrix();
+
+      tempRenderer.render(compositeScene, tempCamera);
+      ctx.drawImage(tempRenderer.domElement, 0, 0);
+
+      tempRenderer.dispose();
 
       // 下載
       const link = document.createElement('a');
       link.download = `支撐合成圖.png`;
       link.href = finalCanvas.toDataURL('image/png');
       link.click();
-    }
 
+      document.getElementById('compositeResult').innerHTML = `
+    <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+      ✅ 匯出成功！使用照片原始尺寸：${outputWidth} × ${outputHeight}
+    </div>
+  `;
+    }
   </script>
 </body>
 
