@@ -3810,10 +3810,12 @@
     }
 
     // 直接截取預覽畫面的分享功能
+    // 修改分享功能，截取整個合成區域
     function shareComposite() {
-      const container = document.getElementById('compositeViewer');
+      // 獲取整個合成區域的容器（包含背景圖片和3D模型）
+      const compositeContainer = document.querySelector('.main-content').querySelector('div[style*="position: relative"]');
 
-      if (!container) {
+      if (!compositeContainer) {
         alert('請先初始化合成場景!');
         return;
       }
@@ -3825,17 +3827,16 @@
     </div>
   `;
 
-      // 使用 html2canvas 截取整個預覽區域
-      html2canvas(container, {
+      // 使用 html2canvas 截取整個合成區域（包含背景和3D模型）
+      html2canvas(compositeContainer, {
         backgroundColor: '#ffffff',
-        scale: 2, // 提高解析度 (1=原始, 2=兩倍, 3=三倍)
+        scale: 2, // 提高解析度
         useCORS: true,
         allowTaint: true,
         logging: false,
-        width: container.offsetWidth,
-        height: container.offsetHeight
+        width: compositeContainer.offsetWidth,
+        height: compositeContainer.offsetHeight
       }).then(function (canvas) {
-
         // 轉換為 Blob
         canvas.toBlob(function (blob) {
           const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
@@ -3845,7 +3846,6 @@
           if (navigator.share && navigator.canShare) {
             const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
 
-            // 檢查是否可以分享檔案
             if (navigator.canShare({ files: [file] })) {
               navigator.share({
                 files: [file],
@@ -3861,15 +3861,12 @@
             `;
               }).catch(error => {
                 console.log('分享取消或失敗:', error);
-                // 如果分享失敗,改用下載
                 downloadImage(canvas, sizeMB);
               });
             } else {
-              // 不支援檔案分享,直接下載
               downloadImage(canvas, sizeMB);
             }
           } else {
-            // 不支援 Web Share API,直接下載
             downloadImage(canvas, sizeMB);
           }
         }, 'image/png', 0.95);
@@ -3884,6 +3881,43 @@
       });
     }
 
+    // 同時修改匯出功能，確保一致性
+    function exportComposite() {
+      if (!compositeRenderer) return;
+
+      // 獲取整個合成區域
+      const compositeContainer = document.querySelector('.main-content').querySelector('div[style*="position: relative"]');
+
+      if (!compositeContainer) {
+        alert('找不到合成區域!');
+        return;
+      }
+
+      // 使用 html2canvas 截取整個合成區域
+      html2canvas(compositeContainer, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      }).then(function (canvas) {
+        const format = document.getElementById('exportFormat').value;
+        const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+
+        const link = document.createElement('a');
+        link.download = `支撐合成圖_${new Date().getTime()}.${format}`;
+        link.href = canvas.toDataURL(mimeType, format === 'jpg' ? 0.9 : 1.0);
+        link.click();
+
+        document.getElementById('compositeResult').innerHTML = `
+      <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+        ✅ 完美匯出！<br>
+        📐 完整合成圖片（背景 + 3D模型）<br>
+        🖼️ 無拉伸變形
+      </div>
+    `;
+      });
+    }
     // 下載圖片的輔助函數
     function downloadImage(canvas, sizeMB) {
       const link = document.createElement('a');
