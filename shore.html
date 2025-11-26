@@ -3816,10 +3816,7 @@
     function exportComposite() {
       if (!compositeRenderer) return;
 
-      // ✅ 關鍵：完全保持預覽時的狀態，不重新設定尺寸
       const threeCanvas = compositeRenderer.domElement;
-
-      // ✅ 直接使用當前渲染的 canvas，不做任何修改
       const finalCanvas = document.createElement('canvas');
       finalCanvas.width = threeCanvas.width;
       finalCanvas.height = threeCanvas.height;
@@ -3829,28 +3826,40 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-      // ✅ 背景圖片 - 使用與預覽完全相同的邏輯
+      // ✅ 關鍵：完全複製預覽時的 object-fit: contain 效果
       if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
         const img = backgroundImageElement;
-        const container = document.getElementById('compositeViewer');
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        const canvasRatio = finalCanvas.width / finalCanvas.height;
 
-        // 計算預覽區的顯示比例
-        const containerRect = container.getBoundingClientRect();
-        const imgRect = backgroundImageElement.getBoundingClientRect();
+        let drawWidth, drawHeight, offsetX, offsetY;
 
-        // ✅ 直接複製預覽時的顯示位置和尺寸
-        const scaleX = finalCanvas.width / containerRect.width;
-        const scaleY = finalCanvas.height / containerRect.height;
+        // ✅ 複製 CSS object-fit: contain 的邏輯
+        if (imgRatio > canvasRatio) {
+          // 圖片較寬 - 填滿寬度，高度自動（上下留白）
+          drawWidth = finalCanvas.width;
+          drawHeight = finalCanvas.width / imgRatio;
+          offsetX = 0;
+          offsetY = (finalCanvas.height - drawHeight) / 2;
+        } else {
+          // 圖片較高 - 填滿高度，寬度自動（左右留白）
+          drawHeight = finalCanvas.height;
+          drawWidth = finalCanvas.height * imgRatio;
+          offsetX = (finalCanvas.width - drawWidth) / 2;
+          offsetY = 0;
+        }
 
-        const drawX = (imgRect.left - containerRect.left) * scaleX;
-        const drawY = (imgRect.top - containerRect.top) * scaleY;
-        const drawWidth = imgRect.width * scaleX;
-        const drawHeight = imgRect.height * scaleY;
+        console.log('圖片繪製:', {
+          原始尺寸: `${img.naturalWidth}x${img.naturalHeight}`,
+          輸出尺寸: `${drawWidth}x${drawHeight}`,
+          位置: `(${offsetX}, ${offsetY})`,
+          留白: imgRatio > canvasRatio ? '上下留白' : '左右留白'
+        });
 
-        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
-      // ✅ 3D 內容 - 直接複製，保持原樣
+      // 3D 內容
       ctx.drawImage(threeCanvas, 0, 0);
 
       // 下載
