@@ -2265,19 +2265,115 @@
 
     // 拍照功能（移动设备）
     function capturePhoto() {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: true })
-          .then(function (stream) {
-            // 这里需要创建视频元素和canvas来捕获照片
-            // 由于代码较复杂，简化实现：
-            alert('拍照功能需要额外实现。请使用"上传背景图片"功能。');
-          })
-          .catch(function (error) {
-            alert('無法訪問相機: ' + error.message);
-          });
-      } else {
-        alert('您的設備不支持拍照功能，請使用上傳圖片。');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('您的瀏覽器不支援拍照功能,請使用「上傳背景圖片」。');
+        return;
       }
+
+      // 創建拍照界面
+      const cameraModal = document.createElement('div');
+      cameraModal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  `;
+
+      const video = document.createElement('video');
+      video.style.cssText = `
+    max-width: 90%;
+    max-height: 70%;
+    background: #000;
+  `;
+      video.setAttribute('playsinline', ''); // iOS 需要
+      video.setAttribute('autoplay', '');
+
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = `
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+  `;
+
+      const captureBtn = document.createElement('button');
+      captureBtn.textContent = '📷 拍照';
+      captureBtn.style.cssText = `
+    padding: 15px 30px;
+    font-size: 18px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  `;
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = '❌ 取消';
+      cancelBtn.style.cssText = `
+    padding: 15px 30px;
+    font-size: 18px;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  `;
+
+      buttonContainer.appendChild(captureBtn);
+      buttonContainer.appendChild(cancelBtn);
+      cameraModal.appendChild(video);
+      cameraModal.appendChild(buttonContainer);
+      document.body.appendChild(cameraModal);
+
+      // 啟動相機
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment', // 使用後置鏡頭
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      })
+        .then(function (stream) {
+          video.srcObject = stream;
+          video.play();
+
+          // 拍照按鈕
+          captureBtn.onclick = function () {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            // 設定為背景圖片
+            backgroundImageElement.src = canvas.toDataURL('image/jpeg', 0.9);
+            backgroundImageElement.style.display = 'block';
+
+            // 停止相機並關閉
+            stream.getTracks().forEach(track => track.stop());
+            document.body.removeChild(cameraModal);
+
+            alert('✅ 照片已設定為背景!');
+          };
+
+          // 取消按鈕
+          cancelBtn.onclick = function () {
+            stream.getTracks().forEach(track => track.stop());
+            document.body.removeChild(cameraModal);
+          };
+        })
+        .catch(function (error) {
+          console.error('無法訪問相機:', error);
+          document.body.removeChild(cameraModal);
+          alert('無法訪問相機: ' + error.message + '\n\n請確認:\n1. 已授予相機權限\n2. 使用 HTTPS 連線\n3. 或使用「上傳背景圖片」功能');
+        });
     }
 
     // 清除背景
@@ -2324,7 +2420,7 @@
           const fov = compositeCamera.fov * (Math.PI / 180);
           let cameraZ = Math.abs(maxDim / Math.sin(fov / 2));
 
-          compositeCamera.position.set(0, 0, cameraZ * 2.5); // 增加距離避免裁剪
+          compositeCamera.position.set(0, 0, cameraZ * 2.5);
           compositeCamera.lookAt(0, 0, 0);
         }
       }
@@ -3724,19 +3820,17 @@
 
       const threeCanvas = compositeRenderer.domElement;
 
-      // ✅ 使用較高解析度,但不會太大(適合 LINE 分享)
+      // ✅ 提高解析度,目標檔案大小 5-8MB
       const container = document.getElementById('compositeViewer');
-      const maxSize = 2048; // LINE 建議的最大尺寸
+      const maxSize = 3840; // 提高到 4K 解析度
       const containerRatio = container.clientWidth / container.clientHeight;
 
       let targetWidth, targetHeight;
       if (containerRatio > 1) {
-        // 橫向圖片
-        targetWidth = Math.min(maxSize, threeCanvas.width * 1.5);
+        targetWidth = Math.min(maxSize, threeCanvas.width * 2);
         targetHeight = targetWidth / containerRatio;
       } else {
-        // 直向圖片
-        targetHeight = Math.min(maxSize, threeCanvas.height * 1.5);
+        targetHeight = Math.min(maxSize, threeCanvas.height * 2);
         targetWidth = targetHeight * containerRatio;
       }
 
@@ -3749,46 +3843,61 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-      // ✅ 關鍵修正:背景圖片 - 完全複製 CSS object-fit: contain 的邏輯
+      // ✅ 背景圖片 - 保持 object-fit: contain
+      let bgOffsetX = 0, bgOffsetY = 0, bgDrawWidth = finalCanvas.width, bgDrawHeight = finalCanvas.height;
+
       if (backgroundImageElement && backgroundImageElement.style.display !== 'none') {
         const img = backgroundImageElement;
 
-        // 計算圖片在 contain 模式下的實際顯示尺寸
         const containerRatio = finalCanvas.width / finalCanvas.height;
         const imgRatio = img.naturalWidth / img.naturalHeight;
 
-        let drawWidth, drawHeight, offsetX, offsetY;
-
-        // ✅ 複製 object-fit: contain 的邏輯
         if (imgRatio > containerRatio) {
-          // 圖片比容器寬 -> 以寬度為準
-          drawWidth = finalCanvas.width;
-          drawHeight = finalCanvas.width / imgRatio;
-          offsetX = 0;
-          offsetY = (finalCanvas.height - drawHeight) / 2;
+          bgDrawWidth = finalCanvas.width;
+          bgDrawHeight = finalCanvas.width / imgRatio;
+          bgOffsetX = 0;
+          bgOffsetY = (finalCanvas.height - bgDrawHeight) / 2;
         } else {
-          // 圖片比容器高 -> 以高度為準
-          drawHeight = finalCanvas.height;
-          drawWidth = finalCanvas.height * imgRatio;
-          offsetX = (finalCanvas.width - drawWidth) / 2;
-          offsetY = 0;
+          bgDrawHeight = finalCanvas.height;
+          bgDrawWidth = finalCanvas.height * imgRatio;
+          bgOffsetX = (finalCanvas.width - bgDrawWidth) / 2;
+          bgOffsetY = 0;
         }
 
-        // 繪製背景圖片,保持比例不變形
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+        ctx.drawImage(img, bgOffsetX, bgOffsetY, bgDrawWidth, bgDrawHeight);
       }
 
-      // ✅ 3D 內容 - 放大繪製以匹配更高的解析度
-      ctx.drawImage(threeCanvas, 0, 0, finalCanvas.width, finalCanvas.height);
+      // ✅ 關鍵修正:3D 內容 - 使用臨時高解析度渲染
+      // 創建臨時渲染器,使用更高解析度
+      const tempRenderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true
+      });
+
+      tempRenderer.setSize(targetWidth, targetHeight);
+      tempRenderer.setClearColor(0x000000, 0);
+
+      // 複製相機設定
+      const tempCamera = compositeCamera.clone();
+      tempCamera.aspect = targetWidth / targetHeight;
+      tempCamera.updateProjectionMatrix();
+
+      // 渲染高解析度版本
+      tempRenderer.render(compositeScene, tempCamera);
+
+      // 繪製 3D 內容
+      ctx.drawImage(tempRenderer.domElement, 0, 0, finalCanvas.width, finalCanvas.height);
+
+      // 清理臨時渲染器
+      tempRenderer.dispose();
 
       // 轉換為 Blob 並分享
       finalCanvas.toBlob(function (blob) {
-        // 檢查檔案大小(LINE 限制約 10MB)
         const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
         console.log(`圖片大小: ${sizeMB}MB, 尺寸: ${finalCanvas.width}x${finalCanvas.height}`);
 
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'test.png', { type: 'image/png' })] })) {
-          // 使用 Web Share API
           const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
           navigator.share({
             files: [file],
@@ -3797,7 +3906,9 @@
           }).then(() => {
             document.getElementById('compositeResult').innerHTML = `
           <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-            ✅ 分享成功! (${finalCanvas.width}x${finalCanvas.height}, ${sizeMB}MB)
+            ✅ 分享成功!<br>
+            📐 尺寸: ${finalCanvas.width}x${finalCanvas.height}<br>
+            💾 大小: ${sizeMB}MB
           </div>
         `;
           }).catch(error => {
@@ -3805,23 +3916,24 @@
             fallbackShare(finalCanvas);
           });
         } else {
-          // 降級方案:下載圖片
           fallbackShare(finalCanvas);
         }
-      }, 'image/png', 0.92); // 稍微壓縮以減小檔案大小
+      }, 'image/png', 0.95); // ✅ 提高品質到 95%
     }
-
     // 降級分享方案
     function fallbackShare(canvas) {
       const link = document.createElement('a');
       link.download = '支撐合成圖.png';
-      link.href = canvas.toDataURL('image/png', 0.92);
+      link.href = canvas.toDataURL('image/png', 0.95);
       link.click();
+
+      const sizeMB = (canvas.toDataURL('image/png', 0.95).length * 0.75 / 1024 / 1024).toFixed(2);
 
       document.getElementById('compositeResult').innerHTML = `
     <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
       📱 圖片已下載,請使用Line或其他應用分享<br>
-      🖼️ 尺寸: ${canvas.width}x${canvas.height}
+      📐 尺寸: ${canvas.width}x${canvas.height}<br>
+      💾 約 ${sizeMB}MB
     </div>
   `;
     }
