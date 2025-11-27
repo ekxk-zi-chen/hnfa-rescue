@@ -3809,159 +3809,63 @@
       }
     }
 
-    // 直接截取預覽畫面的分享功能
-    // 精確的合成截圖功能 - 保持預覽效果
-    // 精確的合成截圖功能 - 真正保持預覽效果
-    function shareComposite() {
-      const container = document.getElementById('compositeViewer');
-      const backgroundImage = document.getElementById('backgroundImage');
+    // 輔助函數：下載圖片
+    function downloadImage(canvas, sizeMB) {
+      const link = document.createElement('a');
+      link.download = `支撐合成圖_${new Date().getTime()}.png`;
+      link.href = canvas.toDataURL('image/png', 0.95);
+      link.click();
 
-      if (!container) {
-        alert('請先初始化合成場景!');
-        return;
-      }
-
-      // 顯示處理中訊息
       document.getElementById('compositeResult').innerHTML = `
-    <div style="color: blue; padding: 10px; background: #f0f8ff; border-radius: 5px;">
-      ⏳ 正在生成合成圖片...
+    <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
+      ✅ 下載成功!<br>
+      📐 尺寸: ${canvas.width}x${canvas.height}<br>
+      💾 大小: ${sizeMB}MB<br>
+      🎯 模型位置和縮放與預覽一致
     </div>
   `;
-
-      // 創建 canvas - 使用背景圖片的自然尺寸或容器尺寸
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      // 決定 canvas 尺寸
-      let canvasWidth, canvasHeight;
-
-      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
-        // 使用背景圖片的自然尺寸，保持原始比例
-        canvasWidth = backgroundImage.naturalWidth;
-        canvasHeight = backgroundImage.naturalHeight;
-      } else {
-        // 沒有背景圖片時使用容器尺寸
-        const containerRect = container.getBoundingClientRect();
-        canvasWidth = containerRect.width;
-        canvasHeight = containerRect.height;
-      }
-
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-
-      console.log('Canvas 尺寸:', canvasWidth, canvasHeight);
-
-      // 白色背景
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 如果有背景圖片，按照 object-fit: contain 邏輯繪製
-      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
-        const img = backgroundImage;
-
-        // 計算 object-fit: contain 的顯示邏輯
-        const containerRatio = canvasWidth / canvasHeight;
-        const imgRatio = img.naturalWidth / img.naturalHeight;
-
-        let drawWidth, drawHeight, offsetX, offsetY;
-
-        if (imgRatio > containerRatio) {
-          // 圖片較寬，以寬度為基準
-          drawWidth = canvasWidth;
-          drawHeight = canvasWidth / imgRatio;
-          offsetX = 0;
-          offsetY = (canvasHeight - drawHeight) / 2;
-        } else {
-          // 圖片較高，以高度為基準
-          drawHeight = canvasHeight;
-          drawWidth = canvasHeight * imgRatio;
-          offsetX = (canvasWidth - drawWidth) / 2;
-          offsetY = 0;
-        }
-
-        console.log('背景圖片繪製參數:', { offsetX, offsetY, drawWidth, drawHeight });
-
-        // 繪製背景圖片（保持原始比例，不拉伸）
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-      }
-
-      // 繪製 3D 內容 - 需要重新計算 3D 內容的位置和尺寸
-      if (compositeRenderer) {
-        const threeCanvas = compositeRenderer.domElement;
-
-        // 重新渲染一次確保 3D 內容是最新的
-        compositeRenderer.render(compositeScene, compositeCamera);
-
-        // 計算 3D 內容在 canvas 上的位置和尺寸
-        const containerRect = container.getBoundingClientRect();
-        const scaleX = canvasWidth / containerRect.width;
-        const scaleY = canvasHeight / containerRect.height;
-
-        // 繪製 3D 內容，保持與預覽相同的相對位置
-        ctx.drawImage(
-          threeCanvas,
-          0, 0, threeCanvas.width, threeCanvas.height, // 源圖像區域
-          0, 0, canvasWidth, canvasHeight // 目標區域（鋪滿整個 canvas）
-        );
-      }
-
-      // 轉換為 Blob 進行分享
-      canvas.toBlob(function (blob) {
-        const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
-        console.log(`合成圖片大小: ${sizeMB}MB, 尺寸: ${canvas.width}x${canvas.height}`);
-
-        // 分享或下載
-        if (navigator.share && navigator.canShare) {
-          const file = new File([blob], '支撐合成圖.png', { type: 'image/png' });
-
-          if (navigator.canShare({ files: [file] })) {
-            navigator.share({
-              files: [file],
-              title: '支撐合成圖',
-              text: '這是我的支撐設計合成圖'
-            }).then(() => {
-              document.getElementById('compositeResult').innerHTML = `
-            <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
-              ✅ 分享成功!<br>
-              📐 尺寸: ${canvas.width}x${canvas.height}<br>
-              💾 大小: ${sizeMB}MB<br>
-              🖼️ 背景圖片保持原始比例
-            </div>
-          `;
-            }).catch(error => {
-              console.log('分享取消或失敗:', error);
-              downloadImage(canvas, sizeMB);
-            });
-          } else {
-            downloadImage(canvas, sizeMB);
-          }
-        } else {
-          downloadImage(canvas, sizeMB);
-        }
-      }, 'image/png', 0.95);
     }
-    // 修正匯出功能
+
+    // 同樣修正 exportComposite 函數
     function exportComposite() {
       const container = document.getElementById('compositeViewer');
       const backgroundImage = document.getElementById('backgroundImage');
 
       if (!container) return;
 
-      // 創建 canvas
+      // 獲取當前模型狀態
+      let modelPosition = { x: 0, y: 0, z: 0 };
+      let modelRotation = { x: 0, y: 0, z: 0 };
+      let modelScale = { x: 1, y: 1, z: 1 };
+
+      if (currentModel) {
+        modelPosition = {
+          x: currentModel.position.x,
+          y: currentModel.position.y,
+          z: currentModel.position.z
+        };
+        modelRotation = {
+          x: currentModel.rotation.x,
+          y: currentModel.rotation.y,
+          z: currentModel.rotation.z
+        };
+        modelScale = {
+          x: currentModel.scale.x,
+          y: currentModel.scale.y,
+          z: currentModel.scale.z
+        };
+      }
+
+      const format = document.getElementById('exportFormat').value;
+      const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+
+      // 創建 canvas - 使用與預覽相同的尺寸
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // 決定 canvas 尺寸
-      let canvasWidth, canvasHeight;
-
-      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
-        canvasWidth = backgroundImage.naturalWidth;
-        canvasHeight = backgroundImage.naturalHeight;
-      } else {
-        const containerRect = container.getBoundingClientRect();
-        canvasWidth = containerRect.width;
-        canvasHeight = containerRect.height;
-      }
+      const containerRect = container.getBoundingClientRect();
+      const canvasWidth = containerRect.width;
+      const canvasHeight = containerRect.height;
 
       canvas.width = canvasWidth;
       canvas.height = canvasHeight;
@@ -3970,8 +3874,8 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 繪製背景圖片（保持原始比例）
-      if (backgroundImage && backgroundImage.style.display !== 'none' && backgroundImage.naturalWidth > 0) {
+      // 背景圖片
+      if (backgroundImage && backgroundImage.style.display !== 'none') {
         const img = backgroundImage;
         const containerRatio = canvasWidth / canvasHeight;
         const imgRatio = img.naturalWidth / img.naturalHeight;
@@ -3993,18 +3897,49 @@
         ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       }
 
-      // 繪製 3D 內容
-      if (compositeRenderer) {
-        compositeRenderer.render(compositeScene, compositeCamera);
-        const threeCanvas = compositeRenderer.domElement;
+      // 創建臨時場景渲染模型
+      const tempScene = new THREE.Scene();
+      const tempCamera = new THREE.PerspectiveCamera(60, canvasWidth / canvasHeight, 0.1, 1000);
 
-        ctx.drawImage(threeCanvas, 0, 0, canvasWidth, canvasHeight);
+      // 光照
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      tempScene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 15);
+      tempScene.add(directionalLight);
+
+      // 複製模型
+      if (currentModel) {
+        const modelClone = currentModel.clone();
+        modelClone.position.set(modelPosition.x, modelPosition.y, modelPosition.z);
+        modelClone.rotation.set(modelRotation.x, modelRotation.y, modelRotation.z);
+        modelClone.scale.set(modelScale.x, modelScale.y, modelScale.z);
+        tempScene.add(modelClone);
+
+        tempCamera.position.copy(compositeCamera.position);
+        tempCamera.rotation.copy(compositeCamera.rotation);
+        tempCamera.zoom = compositeCamera.zoom;
+        tempCamera.updateProjectionMatrix();
       }
 
-      // 下載
-      const format = document.getElementById('exportFormat').value;
-      const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      const tempRenderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true
+      });
 
+      tempRenderer.setSize(canvasWidth, canvasHeight);
+      tempRenderer.setClearColor(0x000000, 0);
+      tempRenderer.render(tempScene, tempCamera);
+
+      // 繪製 3D 內容
+      const threeCanvas = tempRenderer.domElement;
+      ctx.drawImage(threeCanvas, 0, 0, canvasWidth, canvasHeight);
+
+      tempRenderer.dispose();
+
+      // 下載
       const link = document.createElement('a');
       link.download = `支撐合成圖_${new Date().getTime()}.${format}`;
       link.href = canvas.toDataURL(mimeType, format === 'jpg' ? 0.9 : 1.0);
@@ -4014,10 +3949,12 @@
     <div style="color: green; padding: 10px; background: #f0fff0; border-radius: 5px;">
       ✅ 完美匯出！<br>
       📐 完全匹配預覽效果<br>
-      🖼️ 背景圖片保持原始比例不拉伸
+      🖼️ 無拉伸變形<br>
+      🎯 模型位置和縮放一致
     </div>
   `;
     }
+
     // 加載最近的計算結果
     function loadCalculationResult() {
       if (!currentCalculationData) {
