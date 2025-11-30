@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
- 
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1990,7 +1990,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -2038,7 +2038,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2068,7 +2068,7 @@
         async function updateUserPermission(userId, newPermission) {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2101,7 +2101,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2271,7 +2271,7 @@
         async function loadEquipmentHistory(equipmentId, container) {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2546,7 +2546,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2594,7 +2594,7 @@
         async function loadBatchReturnRecords() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2763,7 +2763,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2821,7 +2821,7 @@
             // 載入成員列表
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2884,7 +2884,7 @@
                     const remainQuantity = equipment.數量 - transferQuantity;
 
                     // 1. 更新原裝備數量
-                    await fetch(CONFIG.API_BASE, {
+                    await fetch(AuthUtils.callAPI(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2898,7 +2898,7 @@
                     });
 
                     // 2. 新增轉借的裝備記錄
-                    await fetch(CONFIG.API_BASE, {
+                    await fetch(AuthUtils.callAPI(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2924,7 +2924,7 @@
                     showToast(`已將 ${transferQuantity} 個 ${equipment.器材名稱} 轉借給 ${transferTo}`, 'success');
                 } else {
                     // 全部轉借，只更新狀態
-                    await fetch(CONFIG.API_BASE, {
+                    await fetch(AuthUtils.callAPI(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2969,7 +2969,7 @@
         async function loadMemberListForTransfer() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3010,7 +3010,7 @@
         async function loadBatchTransferRecords() {
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3183,7 +3183,7 @@
 
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
+                const response = await fetch(AuthUtils.callAPI(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3251,7 +3251,7 @@
                 // 批量更新裝備的借出狀態
                 const updatePromises = equipmentIds.map(equipmentId => {
                     const equipment = equipmentData.find(e => e.id === equipmentId);
-                    return fetch(CONFIG.API_BASE, {
+                    return fetch(AuthUtils.callAPI(), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
