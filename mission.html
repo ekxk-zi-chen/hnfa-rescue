@@ -908,12 +908,12 @@
         </div>
     </div>
     <script>
+        // ==================== 初始化與全域變數 ====================
         const CONFIG = {
             API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
             SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
         };
-
         let currentUser = null;
         let allMissions = [];
         let allMembers = [];
@@ -937,6 +937,7 @@
         let membersByUnit = {};  // 按單位分組的成員
         let selectedLeaders = new Map();  // 選中的隊長及其成員
         let currentUnitStates = new Map(); // 記錄單位的展開狀態
+        // ==================== 應用初始化與事件監聽 ====================
         document.addEventListener('DOMContentLoaded', async function () {
             await initializeApp();
         });
@@ -966,6 +967,10 @@
                 setTimeout(() => window.location.href = 'index.html', 2000);
             }
         }
+        // 設置事件監聽器
+        function setupEventListeners() {
+            document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
+        }
         // ✅ 簡單的刷新按鈕設置
         function setupRefreshButton() {
             const refreshBtn = document.getElementById('refreshBtn');
@@ -981,7 +986,7 @@
                 };
             }
         }
-
+        // ==================== 用戶驗證與身份管理 ====================
         // 驗證用戶身份
         async function verifyUser(sessionToken) {
             const response = await fetch(CONFIG.API_BASE, {
@@ -1008,6 +1013,30 @@
                 document.getElementById('adminActions').style.display = 'block';
             }
         }
+        // 根據用戶角色初始化即時更新或刷新按鈕
+        function initRealtimeOrRefresh(userData) {
+            if (!userData || !userData.role) return;
+
+            // ✅ 所有人都顯示刷新按鈕
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.style.display = 'inline-block';
+                refreshBtn.onclick = async () => {
+                    refreshBtn.disabled = true;
+                    refreshBtn.textContent = '刷新中...';
+                    await loadMissions();
+                    showToast('資料已更新', 'success');
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 刷新資料';
+                };
+            }
+
+            // 管理員額外設置即時更新
+            if (userData.role === '管理') {
+                setupRealtimeUpdates();
+            }
+        }
+        // ==================== 資料載入與管理 ====================
         // 載入任務資料
         async function loadMissions() {
             if (isRendering) {
@@ -1025,7 +1054,6 @@
                 await _loadMissionsInternal();
             }, 300);
         }
-
         // ✅ 內部實際載入函數
         async function _loadMissionsInternal() {
             isRendering = true;
@@ -1072,7 +1100,6 @@
                 isRendering = false;
             }
         }
-
         // 載入任務資料
         async function loadMembers() {
             try {
@@ -1096,11 +1123,59 @@
                 console.error('載入成員失敗:', error);
             }
         }
+        // 載入成員資料（按單位分組）
+        async function loadMembersForAssignment() {
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMembers',
+                        sessionToken
+                    })
+                });
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    allMembers = data.members;
+
+                    // ✅ 確保正確分組
+                    membersByUnit = {};
+                    allMembers.forEach(member => {
+                        const unit = member.unit || '未分組';
+                        if (!membersByUnit[unit]) {
+                            membersByUnit[unit] = [];
+                        }
+                        membersByUnit[unit].push(member);
+                    });
+
+                    console.log('✅ 成員資料載入完成，單位數:', Object.keys(membersByUnit).length);
+                }
+            } catch (error) {
+                console.error('載入成員失敗:', error);
+                showToast('載入成員失敗', 'error');
+            }
+        }
+        // 獨立的刷新函數
+        async function refreshData() {
+            const refreshBtn = document.querySelector('.btn-secondary[onclick="refreshData()"]');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = '刷新中...';
+                await loadMissions();
+                showToast('資料已更新', 'success');
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 刷新資料';
+            }
+        }
+        
+        // ==================== 任務渲染與顯示 ====================
         // 渲染所有任務到各分頁
         function renderMissions() {
             saveUIState();
 
-            // ✅ 新增：自動檢查並關閉過期報名
+            // 自動檢查並關閉過期報名
             const now = new Date();
             allMissions.forEach(mission => {
                 if (mission.recruitment_deadline &&
@@ -1229,48 +1304,7 @@
 
             container.innerHTML = html;
         }
-        // 新增專門用於"我的任務"的分組渲染函數
-        function renderGroupedMissionsForPersonal(missions) {
-            const grouped = groupMissionsByDate(missions);
-
-            let html = '';
-            Object.keys(grouped).sort().reverse().forEach(yearMonth => {
-                const monthMissions = grouped[yearMonth];
-                const dateGroups = groupMissionsByDay(monthMissions);
-                const groupId = `personal-${yearMonth.replace(/\s+/g, '-')}`;
-
-                html += `
-                    <div class="mission-group">
-                        <div class="group-header" style="cursor: pointer;">
-                            <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
-                            <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
-                        </div>
-                        <div class="group-content" id="group-${groupId}">
-                            ${Object.keys(dateGroups).sort().reverse().map(day => {
-                    const dayMissions = dateGroups[day];
-                    const dayGroupId = `${groupId}-${day}`;
-
-                    return `
-                                    <div class="mission-group" style="margin-left: 1rem;">
-                                        <div class="group-header" style="cursor: pointer;">
-                                            <h3 style="font-size: 1rem; flex: 1;">📆 ${day} (${dayMissions.length})</h3>
-                                            <span class="toggle-icon" data-group-id="${dayGroupId}" onclick="toggleGroup('${dayGroupId}', event)">▼</span>
-                                        </div>
-                                        <div class="group-content" id="group-${dayGroupId}">
-                                            ${dayMissions.map(mission => createMissionCard(mission)).join('')}
-                                        </div>
-                                    </div>
-                                `;
-                }).join('')}
-                        </div>
-                    </div>
-                `;
-            });
-
-            return html;
-        }
-
-        // ✅ 新增：渲染分組任務
+        // 渲染分組任務
         function renderGroupedMissions(missions) {
             const grouped = groupMissionsByDate(missions);
 
@@ -1312,7 +1346,46 @@
 
             return html;
         }
+        // 新增專門用於"我的任務"的分組渲染函數
+        function renderGroupedMissionsForPersonal(missions) {
+            const grouped = groupMissionsByDate(missions);
 
+            let html = '';
+            Object.keys(grouped).sort().reverse().forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const dateGroups = groupMissionsByDay(monthMissions);
+                const groupId = `personal-${yearMonth.replace(/\s+/g, '-')}`;
+
+                html += `
+                    <div class="mission-group">
+                        <div class="group-header" style="cursor: pointer;">
+                            <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                            <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
+                        </div>
+                        <div class="group-content" id="group-${groupId}">
+                            ${Object.keys(dateGroups).sort().reverse().map(day => {
+                    const dayMissions = dateGroups[day];
+                    const dayGroupId = `${groupId}-${day}`;
+
+                    return `
+                                    <div class="mission-group" style="margin-left: 1rem;">
+                                        <div class="group-header" style="cursor: pointer;">
+                                            <h3 style="font-size: 1rem; flex: 1;">📆 ${day} (${dayMissions.length})</h3>
+                                            <span class="toggle-icon" data-group-id="${dayGroupId}" onclick="toggleGroup('${dayGroupId}', event)">▼</span>
+                                        </div>
+                                        <div class="group-content" id="group-${dayGroupId}">
+                                            ${dayMissions.map(mission => createMissionCard(mission)).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            return html;
+        }
         // 按年月分組
         function groupMissionsByDate(missions) {
             const grouped = {};
@@ -1324,7 +1397,6 @@
             });
             return grouped;
         }
-
         // 按日分組
         function groupMissionsByDay(missions) {
             const grouped = {};
@@ -1337,69 +1409,8 @@
             return grouped;
         }
 
-        // 切換分組顯示
-        // ✅ 修正 toggleGroup - 移除重複呼叫
-        function toggleGroup(groupId, event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
 
-            const content = document.getElementById(`group-${groupId}`);
-            const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-
-            if (!content || !icon) {
-                console.error('找不到分組:', groupId);
-                return;
-            }
-
-            const isCurrentlyExpanded = content.classList.contains('show');
-
-            if (isCurrentlyExpanded) {
-                content.classList.remove('show');
-                icon.textContent = '▼';
-            } else {
-                content.classList.add('show');
-                icon.textContent = '▲';
-            }
-
-            // 只保存分組狀態，不影響卡片狀態
-            uiState.groups.set(groupId, !isCurrentlyExpanded);
-            saveUIState();
-        }
-
-
-        // ✅ 新增：全部展開
-        function expandAll() {
-            document.querySelectorAll('.mission-card-content').forEach(content => {
-                content.style.display = 'block';
-                const icon = document.getElementById(`${content.id}-icon`);
-                if (icon) icon.textContent = '▲';
-
-                // 保存狀態
-                const missionId = content.closest('.mission-card')?.dataset?.missionId;
-                if (missionId) uiState.cards.set(missionId, true);
-            });
-
-            saveUIState();
-            showToast('已展開所有任務卡片', 'success');
-        }
-
-        function collapseAll() {
-            document.querySelectorAll('.mission-card-content').forEach(content => {
-                content.style.display = 'none';
-                const icon = document.getElementById(`${content.id}-icon`);
-                if (icon) icon.textContent = '▼';
-
-                // 保存狀態
-                const missionId = content.closest('.mission-card')?.dataset?.missionId;
-                if (missionId) uiState.cards.set(missionId, false);
-            });
-
-            saveUIState();
-            showToast('已收合所有任務卡片', 'success');
-        }
-
+        // ==================== 任務卡片操作 ====================
         // 建立任務卡片 HTML
         function createMissionCard(mission, context = 'default') {
             const isUrgent = mission.is_urgent;
@@ -1445,38 +1456,6 @@
                 </div>
             `;
         }
-
-        // ✅ 新增：切換任務卡片
-        function toggleMissionCard(cardId, event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-
-            const content = document.getElementById(cardId);
-            const icon = document.getElementById(`${cardId}-icon`);
-
-            if (!content || !icon) {
-                console.error('找不到元素:', cardId);
-                return;
-            }
-
-            const isCurrentlyExpanded = content.style.display === 'block';
-            const missionId = content.closest('.mission-card')?.dataset?.missionId;
-
-            if (isCurrentlyExpanded) {
-                content.style.display = 'none';
-                icon.textContent = '▼';
-                if (missionId) uiState.cards.set(missionId, false);
-            } else {
-                content.style.display = 'block';
-                icon.textContent = '▲';
-                if (missionId) uiState.cards.set(missionId, true);
-            }
-
-            saveUIState();
-        }
-
         // ✅ 修正：支援多階段派遣的卡片內容（獨立狀態檢查）
         function createMissionCardContent(mission, myParticipation) {
             const isCompleted = mission.status === 'completed';
@@ -1631,8 +1610,7 @@
 
             `;
         }
-
-        // ✅ 新增：渲染派遣階段摘要
+        // 渲染派遣階段摘要
         function renderAssignmentsSummary(assignments) {
             return assignments.map((assignment, index) => {
                 const isLatest = index === 0;
@@ -1660,11 +1638,124 @@
                 `;
             }).join('');
         }
+        // 切換任務卡片
+        function toggleMissionCard(cardId, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
 
-        // 設置事件監聽器
-        function setupEventListeners() {
-            document.getElementById('createMissionForm').addEventListener('submit', handleCreateMission);
+            const content = document.getElementById(cardId);
+            const icon = document.getElementById(`${cardId}-icon`);
+
+            if (!content || !icon) {
+                console.error('找不到元素:', cardId);
+                return;
+            }
+
+            const isCurrentlyExpanded = content.style.display === 'block';
+            const missionId = content.closest('.mission-card')?.dataset?.missionId;
+
+            if (isCurrentlyExpanded) {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+                if (missionId) uiState.cards.set(missionId, false);
+            } else {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+                if (missionId) uiState.cards.set(missionId, true);
+            }
+
+            saveUIState();
         }
+        // 局部更新任務卡片
+        function updateMissionCard(missionId, missionData) {
+            // 找到並更新對應的任務卡片
+            const cardElements = document.querySelectorAll(`[id*="mission-${missionId}-"]`);
+
+            cardElements.forEach(element => {
+                if (element.classList.contains('mission-card')) {
+                    const newCardHTML = createMissionCard(missionData);
+                    element.outerHTML = newCardHTML;
+                }
+            });
+        }
+
+        // ==================== 分組與展開/收合操作 ====================
+        // 切換分組顯示
+        function toggleGroup(groupId, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+
+            const content = document.getElementById(`group-${groupId}`);
+            const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+
+            if (!content || !icon) {
+                console.error('找不到分組:', groupId);
+                return;
+            }
+
+            const isCurrentlyExpanded = content.classList.contains('show');
+
+            if (isCurrentlyExpanded) {
+                content.classList.remove('show');
+                icon.textContent = '▼';
+            } else {
+                content.classList.add('show');
+                icon.textContent = '▲';
+            }
+
+            // 只保存分組狀態，不影響卡片狀態
+            uiState.groups.set(groupId, !isCurrentlyExpanded);
+            saveUIState();
+        }
+        // 展開所有任務卡片
+        function expandAll() {
+            document.querySelectorAll('.mission-card-content').forEach(content => {
+                content.style.display = 'block';
+                const icon = document.getElementById(`${content.id}-icon`);
+                if (icon) icon.textContent = '▲';
+
+                // 保存狀態
+                const missionId = content.closest('.mission-card')?.dataset?.missionId;
+                if (missionId) uiState.cards.set(missionId, true);
+            });
+
+            saveUIState();
+            showToast('已展開所有任務卡片', 'success');
+        }
+        // 收合所有任務卡片
+        function collapseAll() {
+            document.querySelectorAll('.mission-card-content').forEach(content => {
+                content.style.display = 'none';
+                const icon = document.getElementById(`${content.id}-icon`);
+                if (icon) icon.textContent = '▼';
+
+                // 保存狀態
+                const missionId = content.closest('.mission-card')?.dataset?.missionId;
+                if (missionId) uiState.cards.set(missionId, false);
+            });
+
+            saveUIState();
+            showToast('已收合所有任務卡片', 'success');
+        }
+        // 切換單位展開/收合
+        function toggleUnit(unitId) {
+            const content = document.getElementById(`unit-content-${unitId}`);
+            const icon = document.getElementById(`unit-icon-${unitId}`);
+
+            const isCurrentlyExpanded = content.style.display === 'block';
+            const newState = !isCurrentlyExpanded;
+
+            content.style.display = newState ? 'block' : 'none';
+            icon.textContent = newState ? '▲' : '▼';
+
+            currentUnitStates.set(unitId, newState);
+        }
+
+        // ==================== 任務操作（CRUD） ====================
         // 處理建立任務表單提交
         async function handleCreateMission(event) {
             event.preventDefault();
@@ -1774,42 +1865,189 @@
                 showToast('取消報名失敗: ' + error.message, 'error');
             }
         }
-        // 載入成員資料（按單位分組）
-        async function loadMembersForAssignment() {
+        // 關閉報名
+        async function closeRecruitment(missionId) {
+            if (!confirm('確定要關閉報名嗎?')) return;
+
             try {
                 const sessionToken = sessionStorage.getItem('sessionToken');
                 const response = await fetch(CONFIG.API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'getMembers',
+                        action: 'closeRecruitment',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('操作失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('報名已關閉', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '操作失敗');
+                }
+            } catch (error) {
+                console.error('關閉報名失敗:', error);
+                showToast('關閉報名失敗: ' + error.message, 'error');
+            }
+        }
+        // 結案任務
+        async function completeMission(missionId) {
+            if (!confirm('確定要結案嗎?')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'completeMission',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('操作失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('任務已結案', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '操作失敗');
+                }
+            } catch (error) {
+                console.error('結案失敗:', error);
+                showToast('結案失敗: ' + error.message, 'error');
+            }
+        }
+        // 刪除任務
+        async function deleteMission(missionId) {
+            if (!confirm('確定要刪除此任務嗎? 此操作無法復原!')) return;
+
+            try {
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'deleteMission',
+                        sessionToken,
+                        missionId
+                    })
+                });
+
+                if (!response.ok) throw new Error('刪除失敗');
+
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    showToast('任務已刪除', 'success');
+                    await loadMissions();
+                } else {
+                    throw new Error(data.message || '刪除失敗');
+                }
+            } catch (error) {
+                console.error('刪除任務失敗:', error);
+                showToast('刪除任務失敗: ' + error.message, 'error');
+            }
+        }
+        // 編輯任務
+        function editMission(missionId) {
+            const mission = allMissions.find(m => m.id === missionId);
+            if (!mission) {
+                showToast('找不到任務', 'error');
+                return;
+            }
+
+            // 重置並填充表單
+            document.getElementById('createMissionForm').reset();
+            document.getElementById('modalTitle').textContent = '編輯任務';
+            document.getElementById('missionTitle').value = mission.mission_title;
+            document.getElementById('missionType').value = mission.mission_type;
+            document.getElementById('missionDescription').value = mission.mission_description || '';
+
+            // 處理日期格式
+            const missionDate = new Date(mission.mission_date);
+            document.getElementById('missionDate').value = missionDate.toISOString().slice(0, 16);
+
+            if (mission.recruitment_deadline) {
+                const deadline = new Date(mission.recruitment_deadline);
+                document.getElementById('recruitmentDeadline').value = deadline.toISOString().slice(0, 16);
+            } else {
+                document.getElementById('recruitmentDeadline').value = '';
+            }
+
+            document.getElementById('isUrgent').checked = mission.is_urgent || false;
+            document.getElementById('allowRecruitment').checked = mission.allow_recruitment || false;
+
+            // 儲存任務 ID 用於提交
+            currentMissionId = missionId;
+
+            showModal('createMissionModal');
+        }
+        // 改進所有操作函數，使用局部更新
+        async function handleOperation(operation, missionId, successMessage) {
+            // 先保存狀態
+            saveUIState();
+
+            try {
+                // 嘗試局部更新
+                const localUpdateSuccess = await updateSingleMission(missionId);
+
+                if (!localUpdateSuccess) {
+                    // 如果局部更新失敗，回退到完整刷新
+                    await loadMissions();
+                }
+
+                showToast(successMessage, 'success');
+            } catch (error) {
+                console.error('操作失敗:', error);
+                showToast('操作失敗: ' + error.message, 'error');
+                // 失敗時也恢復狀態
+                restoreUIState();
+            }
+        }
+        // 刪除或修改 任務後，局部更新單個任務資料
+        async function updateSingleMission(missionId) {
+            try {
+                // 改為使用現有的 getMissions 然後過濾出單個任務
+                const sessionToken = sessionStorage.getItem('sessionToken');
+                const response = await fetch(CONFIG.API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'getMissions',
                         sessionToken
                     })
                 });
 
-                const data = await response.json();
-                if (data.status === 'ok') {
-                    allMembers = data.members;
-
-                    // ✅ 確保正確分組
-                    membersByUnit = {};
-                    allMembers.forEach(member => {
-                        const unit = member.unit || '未分組';
-                        if (!membersByUnit[unit]) {
-                            membersByUnit[unit] = [];
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        const mission = data.missions.find(m => m.id === missionId);
+                        if (mission) {
+                            // 更新本地任務數據
+                            const index = allMissions.findIndex(m => m.id === missionId);
+                            if (index !== -1) {
+                                allMissions[index] = mission;
+                                updateMissionCard(missionId, mission);
+                                return true;
+                            }
                         }
-                        membersByUnit[unit].push(member);
-                    });
-
-                    console.log('✅ 成員資料載入完成，單位數:', Object.keys(membersByUnit).length);
+                    }
                 }
+                return false;
             } catch (error) {
-                console.error('載入成員失敗:', error);
-                showToast('載入成員失敗', 'error');
+                console.error('局部更新失敗:', error);
+                return false;
             }
         }
+        // ==================== 指派人員管理 ====================       
         // 指派人員 Modal
-        // 顯示指派人員 Modal
         async function showAssignModal(missionId) {
             currentMissionId = missionId;
             selectedLeaders.clear();
@@ -1819,8 +2057,7 @@
             renderAssignmentSelector();
             showModal('assignModal');
         }
-
-        // ============ 指派人員選擇器渲染（完整版）============
+        // 渲染指派人員選擇器
         function renderAssignmentSelector() {
             const container = document.getElementById('memberSelector');
 
@@ -1859,7 +2096,56 @@
             updateSelectedSummary();
 
         }
+        // ✅ 修正：渲染單個成員卡片（包含小隊成員選擇）
+        function renderMemberCard(member, unitId) {
+            const selection = selectedLeaders.get(member.user_id);
+            const isLeader = selection && selection.role === 'leader';
 
+            return `
+                <div class="member-card" data-member-id="${member.user_id}" style="padding: 0.75rem; border-bottom: 1px solid var(--gray-200);">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button type="button" 
+                                    class="btn ${isLeader ? 'btn-primary' : 'btn-secondary'} btn-sm leader-btn"
+                                    onclick="selectAsLeader('${member.user_id}', '${member.display_name}', '${member.unit}', '${member.email || ''}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                                ${isLeader ? '✓ 隊長' : '隊長'}
+                            </button>
+                        </div>
+                        <div style="flex: 1;">
+                            <strong>${member.display_name}</strong>
+                        </div>
+                    </div>
+                    
+                    <!-- ✅ 修正：小隊成員選擇區域 -->
+                    ${isLeader ? `
+                        <div class="team-area" style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px; border: 1px solid rgba(0, 195, 0, 0.2);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <strong style="font-size: 0.875rem;">選擇小隊成員：</strong>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button type="button" class="btn btn-secondary btn-sm" 
+                                            onclick="selectAllTeamMembers('${member.user_id}')"
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                        全選
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm" 
+                                            onclick="clearAllTeamMembers('${member.user_id}')"
+                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                        清除
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
+                                ${renderTeamMemberCheckboxes(member.user_id, unitId)}
+                            </div>
+                            <div class="team-count" style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
+                                已選: ${selection.members.length} 人
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
         // ✅ 渲染單個成員卡片（防止重新渲染整個列表）
         function renderMemberCardHtml(member, unitId) {
             const selection = selectedLeaders.get(member.user_id);
@@ -1884,6 +2170,55 @@
                     <!-- 小隊成員選擇區域 -->
                     <div class="team-area" style="display: ${isLeader ? 'block' : 'none'};">
                         ${isLeader ? renderTeamMemberSelectorHtml(member.user_id, unitId) : ''}
+                    </div>
+                </div>
+            `;
+        }
+        // ✅ 小隊成員選擇器 HTML（改良版）
+        function renderTeamMemberSelector(leaderId, unitId) {
+            const leader = selectedLeaders.get(leaderId);
+            if (!leader) return '';
+
+            const unit = leader.unit || '未分組';
+            const unitMembers = membersByUnit[unit] || [];
+            const availableMembers = unitMembers.filter(m =>
+                m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
+            );
+
+            const selectedCount = leader.members.length;
+            const totalCount = availableMembers.length;
+
+            return `
+                <div style="padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px; border: 1px solid rgba(0, 195, 0, 0.2);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 0.875rem;">選擇小隊成員 (${selectedCount}/${totalCount})：</strong>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="selectAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                全選
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" 
+                                    onclick="clearAllTeamMembers('${leaderId}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
+                                清除
+                            </button>
+                        </div>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
+                        ${availableMembers.map(m => {
+                const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
+                return `
+                                <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 4px; transition: background 0.2s ease;">
+                                    <input type="checkbox" 
+                                        value="${m.user_id}"
+                                        ${isSelected ? 'checked' : ''}
+                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')"
+                                        style="width: 16px; height: 16px;">
+                                    <span>${m.display_name}</span>
+                                </label>
+                            `;
+            }).join('')}
                     </div>
                 </div>
             `;
@@ -1936,8 +2271,6 @@
                 </div>
             `;
         }
-
-
         // 渲染小隊成員複選框
         function renderTeamMemberCheckboxes(leaderId, unitId) {
             const leader = selectedLeaders.get(leaderId);
@@ -1963,60 +2296,6 @@
                 `;
             }).join('');
         }
-
-
-        // ✅ 修正：渲染單個成員卡片（包含小隊成員選擇）
-        function renderMemberCard(member, unitId) {
-            const selection = selectedLeaders.get(member.user_id);
-            const isLeader = selection && selection.role === 'leader';
-
-            return `
-                <div class="member-card" data-member-id="${member.user_id}" style="padding: 0.75rem; border-bottom: 1px solid var(--gray-200);">
-                    <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <div style="display: flex; gap: 0.5rem;">
-                            <button type="button" 
-                                    class="btn ${isLeader ? 'btn-primary' : 'btn-secondary'} btn-sm leader-btn"
-                                    onclick="selectAsLeader('${member.user_id}', '${member.display_name}', '${member.unit}', '${member.email || ''}')"
-                                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                ${isLeader ? '✓ 隊長' : '隊長'}
-                            </button>
-                        </div>
-                        <div style="flex: 1;">
-                            <strong>${member.display_name}</strong>
-                        </div>
-                    </div>
-                    
-                    <!-- ✅ 修正：小隊成員選擇區域 -->
-                    ${isLeader ? `
-                        <div class="team-area" style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px; border: 1px solid rgba(0, 195, 0, 0.2);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                <strong style="font-size: 0.875rem;">選擇小隊成員：</strong>
-                                <div style="display: flex; gap: 0.25rem;">
-                                    <button type="button" class="btn btn-secondary btn-sm" 
-                                            onclick="selectAllTeamMembers('${member.user_id}')"
-                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
-                                        全選
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-sm" 
-                                            onclick="clearAllTeamMembers('${member.user_id}')"
-                                            style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
-                                        清除
-                                    </button>
-                                </div>
-                            </div>
-                            <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
-                                ${renderTeamMemberCheckboxes(member.user_id, unitId)}
-                            </div>
-                            <div class="team-count" style="margin-top: 0.5rem; font-size: 0.75rem; color: #666;">
-                                已選: ${selection.members.length} 人
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-
         // 指派人員 - 防止自動收合 
         function selectAsLeader(userId, displayName, unit, email) {
             const existing = selectedLeaders.get(userId);
@@ -2039,7 +2318,6 @@
             updateSelectedSummary();
 
         }
-
         // 更新單一成員卡片
         function updateMemberCard(userId) {
             const member = allMembers.find(m => m.user_id === userId);
@@ -2075,57 +2353,6 @@
                 teamArea.style.display = 'none';
             }
         }
-        // 小隊成員多選功能 
-        // ✅ 修正：小隊成員選擇器
-        function renderTeamMemberSelector(leaderId, unitId) {
-            const leader = selectedLeaders.get(leaderId);
-            if (!leader) return '';
-
-            const unit = leader.unit || '未分組';
-            const unitMembers = membersByUnit[unit] || [];
-            const availableMembers = unitMembers.filter(m =>
-                m.user_id !== leaderId && !selectedLeaders.has(m.user_id)
-            );
-
-            const selectedCount = leader.members.length;
-            const totalCount = availableMembers.length;
-
-            return `
-                <div style="padding: 0.75rem; background: rgba(0, 195, 0, 0.05); border-radius: 6px; border: 1px solid rgba(0, 195, 0, 0.2);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <strong style="font-size: 0.875rem;">選擇小隊成員 (${selectedCount}/${totalCount})：</strong>
-                        <div style="display: flex; gap: 0.25rem;">
-                            <button type="button" class="btn btn-secondary btn-sm" 
-                                    onclick="selectAllTeamMembers('${leaderId}')"
-                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
-                                全選
-                            </button>
-                            <button type="button" class="btn btn-secondary btn-sm" 
-                                    onclick="clearAllTeamMembers('${leaderId}')"
-                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">
-                                清除
-                            </button>
-                        </div>
-                    </div>
-                    <div style="max-height: 200px; overflow-y: auto; display: grid; gap: 0.25rem;">
-                        ${availableMembers.map(m => {
-                const isSelected = leader.members.some(tm => tm.user_id === m.user_id);
-                return `
-                                <label class="team-member-checkbox" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem; border-radius: 4px; transition: background 0.2s ease;">
-                                    <input type="checkbox" 
-                                        value="${m.user_id}"
-                                        ${isSelected ? 'checked' : ''}
-                                        onchange="toggleTeamMember('${leaderId}', '${m.user_id}', '${m.display_name}')"
-                                        style="width: 16px; height: 16px;">
-                                    <span>${m.display_name}</span>
-                                </label>
-                            `;
-            }).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
         // ✅ 切換小隊成員選擇
         function toggleTeamMember(leaderId, memberId, memberName) {
             const leader = selectedLeaders.get(leaderId);
@@ -2164,7 +2391,6 @@
                 }
             }
         }
-
         // ✅ 修正：全選小隊成員
         function selectAllTeamMembers(leaderId) {
             const leader = selectedLeaders.get(leaderId);
@@ -2189,7 +2415,6 @@
 
             updateSelectedSummary();
         }
-
         // ✅ 修正：清除所有小隊成員
         function clearAllTeamMembers(leaderId) {
             const leader = selectedLeaders.get(leaderId);
@@ -2209,7 +2434,6 @@
 
             updateSelectedSummary();
         }
-
         // 切換成員選擇
         function toggleMemberSelection(userId, displayName, unit) {
             // 成員不能獨立存在，需要先有隊長
@@ -2260,7 +2484,6 @@
 
             renderAssignmentSelector();
         }
-
         // 全選單位為隊長
         function selectAllAsLeaders(unitId) {
             const unit = Object.keys(membersByUnit).find(u => u.replace(/\s+/g, '-') === unitId);
@@ -2281,21 +2504,6 @@
 
             renderAssignmentSelector();
         }
-
-        // 切換單位展開/收合
-        function toggleUnit(unitId) {
-            const content = document.getElementById(`unit-content-${unitId}`);
-            const icon = document.getElementById(`unit-icon-${unitId}`);
-
-            const isCurrentlyExpanded = content.style.display === 'block';
-            const newState = !isCurrentlyExpanded;
-
-            content.style.display = newState ? 'block' : 'none';
-            icon.textContent = newState ? '▲' : '▼';
-
-            currentUnitStates.set(unitId, newState);
-        }
-
         // ✅ 更新選擇摘要
         function updateSelectedSummary() {
             const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
@@ -2313,7 +2521,6 @@
 
 
         }
-
         // 確認指派人員
         async function confirmAssign() {
             const leaders = Array.from(selectedLeaders.values()).filter(s => s.role === 'leader');
@@ -2359,7 +2566,7 @@
             }
         }
 
-
+        // ==================== 進度回報管理 ====================
         // ✅ 修正：支援多階段派遣的進度回報（獨立角色判斷）
         function showProgressModal(missionId) {
             console.log('🔔 [showProgressModal] 打開進度回報視窗, missionId:', missionId);
@@ -2469,8 +2676,65 @@
             console.log('✅ 打開進度回報 Modal');
             showModal('progressModal');
         }
+        // ✅ 確保 openProgressModal 正確設定隱藏欄位
+        function openProgressModal(missionId) {
+            const mission = allMissions.find(m => m.id === missionId);
+            if (!mission) {
+                showToast('找不到該任務', 'error');
+                return;
+            }
 
+            const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
+            if (!myParticipation) {
+                showToast('您不在該任務的參與者名單中', 'warning');
+                return;
+            }
 
+            // ✅ 設定隱藏欄位的值
+            const missionIdElement = document.getElementById('progressMissionId');
+            if (missionIdElement) {
+                missionIdElement.value = missionId;
+                console.log('已設定 progressMissionId:', missionId);
+            } else {
+                console.error('找不到 progressMissionId 元素');
+            }
+
+            // 重置表單
+            const statusElement = document.getElementById('progressStatus');
+            const noteElement = document.getElementById('progressNote');
+
+            if (statusElement) statusElement.value = '進行中';
+            if (noteElement) noteElement.value = '';
+
+            // 顯示當前任務資訊
+            const modalTitle = document.querySelector('#progressModal .modal-header h2');
+            if (modalTitle) {
+                modalTitle.textContent = `回報進度 - ${mission.mission_title}`;
+            }
+
+            // 顯示最新進度
+            const progressHistory = myParticipation.progress_history || [];
+            if (progressHistory.length > 0) {
+                const latest = progressHistory[progressHistory.length - 1];
+                const infoDiv = document.getElementById('currentProgressInfo');
+                if (infoDiv) {
+                    infoDiv.innerHTML = `
+                        <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
+                            <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
+                            <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
+                            <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
+                                ${latest.note}
+                            </div>
+                            <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
+                                ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            showModal('progressModal');
+        }
         // ✅ 修正：提交進度回報（獨立階段處理）
         async function submitProgress() {
             try {
@@ -2556,157 +2820,6 @@
                 showToast('提交失敗：' + error.message, 'error');
             }
         }
-        // ✅ 確保 openProgressModal 正確設定隱藏欄位
-        function openProgressModal(missionId) {
-            const mission = allMissions.find(m => m.id === missionId);
-            if (!mission) {
-                showToast('找不到該任務', 'error');
-                return;
-            }
-
-            const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
-            if (!myParticipation) {
-                showToast('您不在該任務的參與者名單中', 'warning');
-                return;
-            }
-
-            // ✅ 設定隱藏欄位的值
-            const missionIdElement = document.getElementById('progressMissionId');
-            if (missionIdElement) {
-                missionIdElement.value = missionId;
-                console.log('已設定 progressMissionId:', missionId);
-            } else {
-                console.error('找不到 progressMissionId 元素');
-            }
-
-            // 重置表單
-            const statusElement = document.getElementById('progressStatus');
-            const noteElement = document.getElementById('progressNote');
-
-            if (statusElement) statusElement.value = '進行中';
-            if (noteElement) noteElement.value = '';
-
-            // 顯示當前任務資訊
-            const modalTitle = document.querySelector('#progressModal .modal-header h2');
-            if (modalTitle) {
-                modalTitle.textContent = `回報進度 - ${mission.mission_title}`;
-            }
-
-            // 顯示最新進度
-            const progressHistory = myParticipation.progress_history || [];
-            if (progressHistory.length > 0) {
-                const latest = progressHistory[progressHistory.length - 1];
-                const infoDiv = document.getElementById('currentProgressInfo');
-                if (infoDiv) {
-                    infoDiv.innerHTML = `
-                        <div style="background: var(--gray-100); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;">
-                            <div style="font-size: 0.875rem; color: #666;">最新狀態：</div>
-                            <div style="font-weight: 600; margin-top: 0.25rem;">${latest.status}</div>
-                            <div style="font-size: 0.875rem; color: #666; margin-top: 0.25rem;">
-                                ${latest.note}
-                            </div>
-                            <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
-                                ${new Date(latest.timestamp).toLocaleString('zh-TW')}
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
-            showModal('progressModal');
-        }
-
-        // 關閉報名
-        async function closeRecruitment(missionId) {
-            if (!confirm('確定要關閉報名嗎?')) return;
-
-            try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'closeRecruitment',
-                        sessionToken,
-                        missionId
-                    })
-                });
-
-                if (!response.ok) throw new Error('操作失敗');
-
-                const data = await response.json();
-                if (data.status === 'ok') {
-                    showToast('報名已關閉', 'success');
-                    await loadMissions();
-                } else {
-                    throw new Error(data.message || '操作失敗');
-                }
-            } catch (error) {
-                console.error('關閉報名失敗:', error);
-                showToast('關閉報名失敗: ' + error.message, 'error');
-            }
-        }
-        // 結案任務
-        async function completeMission(missionId) {
-            if (!confirm('確定要結案嗎?')) return;
-
-            try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'completeMission',
-                        sessionToken,
-                        missionId
-                    })
-                });
-
-                if (!response.ok) throw new Error('操作失敗');
-
-                const data = await response.json();
-                if (data.status === 'ok') {
-                    showToast('任務已結案', 'success');
-                    await loadMissions();
-                } else {
-                    throw new Error(data.message || '操作失敗');
-                }
-            } catch (error) {
-                console.error('結案失敗:', error);
-                showToast('結案失敗: ' + error.message, 'error');
-            }
-        }
-        // 刪除任務
-        async function deleteMission(missionId) {
-            if (!confirm('確定要刪除此任務嗎? 此操作無法復原!')) return;
-
-            try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'deleteMission',
-                        sessionToken,
-                        missionId
-                    })
-                });
-
-                if (!response.ok) throw new Error('刪除失敗');
-
-                const data = await response.json();
-                if (data.status === 'ok') {
-                    showToast('任務已刪除', 'success');
-                    await loadMissions();
-                } else {
-                    throw new Error(data.message || '刪除失敗');
-                }
-            } catch (error) {
-                console.error('刪除任務失敗:', error);
-                showToast('刪除任務失敗: ' + error.message, 'error');
-            }
-        }
-
         // ✅ 修正：顯示階段選擇 Modal（支援多階段獨立）
         function showStageSelectionModal(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
@@ -2825,7 +2938,6 @@
 
             showModal('stageSelectionModal');
         }
-
         // ✅ 修正：選擇特定階段進行回報
         function selectStage(missionId, assignmentNumber, role, leaderId) {
             closeModal('stageSelectionModal');
@@ -2859,7 +2971,7 @@
 
             openProgressModalForStage(missionId, assignment, member, role, leaderId);
         }
-        // ✅ 新增：为特定阶段打开进度回报
+        // 为特定阶段打开进度回报
         function openProgressModalForStage(missionId, assignment, member, role, leaderId) {
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) return;
@@ -2927,6 +3039,8 @@
 
             showModal('progressModal');
         }
+        
+        // ==================== 任務詳情與參與者管理 ====================
         // ✅ 完全重寫：支援多階段派遣的詳情頁面
         function viewMissionDetail(missionId) {
             const mission = allMissions.find(m => m.id === missionId);
@@ -2977,7 +3091,7 @@
             document.getElementById('missionDetailContent').innerHTML = detailHTML;
             showModal('detailModal');
         }
-        // ✅ 新增：渲染派遣階段詳情
+        // 渲染派遣階段詳情
         function renderAssignmentPhaseDetail(assignment, isCurrentPhase) {
             const phaseDate = new Date(assignment.assigned_at);
             const phaseColor = isCurrentPhase ? 'var(--primary)' : 'var(--gray-600)';
@@ -3091,172 +3205,6 @@
                     `}
                 </div>
             `;
-        }
-
-        // 編輯任務
-        function editMission(missionId) {
-            const mission = allMissions.find(m => m.id === missionId);
-            if (!mission) {
-                showToast('找不到任務', 'error');
-                return;
-            }
-
-            // 重置並填充表單
-            document.getElementById('createMissionForm').reset();
-            document.getElementById('modalTitle').textContent = '編輯任務';
-            document.getElementById('missionTitle').value = mission.mission_title;
-            document.getElementById('missionType').value = mission.mission_type;
-            document.getElementById('missionDescription').value = mission.mission_description || '';
-
-            // 處理日期格式
-            const missionDate = new Date(mission.mission_date);
-            document.getElementById('missionDate').value = missionDate.toISOString().slice(0, 16);
-
-            if (mission.recruitment_deadline) {
-                const deadline = new Date(mission.recruitment_deadline);
-                document.getElementById('recruitmentDeadline').value = deadline.toISOString().slice(0, 16);
-            } else {
-                document.getElementById('recruitmentDeadline').value = '';
-            }
-
-            document.getElementById('isUrgent').checked = mission.is_urgent || false;
-            document.getElementById('allowRecruitment').checked = mission.allow_recruitment || false;
-
-            // 儲存任務 ID 用於提交
-            currentMissionId = missionId;
-
-            showModal('createMissionModal');
-        }
-        // 刪除或修改 updateSingleMission 函數
-        async function updateSingleMission(missionId) {
-            try {
-                // 改為使用現有的 getMissions 然後過濾出單個任務
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'getMissions',
-                        sessionToken
-                    })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.status === 'ok') {
-                        const mission = data.missions.find(m => m.id === missionId);
-                        if (mission) {
-                            // 更新本地任務數據
-                            const index = allMissions.findIndex(m => m.id === missionId);
-                            if (index !== -1) {
-                                allMissions[index] = mission;
-                                updateMissionCard(missionId, mission);
-                                return true;
-                            }
-                        }
-                    }
-                }
-                return false;
-            } catch (error) {
-                console.error('局部更新失敗:', error);
-                return false;
-            }
-        }
-        // 局部更新任務卡片
-        function updateMissionCard(missionId, missionData) {
-            // 找到並更新對應的任務卡片
-            const cardElements = document.querySelectorAll(`[id*="mission-${missionId}-"]`);
-
-            cardElements.forEach(element => {
-                if (element.classList.contains('mission-card')) {
-                    const newCardHTML = createMissionCard(missionData);
-                    element.outerHTML = newCardHTML;
-                }
-            });
-        }
-        // 改進所有操作函數，使用局部更新
-        async function handleOperation(operation, missionId, successMessage) {
-            // 先保存狀態
-            saveUIState();
-
-            try {
-                // 嘗試局部更新
-                const localUpdateSuccess = await updateSingleMission(missionId);
-
-                if (!localUpdateSuccess) {
-                    // 如果局部更新失敗，回退到完整刷新
-                    await loadMissions();
-                }
-
-                showToast(successMessage, 'success');
-            } catch (error) {
-                console.error('操作失敗:', error);
-                showToast('操作失敗: ' + error.message, 'error');
-                // 失敗時也恢復狀態
-                restoreUIState();
-            }
-        }
-
-
-        // 載入成員選項
-        function loadHistoryMemberOptions() {
-            const datalist = document.getElementById('memberOptions');
-            const allParticipants = new Set();
-
-            // 收集所有參與過的成員
-            allMissions.forEach(m => {
-                if (m.participants) {
-                    m.participants.forEach(p => allParticipants.add(p.display_name));
-                }
-                // 也收集被指派的成員
-                if (m.assignments) {
-                    m.assignments.forEach(assignment => {
-                        if (assignment.members) {
-                            assignment.members.forEach(member => {
-                                allParticipants.add(member.display_name);
-                                if (member.team_members) {
-                                    member.team_members.forEach(tm => allParticipants.add(tm.display_name));
-                                }
-                            });
-                        }
-                    });
-                }
-            });
-
-            // 清空並重新填充選項
-            datalist.innerHTML = '';
-            Array.from(allParticipants).sort().forEach(name => {
-                if (name && name.trim()) {
-                    datalist.innerHTML += `<option value="${name}">`;
-                }
-            });
-        }
-
-        // 計算不重複的參與人數
-        function getUniqueParticipantCount(mission) {
-            const uniqueUsers = new Set();
-
-            // 加入報名者
-            if (mission.participants) {
-                mission.participants.forEach(p => uniqueUsers.add(p.user_id));
-            }
-
-            // 加入所有被指派者（包含隊長和成員）
-            if (mission.assignments) {
-                mission.assignments.forEach(assignment => {
-                    if (assignment.members) {
-                        assignment.members.forEach(m => {
-                            uniqueUsers.add(m.user_id);
-                            // 加入小隊成員
-                            if (m.team_members) {
-                                m.team_members.forEach(tm => uniqueUsers.add(tm.user_id));
-                            }
-                        });
-                    }
-                });
-            }
-
-            return uniqueUsers.size;
         }
         // 查看參與成員 Modal 
         async function showParticipantsModal(missionId) {
@@ -3379,8 +3327,34 @@
             document.getElementById('participantModalContent').innerHTML = html;
             showModal('participantModal');
         }
+        // 計算不重複的參與人數
+        function getUniqueParticipantCount(mission) {
+            const uniqueUsers = new Set();
 
+            // 加入報名者
+            if (mission.participants) {
+                mission.participants.forEach(p => uniqueUsers.add(p.user_id));
+            }
 
+            // 加入所有被指派者（包含隊長和成員）
+            if (mission.assignments) {
+                mission.assignments.forEach(assignment => {
+                    if (assignment.members) {
+                        assignment.members.forEach(m => {
+                            uniqueUsers.add(m.user_id);
+                            // 加入小隊成員
+                            if (m.team_members) {
+                                m.team_members.forEach(tm => uniqueUsers.add(tm.user_id));
+                            }
+                        });
+                    }
+                });
+            }
+
+            return uniqueUsers.size;
+        }
+
+        // ==================== 篩選與搜索功能 ====================
         // 套用篩選
         function applyHistoryFilters() {
             const keyword = document.getElementById('historySearchInput').value.toLowerCase();
@@ -3417,7 +3391,6 @@
 
             renderMissionList('historyMissions', filtered);
         }
-
         // 清除篩選時也要清空輸入框
         function clearHistoryFilters() {
             document.getElementById('historySearchInput').value = '';
@@ -3426,74 +3399,42 @@
             document.getElementById('historyEndDate').value = '';
             renderMissions();
         }
-        function showMemberStatsModal() {
-            // 實作成員統計功能
-            showToast('成員統計功能開發中', 'info');
-        }
-        // 切換標籤頁
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        // 載入成員選項
+        function loadHistoryMemberOptions() {
+            const datalist = document.getElementById('memberOptions');
+            const allParticipants = new Set();
 
-            event.target.classList.add('active');
-            document.getElementById(tabName + 'Tab').classList.add('active');
-        }
-        // 顯示建立任務 Modal
-        function showCreateMissionModal() {
-            document.getElementById('createMissionForm').reset();
-            document.getElementById('modalTitle').textContent = '建立新案件';
-            currentMissionId = null;
-            showModal('createMissionModal');
-        }
-        // 顯示/關閉 Modal
-        function showModal(modalId) {
-            document.getElementById(modalId).classList.add('show');
-            document.body.style.overflow = 'hidden';
-        }
-        // 關閉 Modal
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
-            document.body.style.overflow = 'auto';
-        }
-        // 顯示 Toast 訊息
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
+            // 收集所有參與過的成員
+            allMissions.forEach(m => {
+                if (m.participants) {
+                    m.participants.forEach(p => allParticipants.add(p.display_name));
+                }
+                // 也收集被指派的成員
+                if (m.assignments) {
+                    m.assignments.forEach(assignment => {
+                        if (assignment.members) {
+                            assignment.members.forEach(member => {
+                                allParticipants.add(member.display_name);
+                                if (member.team_members) {
+                                    member.team_members.forEach(tm => allParticipants.add(tm.display_name));
+                                }
+                            });
+                        }
+                    });
+                }
+            });
 
-            toastMessage.textContent = message;
-            toast.className = `toast toast-${type}`;
-            toast.classList.add('show');
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-        // 根據用戶角色初始化即時更新或刷新按鈕
-        function initRealtimeOrRefresh(userData) {
-            if (!userData || !userData.role) return;
-
-            // ✅ 所有人都顯示刷新按鈕
-            const refreshBtn = document.getElementById('refreshBtn');
-            if (refreshBtn) {
-                refreshBtn.style.display = 'inline-block';
-                refreshBtn.onclick = async () => {
-                    refreshBtn.disabled = true;
-                    refreshBtn.textContent = '刷新中...';
-                    await loadMissions();
-                    showToast('資料已更新', 'success');
-                    refreshBtn.disabled = false;
-                    refreshBtn.textContent = '🔄 刷新資料';
-                };
-            }
-
-            // 管理員額外設置即時更新
-            if (userData.role === '管理') {
-                setupRealtimeUpdates();
-            }
+            // 清空並重新填充選項
+            datalist.innerHTML = '';
+            Array.from(allParticipants).sort().forEach(name => {
+                if (name && name.trim()) {
+                    datalist.innerHTML += `<option value="${name}">`;
+                }
+            });
         }
 
+        // ==================== UI狀態管理 ====================
         // 保存 UI 狀態
-        // 改進的 saveUIState 函數
         function saveUIState() {
             console.log('💾 [狀態保存] 開始...');
 
@@ -3592,7 +3533,58 @@
             }, 150);
         }
 
-        // ✅ 新增：定期檢查報名截止時間（每分鐘檢查一次）
+        // ==================== 模態框與UI控制 ====================
+        // 顯示/關閉 Modal
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        // 關閉 Modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+            document.body.style.overflow = 'auto';
+        }
+        // 顯示 Toast 訊息
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toastMessage.textContent = message;
+            toast.className = `toast toast-${type}`;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        // 切換標籤頁
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+        // 顯示建立任務 Modal
+        function showCreateMissionModal() {
+            document.getElementById('createMissionForm').reset();
+            document.getElementById('modalTitle').textContent = '建立新案件';
+            currentMissionId = null;
+            showModal('createMissionModal');
+        }
+        // 顯示成員統計 Modal
+        function showMemberStatsModal() {
+            // 實作成員統計功能
+            showToast('成員統計功能開發中', 'info');
+        }
+
+        // ==================== 工具與輔助函數 ====================
+        // 返回導航頁面
+        function goBack() {
+            window.location.href = 'navigation.html';
+        }
+        
+        // 定期檢查報名截止時間（每分鐘檢查一次）
         setInterval(() => {
             const now = new Date();
             let needsUpdate = false;
@@ -3616,23 +3608,7 @@
                 renderMissions();
             }
         }, 60000); // 每分鐘檢查一次
-
-        // 返回導航頁面
-        function goBack() {
-            window.location.href = 'navigation.html';
-        }
-        // 獨立的刷新函數
-        async function refreshData() {
-            const refreshBtn = document.querySelector('.btn-secondary[onclick="refreshData()"]');
-            if (refreshBtn) {
-                refreshBtn.disabled = true;
-                refreshBtn.textContent = '刷新中...';
-                await loadMissions();
-                showToast('資料已更新', 'success');
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = '🔄 刷新資料';
-            }
-        }
+        // 點擊模態框外部區域關閉
         document.addEventListener('click', function (event) {
             if (event.target.classList.contains('modal')) {
                 closeModal(event.target.id);
