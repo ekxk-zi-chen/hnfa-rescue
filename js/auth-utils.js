@@ -6,7 +6,7 @@
 
 // ============ 配置常數 ============
 const AUTH_CONFIG = {
-    API_BASE: "https://hnfa-rescue.ververcel.app/api/verify",
+    API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
     SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
 };
