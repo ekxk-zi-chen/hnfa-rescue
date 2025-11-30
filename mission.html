@@ -830,10 +830,8 @@
                 <button class="close-btn" onclick="closeModal('progressModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- ✅ 關鍵：隱藏欄位存放任務 ID -->
                 <input type="hidden" id="progressMissionId">
-
-                <!-- 顯示當前進度資訊 -->
+                
                 <div id="currentProgressInfo"></div>
 
                 <!-- 狀態選擇 -->
@@ -849,22 +847,37 @@
                     </select>
                 </div>
 
+                <!-- ✅ 新增：快速選擇下拉選單 -->
+                <div class="form-group">
+                    <label for="quickActionSelect">快速動作選擇</label>
+                    <select id="quickActionSelect" class="form-control" onchange="fillQuickAction()">
+                        <option value="">-- 選擇快速動作 --</option>
+                        <option value="到達現場">🚗 到達現場</option>
+                        <option value="接觸患者">👤 接觸患者</option>
+                        <option value="救出患者">🆘 救出患者</option>
+                        <option value="現場評估完成">📋 現場評估完成</option>
+                        <option value="醫療處置中">💊 醫療處置中</option>
+                        <option value="準備後送">🚑 準備後送</option>
+                        <option value="任務完成">✅ 任務完成</option>
+                    </select>
+                </div>
+
                 <!-- 進度說明 -->
                 <div class="form-group">
                     <label for="progressNote">進度說明 <span style="color: red;">*</span></label>
-                    <textarea id="progressNote" class="form-control" rows="4" placeholder="請詳細描述當前進度、遇到的問題或需要的支援..."
-                        required></textarea>
+                    <textarea id="progressNote" class="form-control" rows="4" 
+                            placeholder="請詳細描述當前進度、遇到的問題或需要的支援..." required></textarea>
                 </div>
 
                 <!-- 提示訊息 -->
-                <div
-                    style="background: rgba(33, 150, 243, 0.1); padding: 0.75rem; border-radius: 6px; margin-top: 1rem;">
+                <div style="background: rgba(33, 150, 243, 0.1); padding: 0.75rem; border-radius: 6px; margin-top: 1rem;">
                     <div style="font-size: 0.875rem; color: #666;">
                         <strong>💡 提示：</strong>
                         <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
                             <li>回報時間將自動記錄</li>
                             <li>所有進度記錄都會保存在任務歷史中</li>
                             <li>選擇「已完成」表示您的部分已完成</li>
+                            <li>可使用快速動作選擇常用回報項目</li>
                         </ul>
                     </div>
                 </div>
@@ -2644,7 +2657,7 @@
             // 重置表單
             document.getElementById('progressStatus').value = '進行中';
             document.getElementById('progressNote').value = '';
-
+            resetProgressForm();
             // 顯示當前派遣資訊和角色
             const modalTitle = document.querySelector('#progressModal .modal-header h2');
             if (modalTitle) {
@@ -2702,7 +2715,7 @@
             // 重置表單
             const statusElement = document.getElementById('progressStatus');
             const noteElement = document.getElementById('progressNote');
-
+            resetProgressForm();
             if (statusElement) statusElement.value = '進行中';
             if (noteElement) noteElement.value = '';
 
@@ -2944,6 +2957,8 @@
 
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) return;
+            // ✅ 新增：根據任務類型載入對應的快速動作
+            addCustomQuickActions(mission.mission_type);
 
             const assignment = mission.assignments?.find(a => a.assignment_number === assignmentNumber);
             if (!assignment) {
@@ -2975,6 +2990,8 @@
         function openProgressModalForStage(missionId, assignment, member, role, leaderId) {
             const mission = allMissions.find(m => m.id === missionId);
             if (!mission) return;
+            // ✅ 新增：根據任務類型載入對應的快速動作
+            addCustomQuickActions(mission.mission_type);
 
             const missionIdElement = document.getElementById('progressMissionId');
             if (missionIdElement) {
@@ -3039,7 +3056,155 @@
 
             showModal('progressModal');
         }
-        
+        //  ==================== 快速動作選擇功能 ====================
+        // 根據任務類型動態載入快速動作選項
+        function addCustomQuickActions(missionType) {
+            const quickSelect = document.getElementById('quickActionSelect');
+            if (!quickSelect) return;
+            
+            // 保存基本選項
+            const basicOptions = [
+                { value: '', text: '-- 選擇快速動作 --' },
+                { value: '到達現場', text: '🚗 到達現場' },
+                { value: '接觸患者', text: '👤 接觸患者' },
+                { value: '救出患者', text: '🆘 救出患者' },
+                { value: '現場評估完成', text: '📋 現場評估完成' },
+                { value: '醫療處置中', text: '💊 醫療處置中' },
+                { value: '準備後送', text: '🚑 準備後送' },
+                { value: '任務完成', text: '✅ 任務完成' }
+            ];
+            
+            // 清空所有選項
+            quickSelect.innerHTML = '';
+            
+            // 重新添加基本選項
+            basicOptions.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                quickSelect.appendChild(option);
+            });
+            
+            // 根據任務類型添加特定選項
+            let typeSpecificActions = [];
+            
+            switch(missionType) {
+                case '救援':
+                    typeSpecificActions = [
+                        { value: '傷患檢傷完成', text: '🏥 傷患檢傷完成' },
+                        { value: '急救處置中', text: '💉 急救處置中' },
+                        { value: '準備後送醫院', text: '🚑 準備後送醫院' },
+                        { value: '請求醫療支援', text: '🆘 請求醫療支援' },
+                        { value: '現場安全確認', text: '🛡️ 現場安全確認' }
+                    ];
+                    break;
+                case '訓練':
+                    typeSpecificActions = [
+                        { value: '訓練簡報完成', text: '📋 訓練簡報完成' },
+                        { value: '分組練習中', text: '👥 分組練習中' },
+                        { value: '訓練檢討中', text: '📝 訓練檢討中' },
+                        { value: '器材準備完成', text: '🔧 器材準備完成' },
+                        { value: '訓練成果驗收', text: '⭐ 訓練成果驗收' }
+                    ];
+                    break;
+                case '勤務':
+                    typeSpecificActions = [
+                        { value: '勤務交接完成', text: '🔄 勤務交接完成' },
+                        { value: '巡邏中', text: '🚓 巡邏中' },
+                        { value: '定點執勤中', text: '📍 定點執勤中' },
+                        { value: '狀況排除中', text: '⚡ 狀況排除中' },
+                        { value: '勤務報告完成', text: '📄 勤務報告完成' }
+                    ];
+                    break;
+                case '演習':
+                    typeSpecificActions = [
+                        { value: '演習情境啟動', text: '🎬 演習情境啟動' },
+                        { value: '演習進行中', text: '📹 演習進行中' },
+                        { value: '演習暫停', text: '⏸️ 演習暫停' },
+                        { value: '演習檢討中', text: '📊 演習檢討中' },
+                        { value: '演習結束', text: '🏁 演習結束' }
+                    ];
+                    break;
+                default:
+                    typeSpecificActions = [
+                        { value: '裝備檢查完成', text: '🔧 裝備檢查完成' },
+                        { value: '安全區域建立', text: '🛡️ 安全區域建立' },
+                        { value: '等待指揮官指示', text: '📞 等待指揮官指示' },
+                        { value: '人員休息中', text: '☕ 人員休息中' }
+                    ];
+            }
+            
+            // 添加分隔線和類型特定選項
+            if (typeSpecificActions.length > 0) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = `─── ${missionType}專用 ───`;
+                quickSelect.appendChild(separator);
+                
+                typeSpecificActions.forEach(action => {
+                    const option = document.createElement('option');
+                    option.value = action.value;
+                    option.textContent = action.text;
+                    quickSelect.appendChild(option);
+                });
+            }
+        }
+        // 根據快速選擇下拉選單自動填充進度說明
+        function fillQuickAction() {
+            const quickSelect = document.getElementById('quickActionSelect');
+            const progressNote = document.getElementById('progressNote');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            const selectedValue = quickSelect.value;
+            
+            if (selectedValue) {
+                // 根據選擇的動作自動填充文字
+                progressNote.value = selectedValue;
+                
+                // 根據動作自動設定對應的狀態
+                switch(selectedValue) {
+                    case '到達現場':
+                    case '接觸患者':
+                    case '現場評估完成':
+                    case '訓練簡報完成':
+                    case '勤務交接完成':
+                    case '演習情境啟動':
+                        progressStatus.value = '進行中';
+                        break;
+                    case '救出患者':
+                    case '醫療處置中':
+                    case '準備後送':
+                    case '分組練習中':
+                    case '巡邏中':
+                    case '演習進行中':
+                        progressStatus.value = '進行中';
+                        break;
+                    case '任務完成':
+                    case '訓練成果驗收':
+                    case '勤務報告完成':
+                    case '演習結束':
+                        progressStatus.value = '已完成';
+                        break;
+                    default:
+                        progressStatus.value = '進行中';
+                }
+                
+                // 清空快速選擇，以便下次使用
+                setTimeout(() => {
+                    quickSelect.value = '';
+                }, 100);
+            }
+        }
+        // 重置進度回報表單
+        function resetProgressForm() {
+            const quickSelect = document.getElementById('quickActionSelect');
+            if (quickSelect) {
+                quickSelect.value = ''; // 只清空選擇，保留選項
+            }
+            document.getElementById('progressStatus').value = '進行中';
+            document.getElementById('progressNote').value = '';
+            document.getElementById('currentProgressInfo').innerHTML = '';
+        }
         // ==================== 任務詳情與參與者管理 ====================
         // ✅ 完全重寫：支援多階段派遣的詳情頁面
         function viewMissionDetail(missionId) {
