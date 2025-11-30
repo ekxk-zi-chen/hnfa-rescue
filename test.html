@@ -820,7 +820,7 @@
                         <option value="在隊">在隊</option>
                         <option value="借出">借出</option>
                         <option value="維修中">維修中</option>
-                        
+
                     </select>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
@@ -1109,15 +1109,10 @@
         </div>
     </div>
     <script>
-        // 配置常數
-        const CONFIG = {
-            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
-            SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
-            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
-        };
+
 
         // 全域變數
-        let currentUser = null;
+
         let equipmentData = [];
         let supabaseRealtime = null;
         // 新增全域變數
@@ -1133,18 +1128,13 @@
 
         async function initializeApp() {
             try {
-                // 檢查 Session Token
-                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
-                if (!sessionToken) {
-                    window.location.href = 'index.html';
-                    return;
-                }
+                // 使用統一的認證初始化
+                await initializeAuth();
+
+                if (!currentUser) return; // 認證失敗已跳轉
 
                 // 初始化共享的 Supabase 客戶端
                 await initializeSupabaseClient();
-
-                // 驗證用戶身份並獲取角色
-                await verifyUser(sessionToken);
 
                 // 啟動線上狀態追蹤
                 await setupPresenceTracking();
@@ -1166,7 +1156,6 @@
                 }, 2000);
             }
         }
-
         // 新增：初始化共享的 Supabase 客戶端
         async function initializeSupabaseClient() {
             if (!supabaseClient) {
@@ -1521,42 +1510,7 @@
             return '';
         }
 
-        async function verifyUser(sessionToken) {
-            try {
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ sessionToken })
-                });
 
-                if (!response.ok) {
-                    throw new Error('驗證失敗');
-                }
-
-                const data = await response.json();
-                if (data.status !== 'ok') {
-                    throw new Error('用戶驗證失敗');
-                }
-
-                currentUser = {
-                    userId: data.userId,
-                    displayName: data.displayName,
-                    role: data.role || '一般用戶'
-                };
-
-                sessionStorage.setItem('sessionToken', sessionToken);
-                if (localStorage.getItem('sessionToken')) {
-                    localStorage.removeItem('sessionToken');
-                }
-
-                updateUserInterface();
-            } catch (error) {
-                console.error('用戶驗證錯誤:', error);
-                throw error;
-            }
-        }
         // 載入裝備資料
         async function loadEquipmentData() {
             try {
@@ -1655,19 +1609,7 @@
                 }
             ];
         }
-        function updateUserInterface() {
-            document.getElementById('userName').textContent = currentUser.displayName;
-            document.getElementById('userRole').textContent = currentUser.role;
 
-            // 根據權限顯示/隱藏功能
-            if (currentUser.role !== '一般用戶') {
-                document.getElementById('adminActions').style.display = 'block';
-            }
-
-            if (currentUser.role === '管理') {
-                document.getElementById('userManagementSection').style.display = 'block';
-            }
-        }
         // 設置事件監聽器
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
@@ -2372,19 +2314,6 @@
             document.body.style.overflow = 'auto';
         }
 
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
-
-            toastMessage.textContent = message;
-            toast.className = `toast toast-${type}`;
-            toast.classList.add('show');
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-
         function generateId() {
             return Date.now().toString(36) + Math.random().toString(36).substr(2);
         }
@@ -2426,18 +2355,6 @@
             });
         }
 
-        // 在登出時清理
-        function logout() {
-            // 清理線上狀態
-            if (presenceChannel) {
-                presenceChannel.untrack();
-                presenceChannel.unsubscribe();
-            }
-
-            sessionStorage.removeItem('sessionToken');
-            localStorage.removeItem('sessionToken');
-            window.location.href = 'index.html';
-        }
 
         // 修改切換說明書顯示的函數
         function toggleManual(button, equipmentId) {
@@ -3025,7 +2942,7 @@
         }
 
         // 顯示轉借 Modal
-        
+
         async function showTransferModal(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
@@ -3182,18 +3099,18 @@
                 showToast('轉借失敗: ' + error.message, 'error');
             }
         });
-        
-        
+
+
         // 顯示批量轉借 Modal
         async function showBatchTransferModal() {
             // 重置表單
             document.getElementById('transferForm').reset();
             document.getElementById('transferTo').value = '';
             document.getElementById('transferNote').value = '';
-            
+
             // 載入成員列表
             await loadMemberListForTransfer();
-            
+
             // 載入批量記錄
             await loadBatchTransferRecords();
             showModal('transferModal');
@@ -3530,10 +3447,8 @@
                 }
             });
         }
-        // ✅ 新增：返回導航頁面函數
-        function goBack() {
-            window.location.href = 'navigation.html';
-        }
+
+
     </script>
 
 </body>
