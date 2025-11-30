@@ -1,15 +1,19 @@
 // auth.js - 統一認證模塊
+console.log('🔧 auth.js 開始加載...');
+
+// auth.js - 統一認證模塊
 const CONFIG = {
     API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
     SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
 };
-
+console.log('🔧 CONFIG 已定義');
 // 全局變量
 let currentUser = null;
 
 // 驗證用戶身份
 async function verifyUser(sessionToken) {
+    console.log('🔧 verifyUser 被調用');
     try {
         const response = await fetch(CONFIG.API_BASE, {
             method: 'POST',
@@ -56,6 +60,7 @@ function checkSessionAndRedirect() {
 
 // 初始化用戶認證
 async function initializeAuth() {
+    console.log('🔧 initializeAuth 被調用');
     const sessionToken = checkSessionAndRedirect();
     if (!sessionToken) return null;
 
@@ -144,3 +149,4 @@ window.logout = logout;
 window.goBack = goBack;
 window.showToast = showToast;
 window.getCurrentUser = getCurrentUser;
+console.log('🔧 auth.js 加載完成，函數已導出');
