@@ -820,7 +820,7 @@
                         <option value="在隊">在隊</option>
                         <option value="借出">借出</option>
                         <option value="維修中">維修中</option>
-                        
+
                     </select>
                 </div>
                 <button class="btn btn-secondary" style="width: 100%; margin-top: 1rem;"
@@ -1108,199 +1108,51 @@
             </div>
         </div>
     </div>
+    <script src="js/auth-utils.js"></script>
     <script>
-        // 配置常數
-        const CONFIG = {
-            API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
-            SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
-            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
-        };
+
 
         // 全域變數
-        let currentUser = null;
+
         let equipmentData = [];
         let supabaseRealtime = null;
-        // 新增全域變數
-        let onlineUsers = new Map(); // 儲存線上用戶
-        let presenceChannel = null;
-        let supabaseClient = null;
+
         // 批量操作暫存
         let currentBatches = {};
-        // 初始化應用
+
+        // 引用驗證邏輯
+
         document.addEventListener('DOMContentLoaded', async function () {
-            await initializeApp();
-        });
+            await AuthUtils.initializeApp({
+                onUserVerified: async (user) => {
+                    console.log('✅ 用戶驗證成功:', user.displayName);
+                    await loadEquipmentData();
+                },
 
-        async function initializeApp() {
-            try {
-                // 檢查 Session Token
-                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
-                if (!sessionToken) {
-                    window.location.href = 'index.html';
-                    return;
-                }
+                onInitComplete: async (user) => {
+                    console.log('✅ 初始化完成');
 
-                // 初始化共享的 Supabase 客戶端
-                await initializeSupabaseClient();
-
-                // 驗證用戶身份並獲取角色
-                await verifyUser(sessionToken);
-
-                // 啟動線上狀態追蹤
-                await setupPresenceTracking();
-
-                // 載入裝備資料
-                await loadEquipmentData();
-
-                // 設置事件監聽器
-                setupEventListeners();
-
-                // 根據用戶角色決定是否啟動實時更新
-                initRealtimeOrRefresh(currentUser);
-
-            } catch (error) {
-                console.error('初始化失敗:', error);
-                showToast('初始化失敗，請重新登入', 'error');
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
-            }
-        }
-
-        // 新增：初始化共享的 Supabase 客戶端
-        async function initializeSupabaseClient() {
-            if (!supabaseClient) {
-                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
-                supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-                    realtime: {
-                        params: {
-                            eventsPerSecond: 5
-                        }
-                    }
-                });
-            }
-            return supabaseClient;
-        }
-
-
-        // 設定線上狀態追蹤
-        async function setupPresenceTracking() {
-            try {
-                const supabasePresence = await initializeSupabaseClient();
-
-                const userKey = `${currentUser.displayName}-${Date.now()}`;
-
-                presenceChannel = supabasePresence.channel('online-users', {
-                    config: {
-                        presence: {
-                            key: userKey
-                        }
-                    }
-                });
-
-                presenceChannel
-                    .on('presence', { event: 'sync' }, () => {
-                        console.log('[Presence] 線上用戶同步完成');
-                        updateOnlineUsers();
-                    })
-                    .on('presence', { event: 'join' }, ({ newPresences }) => {
-                        const names = newPresences.map(p => p.display_name).filter(Boolean);
-                        console.log('[Presence] 用戶加入:', names);
-                        handleUserJoin(newPresences);
-                    })
-                    .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                        const names = leftPresences.map(p => p.display_name).filter(Boolean);
-                        console.log('[Presence] 用戶離開:', names);
-                        handleUserLeave(leftPresences);
-                    })
-                    .subscribe(async (status) => {
-                        if (status === 'SUBSCRIBED') {
-                            await presenceChannel.track({
-                                display_name: currentUser.displayName,
-                                role: currentUser.role,
-                                online_at: new Date().toISOString()
-                            });
-                            console.log('[Presence] 線上狀態追蹤已啟動 - 當前用戶:', currentUser.displayName);
-                        }
+                    // 更新 UI
+                    AuthUtils.updateUserInterface({
+                        userNameSelector: '#userName',
+                        userRoleSelector: '#userRole',
+                        adminActionsSelector: '#adminActions',
+                        userManagementSelector: '#userManagementSection'
                     });
 
-            } catch (error) {
-                console.error('線上狀態追蹤失敗:', error);
-            }
-        }
-        // 處理用戶加入
-        function handleUserJoin(newPresences) {
-            const names = newPresences.map(p => p.display_name).filter(name =>
-                name && name !== currentUser.displayName
-            );
-            console.log('[Presence] 用戶加入:', names);
-            // 不直接操作 onlineUsers，等待 sync 事件
-        }
+                    // 更新線上用戶
+                    AuthUtils.updateOnlineUsersDisplay({
+                        onlineCountSelector: '#onlineCount'
+                    });
 
-        // 處理用戶離開
-        function handleUserLeave(leftPresences) {
-            const names = leftPresences.map(p => p.display_name).filter(Boolean);
-            console.log('[Presence] 用戶離開:', names);
-            // 不直接操作 onlineUsers，等待 sync 事件
-        }
+                    setupEventListeners();
+                    initRealtimeOrRefresh(user);
+                },
 
-        // 修正：更新線上用戶顯示
-        function updateOnlineDisplay() {
-            const onlineCount = onlineUsers.size + 1; // +1 包含自己
-            console.log(`[線上顯示] 總人數: ${onlineCount}, 其他用戶: ${onlineUsers.size}`);
-
-            document.getElementById('onlineCount').textContent = onlineCount;
-
-            // 如果是在線管理員，顯示詳細資訊
-            if (currentUser.role === '管理') {
-                showDetailedOnlineInfo();
-            }
-        }
-
-        // 管理員詳細資訊顯示
-        function showDetailedOnlineInfo() {
-            const totalUsers = onlineUsers.size + 1;
-            const adminUsers = Array.from(onlineUsers.values()).filter(user => user.role === '管理').length;
-            const totalAdmins = adminUsers + (currentUser.role === '管理' ? 1 : 0);
-            const normalUsers = totalUsers - totalAdmins;
-
-            console.log(`[線上統計] 總人數: ${totalUsers}, 管理員: ${totalAdmins}, 一般用戶: ${normalUsers}`);
-
-            if (document.getElementById('adminOnlineInfo')) {
-                document.getElementById('adminOnlineInfo').innerHTML = `
-            <div style="font-size: 0.75rem; line-height: 1.4;">
-                <div>管理員: ${totalAdmins} 人</div>
-                <div>一般用戶: ${normalUsers} 人</div>
-                <div>總線上: ${totalUsers} 人</div>
-            </div>
-        `;
-            }
-        }
-        // 更新線上用戶列表
-        function updateOnlineUsers() {
-            if (!presenceChannel) return;
-
-            const state = presenceChannel.presenceState();
-            const userCount = Object.keys(state).length;
-            console.log(`[Presence] 當前狀態: ${userCount} 個用戶在線`);
-
-            onlineUsers.clear();
-
-            Object.values(state).forEach(presences => {
-                presences.forEach(presence => {
-                    // 排除自己，並且確保有 display_name
-                    if (presence.display_name && presence.display_name !== currentUser.displayName) {
-                        onlineUsers.set(presence.display_name, {
-                            display_name: presence.display_name,
-                            role: presence.role,
-                            joinTime: new Date(presence.online_at || Date.now())
-                        });
-                    }
-                });
+                needsPresence: true,
+                needsRealtime: false
             });
-
-            updateOnlineDisplay();
-        }
+        });
 
 
         // 資源使用統計
@@ -1367,11 +1219,9 @@
 
             if (userData.role === '管理') {
                 setupRealtimeUpdates();
-                // 隱藏手動刷新按鈕（如果有的話）
                 const refreshBtn = document.getElementById('refreshBtn');
                 if (refreshBtn) refreshBtn.style.display = 'none';
             } else {
-                // 顯示手動刷新按鈕
                 const refreshBtn = document.getElementById('refreshBtn');
                 if (refreshBtn) {
                     refreshBtn.style.display = 'block';
@@ -1379,7 +1229,6 @@
                 }
             }
         }
-
         // 修改：設定 Realtime 訂閱 - 使用共享客戶端
         async function setupRealtimeUpdates() {
             try {
@@ -1521,64 +1370,11 @@
             return '';
         }
 
-        async function verifyUser(sessionToken) {
-            try {
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ sessionToken })
-                });
 
-                if (!response.ok) {
-                    throw new Error('驗證失敗');
-                }
-
-                const data = await response.json();
-                if (data.status !== 'ok') {
-                    throw new Error('用戶驗證失敗');
-                }
-
-                currentUser = {
-                    userId: data.userId,
-                    displayName: data.displayName,
-                    role: data.role || '一般用戶'
-                };
-
-                sessionStorage.setItem('sessionToken', sessionToken);
-                if (localStorage.getItem('sessionToken')) {
-                    localStorage.removeItem('sessionToken');
-                }
-
-                updateUserInterface();
-            } catch (error) {
-                console.error('用戶驗證錯誤:', error);
-                throw error;
-            }
-        }
         // 載入裝備資料
         async function loadEquipmentData() {
             try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                console.log('載入裝備資料，sessionToken:', sessionToken);
-
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'getEquipment',
-                        sessionToken
-                    })
-                });
-
-                console.log('API 回應狀態:', response.status);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
+                const data = await AuthUtils.callAPI('getEquipment');
                 console.log('API 回應資料:', data);
 
                 if (data.status === 'ok') {
@@ -1655,19 +1451,7 @@
                 }
             ];
         }
-        function updateUserInterface() {
-            document.getElementById('userName').textContent = currentUser.displayName;
-            document.getElementById('userRole').textContent = currentUser.role;
 
-            // 根據權限顯示/隱藏功能
-            if (currentUser.role !== '一般用戶') {
-                document.getElementById('adminActions').style.display = 'block';
-            }
-
-            if (currentUser.role === '管理') {
-                document.getElementById('userManagementSection').style.display = 'block';
-            }
-        }
         // 設置事件監聽器
         function renderEquipment() {
             const grid = document.getElementById('equipmentGrid');
@@ -2142,20 +1926,11 @@
             }
 
             try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
-                const response = await fetch(CONFIG.API_BASE, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: isNewEquipment ? 'createEquipment' : 'updateEquipment',
-                        sessionToken,
-                        equipmentData: formData
-                    })
-                });
+                const data = await AuthUtils.callAPI(
+                    isEdit ? 'editMission' : 'createMission',
+                    { equipmentData: formData }
+                );
 
-                if (!response.ok) throw new Error('儲存失敗');
-
-                const data = await response.json();
                 if (data.status === 'ok') {
                     if (isNewEquipment) {
                         formData.id = data.equipmentId;
@@ -2428,15 +2203,7 @@
 
         // 在登出時清理
         function logout() {
-            // 清理線上狀態
-            if (presenceChannel) {
-                presenceChannel.untrack();
-                presenceChannel.unsubscribe();
-            }
-
-            sessionStorage.removeItem('sessionToken');
-            localStorage.removeItem('sessionToken');
-            window.location.href = 'index.html';
+            AuthUtils.logoutUser();
         }
 
         // 修改切換說明書顯示的函數
@@ -3025,7 +2792,7 @@
         }
 
         // 顯示轉借 Modal
-        
+
         async function showTransferModal(equipmentId) {
             const equipment = equipmentData.find(item => item.id === equipmentId);
             if (!equipment) return;
@@ -3182,18 +2949,18 @@
                 showToast('轉借失敗: ' + error.message, 'error');
             }
         });
-        
-        
+
+
         // 顯示批量轉借 Modal
         async function showBatchTransferModal() {
             // 重置表單
             document.getElementById('transferForm').reset();
             document.getElementById('transferTo').value = '';
             document.getElementById('transferNote').value = '';
-            
+
             // 載入成員列表
             await loadMemberListForTransfer();
-            
+
             // 載入批量記錄
             await loadBatchTransferRecords();
             showModal('transferModal');
