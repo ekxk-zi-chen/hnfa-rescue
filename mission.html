@@ -1210,86 +1210,17 @@
                 m.allow_recruitment && !m.recruitment_closed && m.status === 'active'
             );
             const historyMissions = allMissions.filter(m => m.status === 'completed');
-
-            // ✅ 修改：個人任務分為進行中和歷史
             const personalMissions = allMissions.filter(m =>
                 m.participants?.some(p => p.user_id === currentUser.userId)
             );
-            const personalActiveMissions = personalMissions.filter(m => m.status === 'active');
-            const personalHistoryMissions = personalMissions.filter(m => m.status === 'completed');
 
             renderMissionList('activeMissions', activeMissions);
             renderMissionList('recruitingMissions', recruitingMissions);
             renderMissionList('historyMissions', historyMissions);
-
-            // ✅ 修改：使用新的個人任務渲染函數
-            renderPersonalMissions(personalActiveMissions, personalHistoryMissions);
+            renderMissionList('personalMissions', personalMissions);
 
             restoreUIState();
         }
-        // ✅ 新增：專門渲染個人任務（區分進行中和歷史）
-        function renderPersonalMissions(activeMissions, historyMissions) {
-            const container = document.getElementById('personalMissions');
-            if (!container) return;
-
-            if (activeMissions.length === 0 && historyMissions.length === 0) {
-                container.innerHTML = '<p style="color: #666; text-align: center; padding: 2rem;">目前沒有任務</p>';
-                return;
-            }
-
-            let html = '';
-
-            // ✅ 1. 進行中的任務（沒有三角形按鈕，直接顯示內容）
-            if (activeMissions.length > 0) {
-                html += `
-            <div style="margin-bottom: 2rem;">
-                <h2 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--primary); color: var(--primary-dark); display: flex; justify-content: space-between; align-items: center;">
-                    <span>🔥 進行中的任務 (${activeMissions.length})</span>
-                </h2>
-                ${renderGroupedMissionsForPersonal(activeMissions, true)}
-            </div>
-        `;
-            }
-
-            // ✅ 2. 個人歷史任務（有可收合的容器）
-            if (historyMissions.length > 0) {
-                const historySectionId = 'personal-history-section';
-                html += `
-            <div style="margin-bottom: 2rem;">
-                <div class="group-header" onclick="toggleHistorySection('${historySectionId}', event)" 
-                     style="cursor: pointer; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--gray-600); display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0; color: var(--gray-700);">
-                        📚 個人歷史任務 (${historyMissions.length})
-                    </h2>
-                    <span class="toggle-icon" id="${historySectionId}-icon" style="font-size: 1.2rem; cursor: pointer;">▼</span>
-                </div>
-                <div id="group-${historySectionId}" class="group-content" style="display: none;">
-                    ${renderGroupedMissionsForPersonal(historyMissions, false)}
-                </div>
-            </div>
-        `;
-            }
-
-            container.innerHTML = html;
-
-            // ✅ 修正：保存初始狀態
-            setTimeout(() => {
-                // 保存進行中任務的分組狀態（預設展開）
-                document.querySelectorAll('.group-content').forEach(content => {
-                    const groupId = content.id.replace('group-', '');
-                    if (groupId.startsWith('personal-') && !groupId.includes('history-section')) {
-                        const isActiveSection = content.closest('.mission-group')?.parentElement?.previousElementSibling?.textContent?.includes('進行中的任務');
-                        if (isActiveSection && !uiState.groups.has(groupId)) {
-                            content.classList.add('show');
-                            uiState.groups.set(groupId, true);
-                        }
-                    }
-                });
-
-                saveUIState();
-            }, 200);
-        }
-
         // 渲染任務列表，按年月日分組
         function renderMissionList(containerId, missions) {
             const container = document.getElementById(containerId);
@@ -1430,96 +1361,45 @@
             return html;
         }
         // 新增專門用於"我的任務"的分組渲染函數
-        function renderGroupedMissionsForPersonal(missions, shouldExpand = true) {
-            if (missions.length === 0) {
-                return '<p style="color: #666; text-align: center; padding: 1rem;">目前沒有任務</p>';
-            }
-
-            // 按日期分組
-            const grouped = missions.reduce((acc, mission) => {
-                const date = new Date(mission.mission_date);
-                const year = date.getFullYear();
-                const month = date.getMonth() + 1;
-                const day = date.getDate();
-
-                const yearKey = `${year}`;
-                const monthKey = `${year}-${month}`;
-                const dayKey = `${year}-${month}-${day}`;
-
-                if (!acc[yearKey]) acc[yearKey] = {};
-                if (!acc[yearKey][monthKey]) acc[yearKey][monthKey] = {};
-                if (!acc[yearKey][monthKey][dayKey]) acc[yearKey][monthKey][dayKey] = [];
-
-                acc[yearKey][monthKey][dayKey].push(mission);
-                return acc;
-            }, {});
+        function renderGroupedMissionsForPersonal(missions) {
+            const grouped = groupMissionsByDate(missions);
 
             let html = '';
-
-            Object.keys(grouped).sort((a, b) => b - a).forEach(year => {
-                const yearGroup = grouped[year];
-                const yearId = `personal-year-${year}`;
+            Object.keys(grouped).sort().reverse().forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const dateGroups = groupMissionsByDay(monthMissions);
+                const groupId = `personal-${yearMonth.replace(/\s+/g, '-')}`;
 
                 html += `
-            <div class="mission-group" style="margin-bottom: 1.5rem;">
-                <div class="group-header" onclick="toggleGroup('${yearId}', event)" style="cursor: pointer; background: rgba(255, 255, 255, 0.9); padding: 1rem 1.5rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin: 0; font-size: 1.125rem;">${year} 年</h3>
-                    <span class="toggle-icon" data-group-id="${yearId}">${shouldExpand ? '▲' : '▼'}</span>
-                </div>
-                <div id="group-${yearId}" class="group-content" ${shouldExpand ? 'class="group-content show"' : 'class="group-content"'}>
-        `;
-
-                Object.keys(yearGroup).sort((a, b) => {
-                    const [aY, aM] = a.split('-').map(Number);
-                    const [bY, bM] = b.split('-').map(Number);
-                    return bY !== aY ? bY - aY : bM - aM;
-                }).forEach(month => {
-                    const monthGroup = yearGroup[month];
-                    const [y, m] = month.split('-');
-                    const monthId = `personal-month-${month}`;
-
-                    html += `
-                <div class="mission-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
-                    <div class="group-header" onclick="toggleGroup('${monthId}', event)" style="cursor: pointer; background: rgba(255, 255, 255, 0.9); padding: 0.875rem 1.25rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0; font-size: 1rem;">${m} 月</h4>
-                        <span class="toggle-icon" data-group-id="${monthId}">${shouldExpand ? '▲' : '▼'}</span>
-                    </div>
-                    <div id="group-${monthId}" class="group-content" ${shouldExpand ? 'class="group-content show"' : 'class="group-content"'}>
-            `;
-
-                    Object.keys(monthGroup).sort((a, b) => {
-                        const [aY, aM, aD] = a.split('-').map(Number);
-                        const [bY, bM, bD] = b.split('-').map(Number);
-                        if (bY !== aY) return bY - aY;
-                        if (bM !== aM) return bM - aM;
-                        return bD - aD;
-                    }).forEach(day => {
-                        const dayMissions = monthGroup[day];
-                        const [y, m, d] = day.split('-');
-                        const dayId = `personal-day-${day}`;
-
-                        html += `
-                    <div class="mission-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
-                        <div class="group-header" onclick="toggleGroup('${dayId}', event)" style="cursor: pointer; background: rgba(255, 255, 255, 0.9); padding: 0.75rem 1rem; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
-                            <h5 style="margin: 0; font-size: 0.875rem;">${d} 日</h5>
-                            <span class="toggle-icon" data-group-id="${dayId}">${shouldExpand ? '▲' : '▼'}</span>
+                    <div class="mission-group">
+                        <div class="group-header" style="cursor: pointer;">
+                            <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                            <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
                         </div>
-                        <div id="group-${dayId}" class="group-content" ${shouldExpand ? 'class="group-content show"' : 'class="group-content"'}>
-                            ${dayMissions.map(m => createMissionCard(m, `personal-${day}`)).join('')}
+                        <div class="group-content" id="group-${groupId}">
+                            ${Object.keys(dateGroups).sort().reverse().map(day => {
+                    const dayMissions = dateGroups[day];
+                    const dayGroupId = `${groupId}-${day}`;
+
+                    return `
+                                    <div class="mission-group" style="margin-left: 1rem;">
+                                        <div class="group-header" style="cursor: pointer;">
+                                            <h3 style="font-size: 1rem; flex: 1;">📆 ${day} (${dayMissions.length})</h3>
+                                            <span class="toggle-icon" data-group-id="${dayGroupId}" onclick="toggleGroup('${dayGroupId}', event)">▼</span>
+                                        </div>
+                                        <div class="group-content" id="group-${dayGroupId}">
+                                            ${dayMissions.map(mission => createMissionCard(mission)).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                }).join('')}
                         </div>
                     </div>
                 `;
-                    });
-
-                    html += '</div></div>';
-                });
-
-                html += '</div></div>';
             });
 
             return html;
         }
-
         // 按年月分組
         function groupMissionsByDate(missions) {
             const grouped = {};
@@ -1549,7 +1429,6 @@
         function createMissionCard(mission, context = 'default') {
             const isUrgent = mission.is_urgent;
             const isCompleted = mission.status === 'completed';
-            const isPersonalTab = context.startsWith('personal');
 
             let statusBadge, statusText;
             if (isCompleted) {
@@ -1567,28 +1446,25 @@
             const participants = mission.participants || [];
             const myParticipation = participants.find(p => p.user_id === currentUser.userId);
 
-            // ✅ 修改：個人任務且進行中的卡片預設展開
+            // ✅ 關鍵修正：使用 context + mission.id 作為唯一標識
             const cardId = `card-${context}-${mission.id}`;
-            const shouldExpand = isPersonalTab && !isCompleted;
-            const initialDisplay = shouldExpand ? 'block' : 'none';
-            const initialIcon = shouldExpand ? '▲' : '▼';
 
             return `
-                <div class="mission-card ${statusClass}" data-mission-id="${mission.id}" data-context="${context}" style="margin-bottom: 1rem;">
+                <div class="mission-card ${statusClass}" data-mission-id="${mission.id}" style="margin-bottom: 1rem;">
                     <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <div style="flex: 1;" onclick="togglePersonalMissionCard('${cardId}', event)">
+                            <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
                                 <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
                                 <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 1rem;">
                                 <span class="status-badge ${statusBadge} ${isUrgent && !isCompleted ? 'status-urgent' : ''}">${statusText}</span>
-                                <span class="toggle-icon" id="${cardId}-icon" onclick="togglePersonalMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">${initialIcon}</span>
+                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">▼</span>
                             </div>
                         </div>
                     </div>
                     
-                    <div id="${cardId}" class="mission-card-content" style="display: ${initialDisplay}; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
+                    <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
                         ${createMissionCardContent(mission, myParticipation)}
                     </div>
                 </div>
@@ -1806,60 +1682,6 @@
 
             saveUIState();
         }
-        // ✅ 修正：個人任務的卡片切換函數
-        function togglePersonalMissionCard(cardId, event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-
-            const content = document.getElementById(cardId);
-            const icon = document.getElementById(`${cardId}-icon`);
-
-            if (!content || !icon) {
-                console.error('找不到元素:', cardId);
-                return;
-            }
-
-            const isCurrentlyExpanded = content.style.display === 'block';
-
-            if (isCurrentlyExpanded) {
-                content.style.display = 'none';
-                icon.textContent = '▼';
-            } else {
-                content.style.display = 'block';
-                icon.textContent = '▲';
-            }
-        }
-        // ✅ 新增：歷史任務區塊收合函數
-        function toggleHistorySection(sectionId, event) {
-            if (event) {
-                event.stopPropagation();
-                event.preventDefault();
-            }
-
-            const content = document.getElementById(`group-${sectionId}`);
-            const icon = document.getElementById(`${sectionId}-icon`);
-
-            if (!content || !icon) {
-                console.error('找不到歷史任務區塊:', sectionId);
-                return;
-            }
-
-            const isCurrentlyExpanded = content.style.display === 'block' || content.classList.contains('show');
-
-            if (isCurrentlyExpanded) {
-                content.style.display = 'none';
-                icon.textContent = '▼';
-            } else {
-                content.style.display = 'block';
-                icon.textContent = '▲';
-            }
-
-            // 保存狀態
-            uiState.groups.set(sectionId, !isCurrentlyExpanded);
-            saveUIState();
-        }
         // 局部更新任務卡片
         function updateMissionCard(missionId, missionData) {
             // 找到並更新對應的任務卡片
@@ -1902,27 +1724,6 @@
             // 只保存分組狀態，不影響卡片狀態
             uiState.groups.set(groupId, !isCurrentlyExpanded);
             saveUIState();
-        }
-
-        // ✅ 修改：初始化分組狀態
-        function initPersonalMissionGroups() {
-            // 確保個人任務的分組可以正常切換
-            setTimeout(() => {
-                // 為所有個人任務的分組按鈕綁定事件
-                document.querySelectorAll('.group-header').forEach(header => {
-                    // 如果還沒有事件處理器，則重新綁定
-                    if (!header.dataset.hasEvent) {
-                        const icon = header.querySelector('.toggle-icon');
-                        if (icon) {
-                            const groupId = icon.dataset.groupId;
-                            if (groupId) {
-                                header.onclick = (e) => toggleGroup(groupId, e);
-                                header.dataset.hasEvent = 'true';
-                            }
-                        }
-                    }
-                });
-            }, 300);
         }
         // 展開所有任務卡片
         function expandAll() {
@@ -3882,42 +3683,24 @@
             setTimeout(() => {
                 let restoredCount = 0;
 
-                // 恢復分組狀態（包括歷史任務區塊）
+                // 恢復分組狀態
                 uiState.groups.forEach((isExpanded, groupId) => {
-                    // 處理歷史任務區塊
-                    if (groupId === 'personal-history-section') {
-                        const content = document.getElementById(`group-${groupId}`);
-                        const icon = document.getElementById(`${groupId}-icon`);
+                    const content = document.getElementById(`group-${groupId}`);
+                    const icon = document.querySelector(`[data-group-id="${groupId}"]`);
 
-                        if (content && icon) {
-                            if (isExpanded) {
-                                content.style.display = 'block';
-                                icon.textContent = '▲';
-                            } else {
-                                content.style.display = 'none';
-                                icon.textContent = '▼';
-                            }
-                            restoredCount++;
+                    if (content && icon) {
+                        if (isExpanded) {
+                            content.classList.add('show');
+                            icon.textContent = '▲';
+                        } else {
+                            content.classList.remove('show');
+                            icon.textContent = '▼';
                         }
-                    } else {
-                        // 處理一般分組
-                        const content = document.getElementById(`group-${groupId}`);
-                        const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-
-                        if (content && icon) {
-                            if (isExpanded) {
-                                content.classList.add('show');
-                                icon.textContent = '▲';
-                            } else {
-                                content.classList.remove('show');
-                                icon.textContent = '▼';
-                            }
-                            restoredCount++;
-                        }
+                        restoredCount++;
                     }
                 });
 
-                // 恢復卡片狀態
+                // ✅ 恢復卡片狀態 - 使用 data-mission-id
                 uiState.cards.forEach((isExpanded, missionId) => {
                     const cards = document.querySelectorAll(`[data-mission-id="${missionId}"]`);
 
@@ -3938,30 +3721,6 @@
                     });
                 });
 
-                // 對於沒有保存狀態的個人任務分組，設置預設狀態
-                document.querySelectorAll('.group-content').forEach(content => {
-                    const groupId = content.id.replace('group-', '');
-                    if (!uiState.groups.has(groupId) && groupId.startsWith('personal-') && !groupId.includes('history-section')) {
-                        // 判斷是否是進行中任務（根據父容器）
-                        const parentContainer = content.closest('div[style*="margin-bottom: 2rem"]');
-                        if (parentContainer) {
-                            const header = parentContainer.querySelector('h2');
-                            if (header && header.textContent.includes('進行中的任務')) {
-                                content.classList.add('show');
-                                const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-                                if (icon) icon.textContent = '▲';
-                                uiState.groups.set(groupId, true);
-                            } else {
-                                content.classList.remove('show');
-                                const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-                                if (icon) icon.textContent = '▼';
-                                uiState.groups.set(groupId, false);
-                            }
-                            restoredCount++;
-                        }
-                    }
-                });
-
                 // 恢復滾動位置
                 if (uiState.scrollPosition > 0) {
                     window.scrollTo({
@@ -3973,6 +3732,7 @@
                 console.log(`✅ [狀態恢復] 完成，恢復了 ${restoredCount} 個元素`);
             }, 150);
         }
+
         // ==================== 模態框與UI控制 ====================
         // 顯示/關閉 Modal
         function showModal(modalId) {
