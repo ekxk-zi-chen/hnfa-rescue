@@ -2926,19 +2926,33 @@
             myAssignments.forEach((item, index) => {
                 const assignment = item.assignment;
                 const roleText = item.role === 'leader' ? '👑 隊長' : '👤 隊員';
+
+                // ✅ 修正：隊員的回報次數要從隊長那裡取得
                 let progressCount = 0;
+
                 if (item.role === 'leader') {
+                    // 隊長：直接取得自己的回報次數
                     progressCount = item.member.progress_history?.length || 0;
                 } else {
-                    // 隊員：直接從資料中找
-                    progressCount = item.member.progress_history?.length || 0;
-                    // 如果還是 0，可能是資料結構問題，顯示除錯
-                    if (progressCount === 0) {
-                        console.log('隊員資料檢查:', {
-                            member: item.member,
-                            hasProgressHistory: !!item.member.progress_history,
-                            historyLength: item.member.progress_history?.length
-                        });
+                    // 隊員：需要找到對應的隊長，然後取得隊員的回報次數
+                    const leader = assignment.members?.find(l => l.id === item.leaderId);
+                    if (leader) {
+                        const teamMember = leader.team_members?.find(tm =>
+                            tm.user_id === currentUser.userId
+                        );
+                        if (teamMember) {
+                            // 如果隊員自己有 progress_history，用那個
+                            progressCount = teamMember.progress_history?.length || 0;
+
+                            // 如果隊員自己沒有，試試從隊長的進度記錄中找
+                            if (progressCount === 0 && leader.progress_history) {
+                                // 計算隊長進度記錄中屬於這個隊員的回報
+                                const teamMemberReports = leader.progress_history.filter(report =>
+                                    report.reporter_id === currentUser.userId
+                                );
+                                progressCount = teamMemberReports.length;
+                            }
+                        }
                     }
                 }
 
