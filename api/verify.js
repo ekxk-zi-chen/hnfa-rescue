@@ -867,8 +867,8 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
       const insertData = {
         ...missionData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: getTaipeiISOString(),
+        updated_at: getTaipeiISOString()
       };
 
       const { data, error } = await supabase
@@ -928,7 +928,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           user_id: userId,
           display_name: displayName,
           is_assigned: false,
-          joined_at: new Date().toISOString()
+          joined_at: getTaipeiISOString(),
         });
 
       if (error) {
@@ -1024,7 +1024,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           mission_id: missionId,
           assignment_number: nextNumber,
           assigned_by: assignedBy,
-          assigned_at: new Date().toISOString(),
+          assigned_at: getTaipeiISOString(),
           assignment_note: note || null
         })
         .select()
@@ -1201,7 +1201,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
           assignment_id: targetAssignmentId,
           status,
           note,
-          timestamp: timestamp || new Date().toISOString(),
+          timestamp: timestamp || getTaipeiISOString(),
           reporter_name: userData.display_name || userData.姓名
         });
 
@@ -1255,7 +1255,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         .from('missions')
         .update({
           recruitment_closed: true,
-          updated_at: new Date().toISOString()
+          updated_at: getTaipeiISOString(),
         })
         .eq('id', missionId);
 
@@ -1288,7 +1288,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         .update({
           status: 'completed',
           completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: getTaipeiISOString(),
         })
         .eq('id', missionId);
 
@@ -1403,7 +1403,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
         .from('missions')
         .update({
           ...missionData,
-          updated_at: new Date().toISOString()
+          updated_at: getTaipeiISOString(),
         })
         .eq('id', missionId);
 
@@ -1505,6 +1505,16 @@ function parseHistoryText(historyText) {
         原始內容: line
       };
     });
+}
+
+// 在文件開頭添加
+function getTaipeiTime() {
+    const now = new Date();
+    return new Date(now.getTime() + (8 * 60 * 60 * 1000));
+}
+
+function getTaipeiISOString() {
+    return getTaipeiTime().toISOString();
 }
 
 // ------------------- 主 handler -------------------
