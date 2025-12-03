@@ -1514,7 +1514,7 @@
                 <div class="mission-info">
                     <div class="info-item">
                         <span class="info-icon">📅</span>
-                        ${new Date(mission.mission_date).toLocaleString('zh-TW')}
+                        ${formatTaiwanDateTime(mission.mission_date)}
                     </div>
                     <div class="info-item">
                         <span class="info-icon">👤</span>
@@ -1530,7 +1530,7 @@
                     ${mission.recruitment_deadline ? `
                         <div class="info-item">
                             <span class="info-icon">⏰</span>
-                            截止: ${new Date(mission.recruitment_deadline).toLocaleString('zh-TW')}
+                            截止: ${formatTaiwanDateTime(mission.recruitment_deadline)}
                         </div>
                     ` : ''}
                 </div>
@@ -1557,7 +1557,7 @@
                                 <div class="progress-item ${latest.status === '已完成' ? 'completed' : ''}">
                                     <div class="progress-header">
                                         <span><strong>${latest.status}</strong></span>
-                                        <span class="progress-time">${new Date(latest.timestamp).toLocaleString('zh-TW')}</span>
+                                        <span class="progress-time">${formatTaiwanDateTime(latest.timestamp)}</span>
                                     </div>
                                     <div class="progress-content">${latest.note}</div>
                                 </div>
@@ -1639,7 +1639,7 @@
                                 (${assignment.members?.length || 0}人)
                             </span>
                             <span style="font-size: 0.75rem; color: #666;">
-                                ${new Date(assignment.assigned_at).toLocaleDateString('zh-TW')}
+                                ${formatTaiwanDate(assignment.assigned_at)}
                                 ${allCompleted ? ' ✓' : ''}
                             </span>
                         </div>
@@ -1778,8 +1778,8 @@
                 mission_title: document.getElementById('missionTitle').value,
                 mission_type: document.getElementById('missionType').value,
                 mission_description: document.getElementById('missionDescription').value,
-                mission_date: document.getElementById('missionDate').value,
-                recruitment_deadline: document.getElementById('recruitmentDeadline').value || null,
+                mission_date: fromLocalDateTimeToUTC(document.getElementById('missionDate').value),
+                recruitment_deadline: fromLocalDateTimeToUTC(document.getElementById('recruitmentDeadline').value) || null,
                 is_urgent: document.getElementById('isUrgent').checked,
                 allow_recruitment: document.getElementById('allowRecruitment').checked,
                 created_by: currentUser.displayName,
@@ -1985,14 +1985,10 @@
             document.getElementById('missionDescription').value = mission.mission_description || '';
 
             // 處理日期格式
-            const missionDate = new Date(mission.mission_date);
-            document.getElementById('missionDate').value = missionDate.toISOString().slice(0, 16);
+            document.getElementById('missionDate').value = toLocalDateTimeString(mission.mission_date);
 
             if (mission.recruitment_deadline) {
-                const deadline = new Date(mission.recruitment_deadline);
-                document.getElementById('recruitmentDeadline').value = deadline.toISOString().slice(0, 16);
-            } else {
-                document.getElementById('recruitmentDeadline').value = '';
+                document.getElementById('recruitmentDeadline').value = toLocalDateTimeString(mission.recruitment_deadline);
             }
 
             document.getElementById('isUrgent').checked = mission.is_urgent || false;
@@ -2700,7 +2696,7 @@
                             ${latest.note}
                         </div>
                         <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
-                            ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                            ${formatTaiwanDateTime(latest.timestamp)}
                         </div>
                     </div>
                 `;
@@ -2761,7 +2757,7 @@
                                 ${latest.note}
                             </div>
                             <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
-                                ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                                ${formatTaiwanDateTime(latest.timestamp)}
                             </div>
                         </div>
                     `;
@@ -2926,33 +2922,19 @@
             myAssignments.forEach((item, index) => {
                 const assignment = item.assignment;
                 const roleText = item.role === 'leader' ? '👑 隊長' : '👤 隊員';
-
-                // ✅ 修正：隊員的回報次數要從隊長那裡取得
                 let progressCount = 0;
-
                 if (item.role === 'leader') {
-                    // 隊長：直接取得自己的回報次數
                     progressCount = item.member.progress_history?.length || 0;
                 } else {
-                    // 隊員：需要找到對應的隊長，然後取得隊員的回報次數
-                    const leader = assignment.members?.find(l => l.id === item.leaderId);
-                    if (leader) {
-                        const teamMember = leader.team_members?.find(tm =>
-                            tm.user_id === currentUser.userId
-                        );
-                        if (teamMember) {
-                            // 如果隊員自己有 progress_history，用那個
-                            progressCount = teamMember.progress_history?.length || 0;
-
-                            // 如果隊員自己沒有，試試從隊長的進度記錄中找
-                            if (progressCount === 0 && leader.progress_history) {
-                                // 計算隊長進度記錄中屬於這個隊員的回報
-                                const teamMemberReports = leader.progress_history.filter(report =>
-                                    report.reporter_id === currentUser.userId
-                                );
-                                progressCount = teamMemberReports.length;
-                            }
-                        }
+                    // 隊員：直接從資料中找
+                    progressCount = item.member.progress_history?.length || 0;
+                    // 如果還是 0，可能是資料結構問題，顯示除錯
+                    if (progressCount === 0) {
+                        console.log('隊員資料檢查:', {
+                            member: item.member,
+                            hasProgressHistory: !!item.member.progress_history,
+                            historyLength: item.member.progress_history?.length
+                        });
                     }
                 }
 
@@ -3102,7 +3084,7 @@
                             ${latest.note}
                         </div>
                         <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">
-                            ${new Date(latest.timestamp).toLocaleString('zh-TW')}
+                            ${formatTaiwanDateTime(latest.timestamp)}
                         </div>
                     </div>
                 `;
@@ -3272,7 +3254,7 @@
                     <h2 style="margin-bottom: 1rem;">${mission.mission_title}</h2>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                         <div><strong>📝 任務類型:</strong> ${mission.mission_type}</div>
-                        <div><strong>📅 任務日期:</strong> ${new Date(mission.mission_date).toLocaleString('zh-TW')}</div>
+                        <div><strong>📅 任務日期:</strong> ${formatTaiwanDateTime(mission.mission_date)}</div>
                         <div><strong>👤 發起人:</strong> ${mission.created_by}</div>
                         <div><strong>📊 狀態:</strong>
                             <span class="status-badge ${mission.status === 'completed' ? 'status-completed' : 'status-active'}">
@@ -3324,7 +3306,7 @@
                     <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
                         ${isCurrentPhase ? '🎯 當前派遣階段' : `📜 第 ${assignment.assignment_number} 次派遣`}
                         <span style="font-size: 0.9em; color: #666; font-weight: normal;">
-                            (${phaseDate.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})
+                            (${formatTaiwanDateTime(assignment.assigned_at)})
                         </span>
                     </h3>
                     
@@ -3403,10 +3385,7 @@
                                                 ${prog.status} ${prog.status === '已完成' ? '✓' : ''}
                                             </span>
                                             <span style="font-size: 0.75rem; color: #666;">
-                                                ${new Date(prog.timestamp).toLocaleString('zh-TW', {
-                month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit'
-            })}
+                                                ${formatTaiwanDateTime(prog.timestamp).slice(5, 16)} // 顯示 MM-DD HH:mm
                                             </span>
                                         </div>
                                         <div style="font-size: 0.9rem; color: #333; margin-bottom: 0.25rem;">
@@ -3797,6 +3776,50 @@
         function showMemberStatsModal() {
             // 實作成員統計功能
             showToast('成員統計功能開發中', 'info');
+        }
+        // ==================== 時間處理函數 ====================
+        // 轉換 UTC 時間為台灣時間 (+8 小時)
+        function toTaiwanTime(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            // 加上 8 小時轉為台灣時間
+            date.setHours(date.getHours() + 8);
+            return date;
+        }
+        // 格式化為本地時間字串（台灣時間）
+        function formatTaiwanDateTime(dateString) {
+            if (!dateString) return '';
+            const date = toTaiwanTime(dateString);
+            return date.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+        }
+        // 僅格式化日期（台灣時間）
+        function formatTaiwanDate(dateString) {
+            if (!dateString) return '';
+            const date = toTaiwanTime(dateString);
+            return date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+        }
+        // 格式化為日期時間字串，用於 input[type="datetime-local"]
+        function toLocalDateTimeString(dateString) {
+            if (!dateString) return '';
+            const date = toTaiwanTime(dateString);
+
+            // 轉換為 YYYY-MM-DDTHH:mm 格式
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+        // 從本地時間字串轉換為 UTC（提交時使用）
+        function fromLocalDateTimeToUTC(localDateTimeString) {
+            if (!localDateTimeString) return null;
+
+            // 假設輸入的是台灣時間，需要轉為 UTC
+            const date = new Date(localDateTimeString);
+            date.setHours(date.getHours() - 8); // 台灣時間轉 UTC
+            return date.toISOString();
         }
 
         // ==================== 工具與輔助函數 ====================
