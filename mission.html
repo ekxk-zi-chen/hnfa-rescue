@@ -831,7 +831,7 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="progressMissionId">
-                
+
                 <div id="currentProgressInfo"></div>
 
                 <!-- 狀態選擇 -->
@@ -865,12 +865,13 @@
                 <!-- 進度說明 -->
                 <div class="form-group">
                     <label for="progressNote">進度說明 <span style="color: red;">*</span></label>
-                    <textarea id="progressNote" class="form-control" rows="4" 
-                            placeholder="請詳細描述當前進度、遇到的問題或需要的支援..." required></textarea>
+                    <textarea id="progressNote" class="form-control" rows="4" placeholder="請詳細描述當前進度、遇到的問題或需要的支援..."
+                        required></textarea>
                 </div>
 
                 <!-- 提示訊息 -->
-                <div style="background: rgba(33, 150, 243, 0.1); padding: 0.75rem; border-radius: 6px; margin-top: 1rem;">
+                <div
+                    style="background: rgba(33, 150, 243, 0.1); padding: 0.75rem; border-radius: 6px; margin-top: 1rem;">
                     <div style="font-size: 0.875rem; color: #666;">
                         <strong>💡 提示：</strong>
                         <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
@@ -1182,7 +1183,7 @@
                 refreshBtn.textContent = '🔄 刷新資料';
             }
         }
-        
+
         // ==================== 任務渲染與顯示 ====================
         // 渲染所有任務到各分頁
         function renderMissions() {
@@ -2082,7 +2083,7 @@
                 const isExpanded = currentUnitStates.get(unitId) || false;
 
                 // ✅ 計算該單位已選為隊長的人數
-                const selectedCount = members.filter(m => 
+                const selectedCount = members.filter(m =>
                     selectedLeaders.has(m.user_id) && selectedLeaders.get(m.user_id).role === 'leader'
                 ).length;
 
@@ -2456,15 +2457,15 @@
         function clearAllInUnit(unitId) {
             const unit = Object.keys(membersByUnit).find(u => u.replace(/\s+/g, '-') === unitId);
             const members = membersByUnit[unit];
-            
+
             if (!members || members.length === 0) return;
-            
+
             members.forEach(member => {
                 if (selectedLeaders.has(member.user_id)) {
                     selectedLeaders.delete(member.user_id);
                 }
             });
-            
+
             renderAssignmentSelector();
             showToast(`已取消 ${unit} 單位的所有隊長選擇`, 'success');
         }
@@ -2892,9 +2893,15 @@
                 assignment.members?.forEach(leader => {
                     const teamMember = leader.team_members?.find(tm => tm.user_id === currentUser.userId);
                     if (teamMember && !teamMember.completed_at) {
+                        // ✅ 修正：確保有 progress_history
+                        const memberData = {
+                            ...teamMember,
+                            progress_history: teamMember.progress_history || []  // 確保有這個屬性
+                        };
+
                         myAssignments.push({
                             assignment,
-                            member: teamMember,
+                            member: memberData,  // 使用修正後的資料
                             role: 'member',
                             leaderId: leader.id,
                             leaderName: leader.display_name
@@ -2919,7 +2926,21 @@
             myAssignments.forEach((item, index) => {
                 const assignment = item.assignment;
                 const roleText = item.role === 'leader' ? '👑 隊長' : '👤 隊員';
-                const progressCount = item.member.progress_history ? item.member.progress_history.length : 0;
+                let progressCount = 0;
+                if (item.role === 'leader') {
+                    progressCount = item.member.progress_history?.length || 0;
+                } else {
+                    // 隊員：直接從資料中找
+                    progressCount = item.member.progress_history?.length || 0;
+                    // 如果還是 0，可能是資料結構問題，顯示除錯
+                    if (progressCount === 0) {
+                        console.log('隊員資料檢查:', {
+                            member: item.member,
+                            hasProgressHistory: !!item.member.progress_history,
+                            historyLength: item.member.progress_history?.length
+                        });
+                    }
+                }
 
                 html += `
                     <div class="stage-option" 
@@ -3082,7 +3103,7 @@
         function addCustomQuickActions(missionType) {
             const quickSelect = document.getElementById('quickActionSelect');
             if (!quickSelect) return;
-            
+
             // 保存基本選項
             const basicOptions = [
                 { value: '', text: '-- 選擇快速動作 --' },
@@ -3094,10 +3115,10 @@
                 { value: '準備後送', text: '🚑 準備後送' },
                 { value: '任務完成', text: '✅ 任務完成' }
             ];
-            
+
             // 清空所有選項
             quickSelect.innerHTML = '';
-            
+
             // 重新添加基本選項
             basicOptions.forEach(opt => {
                 const option = document.createElement('option');
@@ -3105,11 +3126,11 @@
                 option.textContent = opt.text;
                 quickSelect.appendChild(option);
             });
-            
+
             // 根據任務類型添加特定選項
             let typeSpecificActions = [];
-            
-            switch(missionType) {
+
+            switch (missionType) {
                 case '救援':
                     typeSpecificActions = [
                         { value: '傷患檢傷完成', text: '🏥 傷患檢傷完成' },
@@ -3154,14 +3175,14 @@
                         { value: '人員休息中', text: '☕ 人員休息中' }
                     ];
             }
-            
+
             // 添加分隔線和類型特定選項
             if (typeSpecificActions.length > 0) {
                 const separator = document.createElement('option');
                 separator.disabled = true;
                 separator.textContent = `─── ${missionType}專用 ───`;
                 quickSelect.appendChild(separator);
-                
+
                 typeSpecificActions.forEach(action => {
                     const option = document.createElement('option');
                     option.value = action.value;
@@ -3175,15 +3196,15 @@
             const quickSelect = document.getElementById('quickActionSelect');
             const progressNote = document.getElementById('progressNote');
             const progressStatus = document.getElementById('progressStatus');
-            
+
             const selectedValue = quickSelect.value;
-            
+
             if (selectedValue) {
                 // 根據選擇的動作自動填充文字
                 progressNote.value = selectedValue;
-                
+
                 // 根據動作自動設定對應的狀態
-                switch(selectedValue) {
+                switch (selectedValue) {
                     case '到達現場':
                     case '接觸患者':
                     case '現場評估完成':
@@ -3209,7 +3230,7 @@
                     default:
                         progressStatus.value = '進行中';
                 }
-                
+
                 // 清空快速選擇，以便下次使用
                 setTimeout(() => {
                     quickSelect.value = '';
@@ -3769,7 +3790,7 @@
         function goBack() {
             window.location.href = 'navigation.html';
         }
-        
+
         // 定期檢查報名截止時間（每分鐘檢查一次）
         setInterval(() => {
             const now = new Date();
