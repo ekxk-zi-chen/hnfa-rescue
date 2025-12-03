@@ -1239,43 +1239,49 @@
 
             let html = '';
 
-            // ✅ 1. 進行中的任務（預設展開）
+            // ✅ 1. 進行中的任務（沒有三角形按鈕，直接顯示內容）
             if (activeMissions.length > 0) {
                 html += `
             <div style="margin-bottom: 2rem;">
-                <h2 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--primary); color: var(--primary-dark);">
-                    🔥 進行中的任務 (${activeMissions.length})
+                <h2 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--primary); color: var(--primary-dark); display: flex; justify-content: space-between; align-items: center;">
+                    <span>🔥 進行中的任務 (${activeMissions.length})</span>
                 </h2>
                 ${renderGroupedMissionsForPersonal(activeMissions, true)}
             </div>
         `;
             }
 
-            // ✅ 2. 個人歷史任務（預設收合）
+            // ✅ 2. 個人歷史任務（有可收合的容器）
             if (historyMissions.length > 0) {
+                const historySectionId = 'personal-history-section';
                 html += `
             <div style="margin-bottom: 2rem;">
-                <h2 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--gray-600); color: var(--gray-700);">
-                    📚 個人歷史任務 (${historyMissions.length})
-                </h2>
-                ${renderGroupedMissionsForPersonal(historyMissions, false)}
+                <div class="group-header" onclick="toggleHistorySection('${historySectionId}', event)" 
+                     style="cursor: pointer; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--gray-600); display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="margin: 0; color: var(--gray-700);">
+                        📚 個人歷史任務 (${historyMissions.length})
+                    </h2>
+                    <span class="toggle-icon" id="${historySectionId}-icon" style="font-size: 1.2rem; cursor: pointer;">▼</span>
+                </div>
+                <div id="group-${historySectionId}" class="group-content" style="display: none;">
+                    ${renderGroupedMissionsForPersonal(historyMissions, false)}
+                </div>
             </div>
         `;
             }
 
             container.innerHTML = html;
 
-            // ✅ 修正：在渲染完成後保存初始狀態
+            // ✅ 修正：保存初始狀態
             setTimeout(() => {
                 // 保存進行中任務的分組狀態（預設展開）
                 document.querySelectorAll('.group-content').forEach(content => {
                     const groupId = content.id.replace('group-', '');
-                    if (groupId.startsWith('personal-')) {
-                        const isActiveSection = content.closest('.mission-group')?.previousElementSibling?.textContent?.includes('進行中的任務');
+                    if (groupId.startsWith('personal-') && !groupId.includes('history-section')) {
+                        const isActiveSection = content.closest('.mission-group')?.parentElement?.previousElementSibling?.textContent?.includes('進行中的任務');
                         if (isActiveSection && !uiState.groups.has(groupId)) {
+                            content.classList.add('show');
                             uiState.groups.set(groupId, true);
-                        } else if (!uiState.groups.has(groupId)) {
-                            uiState.groups.set(groupId, false);
                         }
                     }
                 });
@@ -1283,6 +1289,7 @@
                 saveUIState();
             }, 200);
         }
+
         // 渲染任務列表，按年月日分組
         function renderMissionList(containerId, missions) {
             const container = document.getElementById(containerId);
@@ -1424,7 +1431,9 @@
         }
         // 新增專門用於"我的任務"的分組渲染函數
         function renderGroupedMissionsForPersonal(missions, shouldExpand = true) {
-            if (missions.length === 0) return '';
+            if (missions.length === 0) {
+                return '<p style="color: #666; text-align: center; padding: 1rem;">目前沒有任務</p>';
+            }
 
             // 按日期分組
             const grouped = missions.reduce((acc, mission) => {
@@ -1821,6 +1830,35 @@
                 content.style.display = 'block';
                 icon.textContent = '▲';
             }
+        }
+        // ✅ 新增：歷史任務區塊收合函數
+        function toggleHistorySection(sectionId, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+
+            const content = document.getElementById(`group-${sectionId}`);
+            const icon = document.getElementById(`${sectionId}-icon`);
+
+            if (!content || !icon) {
+                console.error('找不到歷史任務區塊:', sectionId);
+                return;
+            }
+
+            const isCurrentlyExpanded = content.style.display === 'block' || content.classList.contains('show');
+
+            if (isCurrentlyExpanded) {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            } else {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            }
+
+            // 保存狀態
+            uiState.groups.set(sectionId, !isCurrentlyExpanded);
+            saveUIState();
         }
         // 局部更新任務卡片
         function updateMissionCard(missionId, missionData) {
@@ -3844,24 +3882,42 @@
             setTimeout(() => {
                 let restoredCount = 0;
 
-                // 恢復分組狀態
+                // 恢復分組狀態（包括歷史任務區塊）
                 uiState.groups.forEach((isExpanded, groupId) => {
-                    const content = document.getElementById(`group-${groupId}`);
-                    const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+                    // 處理歷史任務區塊
+                    if (groupId === 'personal-history-section') {
+                        const content = document.getElementById(`group-${groupId}`);
+                        const icon = document.getElementById(`${groupId}-icon`);
 
-                    if (content && icon) {
-                        if (isExpanded) {
-                            content.classList.add('show');
-                            icon.textContent = '▲';
-                        } else {
-                            content.classList.remove('show');
-                            icon.textContent = '▼';
+                        if (content && icon) {
+                            if (isExpanded) {
+                                content.style.display = 'block';
+                                icon.textContent = '▲';
+                            } else {
+                                content.style.display = 'none';
+                                icon.textContent = '▼';
+                            }
+                            restoredCount++;
                         }
-                        restoredCount++;
+                    } else {
+                        // 處理一般分組
+                        const content = document.getElementById(`group-${groupId}`);
+                        const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+
+                        if (content && icon) {
+                            if (isExpanded) {
+                                content.classList.add('show');
+                                icon.textContent = '▲';
+                            } else {
+                                content.classList.remove('show');
+                                icon.textContent = '▼';
+                            }
+                            restoredCount++;
+                        }
                     }
                 });
 
-                // ✅ 修正：恢復卡片狀態 - 特別處理個人任務
+                // 恢復卡片狀態
                 uiState.cards.forEach((isExpanded, missionId) => {
                     const cards = document.querySelectorAll(`[data-mission-id="${missionId}"]`);
 
@@ -3885,21 +3941,24 @@
                 // 對於沒有保存狀態的個人任務分組，設置預設狀態
                 document.querySelectorAll('.group-content').forEach(content => {
                     const groupId = content.id.replace('group-', '');
-                    if (!uiState.groups.has(groupId) && groupId.startsWith('personal-')) {
+                    if (!uiState.groups.has(groupId) && groupId.startsWith('personal-') && !groupId.includes('history-section')) {
                         // 判斷是否是進行中任務（根據父容器）
-                        const isActiveSection = content.closest('.mission-group')?.querySelector('h2')?.textContent.includes('進行中的任務');
-                        if (isActiveSection) {
-                            content.classList.add('show');
-                            const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-                            if (icon) icon.textContent = '▲';
-                            uiState.groups.set(groupId, true);
-                        } else {
-                            content.classList.remove('show');
-                            const icon = document.querySelector(`[data-group-id="${groupId}"]`);
-                            if (icon) icon.textContent = '▼';
-                            uiState.groups.set(groupId, false);
+                        const parentContainer = content.closest('div[style*="margin-bottom: 2rem"]');
+                        if (parentContainer) {
+                            const header = parentContainer.querySelector('h2');
+                            if (header && header.textContent.includes('進行中的任務')) {
+                                content.classList.add('show');
+                                const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+                                if (icon) icon.textContent = '▲';
+                                uiState.groups.set(groupId, true);
+                            } else {
+                                content.classList.remove('show');
+                                const icon = document.querySelector(`[data-group-id="${groupId}"]`);
+                                if (icon) icon.textContent = '▼';
+                                uiState.groups.set(groupId, false);
+                            }
+                            restoredCount++;
                         }
-                        restoredCount++;
                     }
                 });
 
