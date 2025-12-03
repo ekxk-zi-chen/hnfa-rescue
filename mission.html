@@ -1197,9 +1197,6 @@
                     mission.status === 'active') {
                     const deadline = new Date(mission.recruitment_deadline);
                     if (now > deadline) {
-                        // 需要關閉報名
-                        console.log(`任務 ${mission.mission_title} 報名已過期，自動關閉`);
-                        // 僅更新本地狀態，不影響資料庫（或可選擇性更新資料庫）
                         mission.recruitment_closed = true;
                     }
                 }
@@ -1234,89 +1231,201 @@
                 return;
             }
 
+            // ✅ 根據不同分頁使用不同的渲染邏輯
+            if (context === 'active') {
+                // 進行中任務：預設全部展開，按時序排序（最新的在最前面）
+                renderActiveMissions(container, missions);
+            } else if (context === 'history') {
+                // 歷史記錄：分組顯示
+                renderHistoryMissions(container, missions);
+            } else if (context === 'personal') {
+                // 個人任務：分組顯示
+                renderPersonalMissions(container, missions);
+            } else {
+                // 其他分頁使用預設渲染
+                renderDefaultMissions(container, missions, context);
+            }
+        }
+        // ✅ 專門渲染進行中任務（預設展開，按時序排序）
+        function renderActiveMissions(container, missions) {
+            // 按任務日期排序（最新的在最前面）
+            const sortedMissions = missions.sort((a, b) => {
+                return new Date(b.mission_date) - new Date(a.mission_date);
+            });
+
+            let html = '';
+
+            sortedMissions.forEach(mission => {
+                // ✅ 進行中任務預設展開卡片
+                const cardId = `card-active-${mission.id}`;
+
+                html += `
+            <div class="mission-card" data-mission-id="${mission.id}" style="margin-bottom: 1rem;">
+                <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
+                            <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
+                            <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <span class="status-badge ${getStatusClass(mission)} ${mission.is_urgent && mission.status !== 'completed' ? 'status-urgent' : ''}">
+                                ${getStatusText(mission)}
+                            </span>
+                            <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">▲</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="${cardId}" class="mission-card-content" style="display: block; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
+                    ${createMissionCardContent(mission, null)}
+                </div>
+            </div>
+        `;
+            });
+
+            container.innerHTML = html;
+        }
+        // ✅ 專門渲染歷史任務（按年月分組，預設收合）
+        function renderHistoryMissions(container, missions) {
             // 按日期分組
             const grouped = missions.reduce((acc, mission) => {
                 const date = new Date(mission.mission_date);
                 const year = date.getFullYear();
                 const month = date.getMonth() + 1;
-                const day = date.getDate();
 
-                const yearKey = `${year}`;
-                const monthKey = `${year}-${month}`;
-                const dayKey = `${year}-${month}-${day}`;
-
-                if (!acc[yearKey]) acc[yearKey] = {};
-                if (!acc[yearKey][monthKey]) acc[yearKey][monthKey] = {};
-                if (!acc[yearKey][monthKey][dayKey]) acc[yearKey][monthKey][dayKey] = [];
-
-                acc[yearKey][monthKey][dayKey].push(mission);
+                const yearMonth = `${year}年 ${month}月`;
+                if (!acc[yearMonth]) acc[yearMonth] = [];
+                acc[yearMonth].push(mission);
                 return acc;
             }, {});
 
             let html = '';
 
-            Object.keys(grouped).sort((a, b) => b - a).forEach(year => {
-                const yearGroup = grouped[year];
-                const yearId = `${context}-year-${year}`;
+            Object.keys(grouped).sort((a, b) => {
+                // 按年月排序（最新的在最前面）
+                const [aYear, aMonth] = a.split('年 ').map(str => parseInt(str));
+                const [bYear, bMonth] = b.split('年 ').map(str => parseInt(str));
+                if (bYear !== aYear) return bYear - aYear;
+                return bMonth - aMonth;
+            }).forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const groupId = `history-${yearMonth.replace(/\s+/g, '-')}`;
 
                 html += `
-                    <div class="time-group" style="margin-bottom: 1.5rem;">
-                        <div class="group-header" onclick="toggleGroup('${yearId}', event)" style="cursor: pointer;">
-                            <h3>${year} 年</h3>
-                            <span class="toggle-icon" data-group-id="${yearId}">▼</span>
-                        </div>
-                        <div id="group-${yearId}" class="group-content">
-                `;
-
-                Object.keys(yearGroup).sort((a, b) => {
-                    const [aY, aM] = a.split('-').map(Number);
-                    const [bY, bM] = b.split('-').map(Number);
-                    return bY !== aY ? bY - aY : bM - aM;
-                }).forEach(month => {
-                    const monthGroup = yearGroup[month];
-                    const [y, m] = month.split('-');
-                    const monthId = `${context}-month-${month}`;
-
-                    html += `
-                        <div class="time-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
-                            <div class="group-header" onclick="toggleGroup('${monthId}', event)" style="cursor: pointer;">
-                                <h4>${m} 月</h4>
-                                <span class="toggle-icon" data-group-id="${monthId}">▼</span>
-                            </div>
-                            <div id="group-${monthId}" class="group-content">
-                    `;
-
-                    Object.keys(monthGroup).sort((a, b) => {
-                        const [aY, aM, aD] = a.split('-').map(Number);
-                        const [bY, bM, bD] = b.split('-').map(Number);
-                        if (bY !== aY) return bY - aY;
-                        if (bM !== aM) return bM - aM;
-                        return bD - aD;
-                    }).forEach(day => {
-                        const dayMissions = monthGroup[day];
-                        const [y, m, d] = day.split('-');
-                        const dayId = `${context}-day-${day}`;
-
-                        html += `
-                            <div class="time-group" style="margin-left: 1.5rem; margin-bottom: 1rem;">
-                                <div class="group-header" onclick="toggleGroup('${dayId}', event)" style="cursor: pointer;">
-                                    <h5>${d} 日</h5>
-                                    <span class="toggle-icon" data-group-id="${dayId}">▼</span>
+            <div class="mission-group">
+                <div class="group-header" style="cursor: pointer;">
+                    <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                    <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
+                </div>
+                <div class="group-content" id="group-${groupId}" style="display: none;">
+                    ${monthMissions.sort((a, b) => new Date(b.mission_date) - new Date(a.mission_date))
+                        .map(mission => {
+                            const cardId = `card-history-${mission.id}`;
+                            return `
+                                <div class="mission-card" data-mission-id="${mission.id}" style="margin-bottom: 1rem;">
+                                    <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                            <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
+                                                <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
+                                                <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                                <span class="status-badge status-completed">已完成</span>
+                                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">▼</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
+                                        ${createMissionCardContent(mission, null)}
+                                    </div>
                                 </div>
-                                <div id="group-${dayId}" class="group-content">
-                                    ${dayMissions.map(m => createMissionCard(m, `${context}-${day}`)).join('')}
-                                </div>
-                            </div>
-                        `;
-                    });
-
-                    html += '</div></div>';
-                });
-
-                html += '</div></div>';
+                            `;
+                        }).join('')}
+                </div>
+            </div>
+        `;
             });
 
             container.innerHTML = html;
+        }
+        // ✅ 專門渲染個人任務（類似歷史任務的分組方式）
+        function renderPersonalMissions(container, missions) {
+            // 按日期分組
+            const grouped = missions.reduce((acc, mission) => {
+                const date = new Date(mission.mission_date);
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+
+                const yearMonth = `${year}年 ${month}月`;
+                if (!acc[yearMonth]) acc[yearMonth] = [];
+                acc[yearMonth].push(mission);
+                return acc;
+            }, {});
+
+            let html = '';
+
+            Object.keys(grouped).sort((a, b) => {
+                // 按年月排序（最新的在最前面）
+                const [aYear, aMonth] = a.split('年 ').map(str => parseInt(str));
+                const [bYear, bMonth] = b.split('年 ').map(str => parseInt(str));
+                if (bYear !== aYear) return bYear - aYear;
+                return bMonth - aMonth;
+            }).forEach(yearMonth => {
+                const monthMissions = grouped[yearMonth];
+                const groupId = `personal-${yearMonth.replace(/\s+/g, '-')}`;
+
+                html += `
+            <div class="mission-group">
+                <div class="group-header" style="cursor: pointer;">
+                    <h3 style="flex: 1;">📅 ${yearMonth} (${monthMissions.length})</h3>
+                    <span class="toggle-icon" data-group-id="${groupId}" onclick="toggleGroup('${groupId}', event)">▼</span>
+                </div>
+                <div class="group-content" id="group-${groupId}" style="display: none;">
+                    ${monthMissions.sort((a, b) => new Date(b.mission_date) - new Date(a.mission_date))
+                        .map(mission => {
+                            const cardId = `card-personal-${mission.id}`;
+                            const myParticipation = mission.participants?.find(p => p.user_id === currentUser.userId);
+                            return `
+                                <div class="mission-card" data-mission-id="${mission.id}" style="margin-bottom: 1rem;">
+                                    <div class="mission-header" style="cursor: pointer; padding: 1rem 1.5rem; background: var(--gray-100); border-radius: 12px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                            <div style="flex: 1;" onclick="toggleMissionCard('${cardId}', event)">
+                                                <strong style="font-size: 1.125rem;">${mission.mission_title}</strong>
+                                                <span style="color: #666; font-size: 0.875rem; margin-left: 1rem;">📝 ${mission.mission_type}</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                                <span class="status-badge ${getStatusClass(mission)}">
+                                                    ${getStatusText(mission)}
+                                                </span>
+                                                <span class="toggle-icon" id="${cardId}-icon" onclick="toggleMissionCard('${cardId}', event)" style="cursor: pointer; padding: 5px;">▼</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="${cardId}" class="mission-card-content" style="display: none; padding: 1.5rem; border-top: 1px solid var(--gray-200);">
+                                        ${createMissionCardContent(mission, myParticipation)}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                </div>
+            </div>
+        `;
+            });
+
+            container.innerHTML = html;
+        }
+        // ✅ 輔助函數：獲取狀態類別
+        function getStatusClass(mission) {
+            if (mission.status === 'completed') return 'status-completed';
+            if (mission.allow_recruitment && !mission.recruitment_closed) return 'status-recruiting';
+            return 'status-active';
+        }
+
+        // ✅ 輔助函數：獲取狀態文字
+        function getStatusText(mission) {
+            if (mission.status === 'completed') return '已完成';
+            if (mission.allow_recruitment && !mission.recruitment_closed) return '報名中';
+            return '任務中';
         }
         // 渲染分組任務
         function renderGroupedMissions(missions) {
@@ -3644,26 +3753,27 @@
             // 保存所有分組狀態
             document.querySelectorAll('.group-content').forEach(content => {
                 const groupId = content.id.replace('group-', '');
-                const isExpanded = content.classList.contains('show');
+                const isExpanded = content.style.display !== 'none' && content.style.display !== '';
                 uiState.groups.set(groupId, isExpanded);
             });
 
-            // 保存所有卡片狀態
+            // 保存所有卡片狀態（但進行中任務的預設展開狀態優先級更高）
             document.querySelectorAll('.mission-card-content').forEach(content => {
-                const missionId = content.id.split('-')[1];
+                const missionId = content.closest('.mission-card')?.dataset?.missionId;
                 if (missionId) {
                     const isExpanded = content.style.display === 'block';
                     uiState.cards.set(missionId, isExpanded);
                 }
             });
 
-            // 保存到 sessionStorage 以便頁面刷新後仍能恢復
+            // 保存到 sessionStorage
             sessionStorage.setItem('missionUIState', JSON.stringify({
                 groups: Array.from(uiState.groups.entries()),
                 cards: Array.from(uiState.cards.entries()),
                 currentTab: uiState.currentTab
             }));
         }
+
         // 恢復 UI 狀態
         function restoreUIState() {
             console.log('📥 [狀態恢復] 開始...');
@@ -3690,36 +3800,41 @@
 
                     if (content && icon) {
                         if (isExpanded) {
-                            content.classList.add('show');
+                            content.style.display = 'block';
                             icon.textContent = '▲';
                         } else {
-                            content.classList.remove('show');
+                            content.style.display = 'none';
                             icon.textContent = '▼';
                         }
                         restoredCount++;
                     }
                 });
 
-                // ✅ 恢復卡片狀態 - 使用 data-mission-id
-                uiState.cards.forEach((isExpanded, missionId) => {
-                    const cards = document.querySelectorAll(`[data-mission-id="${missionId}"]`);
+                // ✅ 恢復卡片狀態，但「進行中任務」保持預設展開
+                const currentTab = document.querySelector('.tab-btn.active').textContent;
 
-                    cards.forEach(card => {
-                        const content = card.querySelector('.mission-card-content');
-                        const icon = card.querySelector('.toggle-icon');
+                if (currentTab !== '進行中任務') {
+                    // 非進行中任務：恢復保存的狀態
+                    uiState.cards.forEach((isExpanded, missionId) => {
+                        const cards = document.querySelectorAll(`[data-mission-id="${missionId}"]`);
+                        cards.forEach(card => {
+                            const content = card.querySelector('.mission-card-content');
+                            const icon = card.querySelector('.toggle-icon');
 
-                        if (content && icon) {
-                            if (isExpanded) {
-                                content.style.display = 'block';
-                                icon.textContent = '▲';
-                            } else {
-                                content.style.display = 'none';
-                                icon.textContent = '▼';
+                            if (content && icon) {
+                                if (isExpanded) {
+                                    content.style.display = 'block';
+                                    icon.textContent = '▲';
+                                } else {
+                                    content.style.display = 'none';
+                                    icon.textContent = '▼';
+                                }
+                                restoredCount++;
                             }
-                            restoredCount++;
-                        }
+                        });
                     });
-                });
+                }
+                // 進行中任務已經在 renderActiveMissions 中預設展開了
 
                 // 恢復滾動位置
                 if (uiState.scrollPosition > 0) {
@@ -3733,6 +3848,7 @@
             }, 150);
         }
 
+        
         // ==================== 模態框與UI控制 ====================
         // 顯示/關閉 Modal
         function showModal(modalId) {
