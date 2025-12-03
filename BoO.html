@@ -493,6 +493,32 @@
 </head>
 
 <body>
+  <!-- 返回鍵 - 放在最上方 -->
+  <div class="back-button-container" style="
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    ">
+    <button onclick="goBackToNavigation()" style="
+        background: linear-gradient(135deg, #10b981, #0da678);
+        color: #042018;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: bold;
+        font-size: 16px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    ">
+      <span style="font-size: 18px;">←</span> 返回選擇頁面
+    </button>
+  </div>
+  <br>
   <div class="app">
     <!-- 行動裝置工具列 -->
     <div class="mobile-toolbar">
@@ -669,9 +695,46 @@
         <button class="zoom-btn" id="resetZoomBtn">↺</button>
       </div>
 
-      <div class="legend" id="legend">
-        <div><strong>圖例說明：</strong></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;font-size:11px">
+      <div class="legend-collapsible" style="
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 12px;
+    backdrop-filter: blur(5px);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    max-width: 200px;
+">
+        <!-- 收合標題列 -->
+        <div class="legend-header" style="
+        padding: 10px 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.7);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    ">
+          <div style="font-weight: bold; color: #10b981">📋 圖例說明</div>
+          <div class="legend-toggle" style="
+            font-size: 16px;
+            color: #9fb6b0;
+            transition: transform 0.3s ease;
+        ">▼</div>
+        </div>
+
+        <!-- 圖例內容（預設展開） -->
+        <div class="legend-content" style="
+        padding: 12px 15px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        transition: all 0.3s ease;
+    ">
           <div><span style="color:#10b981">⛺</span> 個人帳</div>
           <div><span style="color:#3b82f6">⛺</span> 團體帳</div>
           <div><span style="color:#f59e0b">🛋️</span> 桌椅</div>
@@ -768,7 +831,38 @@
 
 
     };
+    // 返回导航页面的函数
+    function goBackToNavigation() {
+      window.location.href = 'navigation.html';
+    }
 
+    // 如果需要按钮悬停效果，可以添加这些CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        .back-button-container button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, #0cd493, #0ba574);
+        }
+        
+        .back-button-container button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }
+        
+        /* 手机响应式调整 */
+        @media (max-width: 900px) {
+            .back-button-container {
+                top: 10px;
+                left: 10px;
+            }
+            .back-button-container button {
+                padding: 10px 16px;
+                font-size: 14px;
+            }
+        }
+    `;
+    document.head.appendChild(style);
     // ========== SVG 地圖建立 ==========
     function createSvg() {
       const container = document.getElementById('svgmap');
@@ -931,7 +1025,7 @@
             clientY = event.changedTouches[0].clientY;
           } else {
             return { x: 0, y: 0 };
-          } 
+          }
         } else {
           clientX = event.clientX;
           clientY = event.clientY;
@@ -3236,7 +3330,66 @@
     document.addEventListener('gesturestart', (e) => {
       e.preventDefault();
     });
+    // 添加圖例收合功能
+    document.addEventListener('DOMContentLoaded', function () {
+      const legend = document.querySelector('.legend-collapsible');
+      const header = document.querySelector('.legend-header');
+      const content = document.querySelector('.legend-content');
+      const toggle = document.querySelector('.legend-toggle');
 
+      let isExpanded = true;
+
+      header.addEventListener('click', function () {
+        isExpanded = !isExpanded;
+
+        if (isExpanded) {
+          content.style.display = 'grid';
+          content.style.opacity = '1';
+          content.style.maxHeight = '200px';
+          toggle.style.transform = 'rotate(0deg)';
+          legend.style.maxWidth = '200px';
+        } else {
+          content.style.display = 'none';
+          content.style.opacity = '0';
+          content.style.maxHeight = '0';
+          toggle.style.transform = 'rotate(-90deg)';
+          legend.style.maxWidth = '130px';
+        }
+      });
+
+      // 根據當前模式自動調整（可選）
+      function updateLegendVisibility() {
+        if (state.currentMode === 'draw') {
+          // 繪製模式時，圖例自動收合
+          if (isExpanded) {
+            header.click();
+          }
+        } else if (state.currentMode === 'select') {
+          // 選擇模式時，圖例自動展開
+          if (!isExpanded) {
+            header.click();
+          }
+        }
+      }
+
+      // 監聽模式變化（需要整合到現有的 setMode 函數中）
+      const originalSetMode = setMode;
+      setMode = function (mode) {
+        originalSetMode(mode);
+        updateLegendVisibility();
+      };
+
+      // 點擊地圖時檢查是否點到圖例（防止干擾繪圖）
+      const svgmap = document.getElementById('svgmap');
+      if (svgmap) {
+        svgmap.addEventListener('click', function (e) {
+          const legend = document.querySelector('.legend-collapsible');
+          if (legend && legend.contains(e.target)) {
+            e.stopPropagation();
+          }
+        });
+      }
+    });
   </script>
 </body>
 
