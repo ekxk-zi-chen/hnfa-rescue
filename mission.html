@@ -3830,15 +3830,17 @@
 
         // 定期檢查報名截止時間（每分鐘檢查一次）
         setInterval(() => {
-            const now = new Date();
+            const now = new Date();//台灣時間
             let needsUpdate = false;
 
             allMissions.forEach(mission => {
                 if (mission.recruitment_deadline &&
                     !mission.recruitment_closed &&
                     mission.status === 'active') {
-                    const deadline = new Date(mission.recruitment_deadline);
-                    if (now > deadline) {
+                    const deadlineUTC = new Date(mission.recruitment_deadline);
+                    // ✅ 將 UTC 時間轉為台灣時間再比較
+                    const deadlineTaiwan = new Date(deadlineUTC.getTime() + (8 * 60 * 60 * 1000));
+                    if (now > deadlineTaiwan) {
                         console.log(`自動關閉過期報名: ${mission.mission_title}`);
                         mission.recruitment_closed = true;
                         needsUpdate = true;
