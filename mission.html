@@ -1190,13 +1190,15 @@
             saveUIState();
 
             // 自動檢查並關閉過期報名
-            const now = new Date();
+            const now = new Date();// 台灣時間
             allMissions.forEach(mission => {
                 if (mission.recruitment_deadline &&
                     !mission.recruitment_closed &&
                     mission.status === 'active') {
-                    const deadline = new Date(mission.recruitment_deadline);
-                    if (now > deadline) {
+                    const deadlineUTC = new Date(mission.recruitment_deadline);
+                    // ✅ 轉換為台灣時間比較
+                    const deadlineTaiwan = new Date(deadlineUTC.getTime() + (8 * 60 * 60 * 1000));
+                    if (now > deadlineTaiwan) {
                         // 需要關閉報名
                         console.log(`任務 ${mission.mission_title} 報名已過期，自動關閉`);
                         // 僅更新本地狀態，不影響資料庫（或可選擇性更新資料庫）
