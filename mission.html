@@ -3818,7 +3818,7 @@
 
             // 假設輸入的是台灣時間，需要轉為 UTC
             const date = new Date(localDateTimeString);
-            date.setHours(date.getHours() - 8); // 台灣時間轉 UTC
+            // date.setHours(date.getHours() - 8); // 台灣時間轉 UTC
             return date.toISOString();
         }
 
