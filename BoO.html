@@ -671,6 +671,7 @@
             <button id="mobileAutoArrange" title="AI排版">🤖</button>
         </div>
 
+
         <div class="side">
             <h2>BoO 現場佈局助手</h2>
             <div class="muted">專為救援、露營、活動規劃設計。先在右側繪製場地範圍，加入物件後使用 AI 智能排版。</div>
@@ -980,8 +981,10 @@
             touchStart: null,       // 觸控開始位置
             touchZoom: 1,           // 觸控縮放初始值
             touchDistance: 0,       // 兩指距離
-
-
+            isPanning: false,       // 是否正在平移地圖
+            panStart: { x: 0, y: 0 }, // 平移開始位置
+            touchStartTime: 0,      // 觸摸開始時間
+            lastTapTime: 0,         // 上次點擊時間
         };
 
         // 返回导航页面的函数
@@ -1249,13 +1252,12 @@
                 return { x: worldX, y: worldY };
             }
 
-
             // 點擊事件
             svg.addEventListener('click', (event) => {
                 event.preventDefault();
                 const pt = getSvgPoint(event);
 
-                console.log('点击位置:', pt); // 调试用，可以查看点击坐标
+                console.log('點擊位置:', pt);
 
                 switch (state.currentMode) {
                     case 'draw':
@@ -1290,13 +1292,12 @@
                 }
             });
 
-            // 拖曳相關事件
-            let isDragging = false;
-            let dragItem = null;
-            let dragStartX = 0;
-            let dragStartY = 0;
-            let itemStartX = 0;
-            let itemStartY = 0;
+
+            // ========== 修正滑鼠拖曳事件 ==========
+            let mouseIsDragging = false;
+            let mouseDragItem = null;
+            let mouseDragStart = { x: 0, y: 0 };
+            let mouseItemStart = { x: 0, y: 0 };
 
             svg.addEventListener('mousedown', (event) => {
                 if (state.currentMode !== 'select') return;
@@ -1305,83 +1306,72 @@
                 const hit = hitTestPlaced(pt.x, pt.y);
 
                 if (hit) {
-                    isDragging = true;
-                    dragItem = hit;
-                    dragStartX = pt.x;
-                    dragStartY = pt.y;
-                    itemStartX = hit.x;
-                    itemStartY = hit.y;
+                    mouseIsDragging = true;
+                    mouseDragItem = hit;
+                    mouseDragStart = { x: pt.x, y: pt.y };
+                    mouseItemStart = { x: hit.x, y: hit.y };
 
-                    // 視覺回饋
                     selectItem(hit);
-
-                    // 防止選擇文字
                     event.preventDefault();
                     event.stopPropagation();
 
-                    // 防止拖曳時出現選擇框
                     document.body.style.userSelect = 'none';
                     document.body.style.webkitUserSelect = 'none';
-
-                    // 拖曳結束時恢復
-                    const onMouseUp = () => {
-                        isDragging = false;
-                        dragItem = null;
-                        document.body.style.userSelect = '';
-                        document.body.style.webkitUserSelect = '';
-                        document.removeEventListener('mouseup', onMouseUp);
-                    };
-
-                    document.addEventListener('mouseup', onMouseUp);
                 }
             });
 
             svg.addEventListener('mousemove', (event) => {
-                if (!isDragging || !dragItem) return;
+                if (!mouseIsDragging || !mouseDragItem) return;
 
                 const pt = getSvgPoint(event);
-                dragItem.x = itemStartX + (pt.x - dragStartX);
-                dragItem.y = itemStartY + (pt.y - dragStartY);
+                mouseDragItem.x = mouseItemStart.x + (pt.x - mouseDragStart.x);
+                mouseDragItem.y = mouseItemStart.y + (pt.y - mouseDragStart.y);
 
-                // 確保物件在場地內
-                constrainItemToPolygon(dragItem);
-
+                constrainItemToPolygon(mouseDragItem);
                 updatePlacedGraphics();
                 event.preventDefault();
             });
 
             svg.addEventListener('mouseup', () => {
-                isDragging = false;
-                dragItem = null;
+                mouseIsDragging = false;
+                mouseDragItem = null;
+                document.body.style.userSelect = '';
+                document.body.style.webkitUserSelect = '';
             });
 
-            // 觸控事件支援
+
+            // ========== 修正觸控事件 ==========
+            let touchStartTime = 0;
+            let lastTapTime = 0;
+
             svg.addEventListener('touchstart', (event) => {
-                if (isFullscreen) {
-                    // 全屏模式下允許所有觸控操作
-                    event.preventDefault();
-                }
+                event.preventDefault();
+                touchStartTime = Date.now();
+
                 if (event.touches.length === 1) {
-                    // 單指觸摸 - 新增頂點或出入口
-                    event.preventDefault();
+                    // 單指觸摸
                     const pt = getSvgPoint(event);
+                    const hit = hitTestPlaced(pt.x, pt.y);
 
-                    // 添加調試日誌
-                    console.log('觸摸位置 - 原始:', {
-                        clientX: event.touches[0].clientX,
-                        clientY: event.touches[0].clientY
-                    });
-                    console.log('觸摸位置 - 轉換後:', pt);
-
-                    if (state.currentMode === 'draw' && !state.polygonClosed) {
-                        addPolygonPoint(pt.x, pt.y);
-                    } else if (state.currentMode === 'entrance') {
-                        addEntrance(pt.x, pt.y);
-                    } else if (state.currentMode === 'select') {
-                        const hit = hitTestPlaced(pt.x, pt.y);
-                        if (hit) {
-                            selectItem(hit);
-                        }
+                    if (hit && state.currentMode === 'select') {
+                        // 觸摸到物件，準備拖曳
+                        state.dragItem = hit;
+                        state.dragOffset = {
+                            x: pt.x - hit.x,
+                            y: pt.y - hit.y
+                        };
+                        selectItem(hit);
+                    } else {
+                        // 觸摸空白處，準備平移地圖
+                        state.isPanning = true;
+                        state.panStart = {
+                            x: event.touches[0].clientX,
+                            y: event.touches[0].clientY
+                        };
+                        state.touchStart = {
+                            pan: { ...state.pan },
+                            zoom: state.zoom
+                        };
                     }
                 } else if (event.touches.length === 2) {
                     // 雙指觸摸 - 開始縮放
@@ -1390,115 +1380,124 @@
                         x1: event.touches[0].clientX,
                         y1: event.touches[0].clientY,
                         x2: event.touches[1].clientX,
-                        y2: event.touches[1].clientY
+                        y2: event.touches[1].clientY,
+                        pan: { ...state.pan },
+                        zoom: state.zoom
                     };
-                    state.touchZoom = state.zoom;
                     state.touchDistance = Math.hypot(
                         state.touchStart.x2 - state.touchStart.x1,
                         state.touchStart.y2 - state.touchStart.y1
                     );
                 }
-            });
-            // 
+            }, { passive: false });
+
             svg.addEventListener('touchmove', (event) => {
-                if (isFullscreen) {
-                    // 全屏模式下允許拖曳和縮放
-                    event.preventDefault();
-                }
+                event.preventDefault();
 
                 if (event.touches.length === 2 && state.touchStart) {
                     // 双指缩放
-                    event.preventDefault();
+                    const touch1 = event.touches[0];
+                    const touch2 = event.touches[1];
 
                     const currentDistance = Math.hypot(
-                        event.touches[1].clientX - event.touches[0].clientX,
-                        event.touches[1].clientY - event.touches[0].clientY
+                        touch2.clientX - touch1.clientX,
+                        touch2.clientY - touch1.clientY
                     );
 
                     if (state.touchDistance > 0) {
-                        const scaleFactor = currentDistance / state.touchDistance;
-                        const newZoom = state.touchZoom * scaleFactor;
+                        // 計算縮放中心點（兩指中點）
+                        const centerX = (touch1.clientX + touch2.clientX) / 2;
+                        const centerY = (touch1.clientY + touch2.clientY) / 2;
 
-                        // 計算中心點
-                        const centerX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-                        const centerY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
-
+                        // 獲取SVG位置
                         const rect = svg.getBoundingClientRect();
-                        const viewBoxX = ((centerX - rect.left) / rect.width) * 1200;
-                        const viewBoxY = ((centerY - rect.top) / rect.height) * 700;
 
-                        const worldX = (viewBoxX - state.pan.x) / state.touchZoom;
-                        const worldY = (viewBoxY - state.pan.y) / state.touchZoom;
+                        // 將中心點轉換為viewBox座標
+                        const viewBoxCenterX = ((centerX - rect.left) / rect.width) * 1200;
+                        const viewBoxCenterY = ((centerY - rect.top) / rect.height) * 700;
 
-                        state.zoom = Math.max(0.1, Math.min(5, newZoom));
-                        state.pan.x = viewBoxX - worldX * state.zoom;
-                        state.pan.y = viewBoxY - worldY * state.zoom;
+                        // 計算縮放比例
+                        const scaleFactor = currentDistance / state.touchDistance;
+                        const newZoom = Math.max(0.1, Math.min(5, state.touchStart.zoom * scaleFactor));
+
+                        // 計算世界座標系中的中心點位置
+                        // 公式: world = (viewBox - pan) / zoom
+                        const worldCenterX = (viewBoxCenterX - state.touchStart.pan.x) / state.touchStart.zoom;
+                        const worldCenterY = (viewBoxCenterY - state.touchStart.pan.y) / state.touchStart.zoom;
+
+                        // 計算新的平移值
+                        // 公式: newPan = viewBox - world * newZoom
+                        const newPanX = viewBoxCenterX - worldCenterX * newZoom;
+                        const newPanY = viewBoxCenterY - worldCenterY * newZoom;
+
+                        // 更新狀態
+                        state.zoom = newZoom;
+                        state.pan.x = newPanX;
+                        state.pan.y = newPanY;
 
                         updateViewTransform();
                     }
                 } else if (event.touches.length === 1) {
-                    // 单指拖拽物件 - 修正這裡
-                    event.preventDefault(); // 加這行
-
-                    const pt = getSvgPoint(event);
-
-                    // 如果還沒有拖拽物件，嘗試抓取一個
-                    if (!state.dragItem) {
-                        const hit = hitTestPlaced(pt.x, pt.y);
-                        if (hit) {
-                            state.dragItem = hit;
-                            state.dragOffset = {
-                                x: pt.x - hit.x,
-                                y: pt.y - hit.y
-                            };
-                            selectItem(hit); // 選中物件
-                        }
-                    }
-
-                    // 如果有拖拽物件，移動它
+                    // 單指移動
                     if (state.dragItem) {
+                        // 拖曳物件
+                        const pt = getSvgPoint(event);
                         state.dragItem.x = pt.x - state.dragOffset.x;
                         state.dragItem.y = pt.y - state.dragOffset.y;
                         constrainItemToPolygon(state.dragItem);
                         updatePlacedGraphics();
+                    } else if (state.isPanning && state.panStart) {
+                        // 平移地圖
+                        const touch = event.touches[0];
+                        const dx = touch.clientX - state.panStart.x;
+                        const dy = touch.clientY - state.panStart.y;
+
+                        // 更新平移值
+                        state.pan.x = state.touchStart.pan.x + dx;
+                        state.pan.y = state.touchStart.pan.y + dy;
+
+                        updateViewTransform();
                     }
                 }
-            });
+            }, { passive: false });
 
 
-            let lastTap = 0;
             svg.addEventListener('touchend', (event) => {
-                // 清除拖拽狀態
-                if (event.touches.length === 0) {
-                    state.dragItem = null;
-                    state.touchStart = null;
+                // 檢測雙擊（快速點擊兩次）
+                const currentTime = Date.now();
+                const touchDuration = currentTime - touchStartTime;
 
-                    const currentTime = Date.now();
-                    const tapLength = currentTime - lastTap;
+                if (touchDuration < 300) {
+                    // 快速點擊，可能是點擊或雙擊
+                    const timeSinceLastTap = currentTime - lastTapTime;
 
-                    if (tapLength < 300 && tapLength > 0) {
-                        // 检测到双击
+                    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+                        // 雙擊事件
                         event.preventDefault();
 
                         if (state.currentMode === 'draw' && state.polygon.length >= 3) {
                             state.polygonClosed = true;
                             renderPolygon();
-                            document.getElementById('modeLabel').textContent = '范围已定义';
+                            document.getElementById('modeLabel').textContent = '範圍已定義';
                             showAreaInfo();
                             setMode('select');
                         }
                     }
-                    lastTap = currentTime;
+                    lastTapTime = currentTime;
                 }
+
+                // 重置觸控狀態
+                state.dragItem = null;
+                state.isPanning = false;
+                state.touchStart = null;
+                state.panStart = null;
             });
 
-            // 防止滾動
+            // 修正滾輪縮放
             svg.addEventListener('wheel', (event) => {
                 event.preventDefault();
 
                 const rect = svg.getBoundingClientRect();
-
-                // 計算滑鼠在SVG中的位置（0-1200, 0-700範圍）
                 const mouseX = event.clientX - rect.left;
                 const mouseY = event.clientY - rect.top;
 
@@ -1506,7 +1505,7 @@
                 const viewBoxX = (mouseX / rect.width) * 1200;
                 const viewBoxY = (mouseY / rect.height) * 700;
 
-                // 計算滑鼠位置對應的世界座標（變換前的座標）
+                // 計算滑鼠位置對應的世界座標
                 const worldX = (viewBoxX - state.pan.x) / state.zoom;
                 const worldY = (viewBoxY - state.pan.y) / state.zoom;
 
@@ -1515,24 +1514,12 @@
                 const oldZoom = state.zoom;
                 state.zoom = Math.max(0.1, Math.min(5, state.zoom * zoomFactor));
 
-                // 重新計算平移，使滑鼠位置對應的世界座標保持不變
-                // 公式推導：
-                // 之前：viewBoxX = state.pan.x + worldX * oldZoom
-                // 之後：viewBoxX = newPan.x + worldX * newZoom
-                // 所以：newPan.x = viewBoxX - worldX * newZoom
+                // 重新計算平移
                 state.pan.x = viewBoxX - worldX * state.zoom;
                 state.pan.y = viewBoxY - worldY * state.zoom;
 
                 updateViewTransform();
-
-                console.log('滾輪縮放:', {
-                    mouse: { x: mouseX, y: mouseY },
-                    viewBox: { x: viewBoxX, y: viewBoxY },
-                    world: { x: worldX, y: worldY },
-                    oldZoom, newZoom: state.zoom,
-                    newPan: state.pan
-                });
-            });
+            }, { passive: false });
 
         }
         // ========== 備用座標轉換方案 ==========
@@ -1624,30 +1611,36 @@
 
             state.svgRoot.appendChild(gridGroup);
         }
-        // ========== 更新視圖變換 ==========
+        // ========== 修正視圖變換 ==========
         function updateViewTransform() {
             if (!state.transformGroup) return;
 
             // 限制缩放范围
             state.zoom = Math.max(0.1, Math.min(5, state.zoom));
 
+            // 限制平移範圍
+            const maxPan = 1000;
+            state.pan.x = Math.max(-maxPan, Math.min(maxPan, state.pan.x));
+            state.pan.y = Math.max(-maxPan, Math.min(maxPan, state.pan.y));
+
             // 创建变换字符串
             const transform = `translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`;
-
-            // 应用到变换组
             state.transformGroup.setAttribute('transform', transform);
 
-            // 更新調試網格
-            updateDebugGrid();
-
-            // 更新狀態顯示
-            updateStatusDisplay();
-            // 更新邊界標籤的變換
+            // 更新邊界標籤
             if (edgeLabelsGroup) {
-                edgeLabelsGroup.setAttribute('transform', state.transformGroup.getAttribute('transform'));
+                edgeLabelsGroup.setAttribute('transform', transform);
+            }
+
+            // 更新座標顯示
+            updateCoordinateDisplay();
+        }
+        function updateCoordinateDisplay() {
+            const display = document.getElementById('coordinateDisplay');
+            if (display) {
+                display.textContent = `縮放: ${state.zoom.toFixed(2)}x | 平移: (${state.pan.x.toFixed(0)}, ${state.pan.y.toFixed(0)})`;
             }
         }
-
         // 更新調試網格
         function updateDebugGrid() {
             const debugGrid = document.getElementById('debug-grid');
@@ -3269,12 +3262,12 @@
 
             // 縮放控制
             document.getElementById('zoomInBtn').addEventListener('click', () => {
-                state.zoom = Math.min(3, state.zoom * 1.2);
+                state.zoom = Math.min(5, state.zoom * 1.2);
                 updateViewTransform();
             });
 
             document.getElementById('zoomOutBtn').addEventListener('click', () => {
-                state.zoom = Math.max(0.5, state.zoom / 1.2);
+                state.zoom = Math.max(0.1, state.zoom / 1.2);
                 updateViewTransform();
             });
 
@@ -3286,39 +3279,23 @@
 
             // 在 initEventBindings 函數中，為置中視圖按鈕添加修正
             document.getElementById('centerViewBtn').addEventListener('click', () => {
-                if (state.polygonClosed && state.polygon.length > 0) {
-                    const centroid = calculatePolygonCentroid(state.polygon);
-
-                    // 將場地中心點置中顯示
-                    const viewportCenterX = 600;  // 1200/2
-                    const viewportCenterY = 350;  // 700/2
-
-                    // 計算需要的平移
-                    // viewportCenter = pan + centroid * zoom
-                    // 所以：pan = viewportCenter - centroid * zoom
-                    state.pan.x = viewportCenterX - centroid.x * state.zoom;
-                    state.pan.y = viewportCenterY - centroid.y * state.zoom;
-
-                    updateViewTransform();
-                } else {
-                    // 重置到初始狀態
-                    state.zoom = 1;
-                    state.pan = { x: 0, y: 0 };
-                    updateViewTransform();
-                }
+                state.zoom = 1;
+                state.pan = { x: 0, y: 0 };
+                updateViewTransform();
             });
 
 
             // 行動裝置工具列
             document.getElementById('mobileDrawBtn').addEventListener('click', () => setMode('draw'));
             document.getElementById('mobileSelectBtn').addEventListener('click', () => setMode('select'));
+            // 行動裝置工具列
             document.getElementById('mobileZoomIn').addEventListener('click', () => {
-                state.zoom = Math.min(3, state.zoom * 1.2);
+                state.zoom = Math.min(5, state.zoom * 1.2);
                 updateViewTransform();
             });
 
             document.getElementById('mobileZoomOut').addEventListener('click', () => {
-                state.zoom = Math.max(0.5, state.zoom / 1.2);
+                state.zoom = Math.max(0.1, state.zoom / 1.2);
                 updateViewTransform();
             });
 
@@ -3372,30 +3349,23 @@
         // ========== 初始化應用程式 ==========
         // 在 initApp 函數中，確保初始狀態正確
         function initApp() {
-            // 建立 SVG
             createSvg();
-
-            // 初始化事件綁定
             initEventBindings();
 
-            // 重置狀態
+            // 重置視圖
             state.zoom = 1;
-            state.pan = { x: 0, y: 0 };  // 確保初始平移為0
+            state.pan = { x: 0, y: 0 };
             updateViewTransform();
 
-            // 更新顯示
+            // 初始化其他顯示
             updatePlacedGraphics();
             refreshItemsUI();
             updateEntranceInfo();
-
-            // 設定初始模式
             setMode('draw');
 
-            // 加入一些範例資料
+            // 添加示例場地（如果沒有場地）
             setTimeout(() => {
-                // 自动建立一个示例场地（如果没有场地）
                 if (state.polygon.length === 0) {
-                    // 根据 SVG 尺寸计算居中位置
                     const svgWidth = 1200;
                     const svgHeight = 700;
                     const margin = 100;
@@ -3411,16 +3381,7 @@
                     showAreaInfo();
                     setMode('select');
                 }
-
-                // 加入一些示例出入口
-                if (state.entrances.length === 0) {
-                    const centerX = 600;
-                    const centerY = 350;
-                    addEntrance(centerX - 200, centerY);
-                    addEntrance(centerX + 200, centerY);
-                }
             }, 500);
-
         }
         // ========== 空间最优化排列 ==========
         function arrangeEfficiently(items, bbox, aisleWidth) {
@@ -3938,8 +3899,9 @@
                 setMode('select');
             }
         }
-        // 全屏模式功能（新增）
+        // ========== 修正全屏模式 ==========
         let isFullscreen = false;
+
         function toggleFullscreen() {
             const sidePanel = document.querySelector('.side');
             const mainPanel = document.querySelector('.main');
@@ -3949,14 +3911,10 @@
             if (!isFullscreen) {
                 // 進入全屏模式
                 isFullscreen = true;
-
-                // 儲存當前模式以便恢復
                 state.preFullscreenMode = state.currentMode;
-
-                // 強制切換到選擇模式（以便操作物件）
                 setMode('select');
 
-                // 隱藏側邊欄、返回按鈕和手機工具列
+                // 隱藏其他元素
                 if (sidePanel) sidePanel.style.display = 'none';
                 if (backButton) backButton.style.display = 'none';
                 if (mobileToolbar) mobileToolbar.style.display = 'none';
@@ -3972,88 +3930,38 @@
                 mainPanel.style.borderRadius = '0';
                 mainPanel.style.background = 'linear-gradient(180deg, #061018, #071425)';
 
-
-                // 隱藏原本工具列上的全屏按鈕
-                const toolbarFullscreenBtn = document.querySelector('.toolbar #fullscreenDrawBtn');
-                if (toolbarFullscreenBtn) toolbarFullscreenBtn.style.display = 'none';
-                // 添加大型退出全屏按鈕
+                // 添加退出按鈕
                 const exitBtn = document.createElement('button');
                 exitBtn.innerHTML = '❌ 退出全屏';
                 exitBtn.style.position = 'absolute';
                 exitBtn.style.top = '20px';
                 exitBtn.style.right = '20px';
                 exitBtn.style.zIndex = '2001';
-                exitBtn.style.padding = '20px 30px';
-                exitBtn.style.fontSize = '20px';
+                exitBtn.style.padding = '15px 25px';
+                exitBtn.style.fontSize = '16px';
                 exitBtn.style.fontWeight = 'bold';
                 exitBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
                 exitBtn.style.color = 'white';
-                exitBtn.style.border = '3px solid white';
-                exitBtn.style.borderRadius = '15px';
-                exitBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.7)';
+                exitBtn.style.border = '2px solid white';
+                exitBtn.style.borderRadius = '10px';
                 exitBtn.style.cursor = 'pointer';
-                exitBtn.style.minWidth = '160px';
-                exitBtn.style.minHeight = '70px';
+                exitBtn.onclick = exitFullscreen;
 
-                exitBtn.onclick = function () {
-                    exitFullscreen();
-                    this.remove();
-                };
-
-                // 添加全屏操作提示
-                const hintDiv = document.createElement('div');
-                hintDiv.innerHTML = `
-      <div style="
-        background: rgba(0, 0, 0, 0.85);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        font-size: 16px;
-        line-height: 1.5;
-        max-width: 300px;
-        backdrop-filter: blur(10px);
-      ">
-        <div style="font-weight: bold; margin-bottom: 8px; color: #10b981">📱 全屏操作模式</div>
-        <div>• 可拖曳移動物件</div>
-        <div>• 雙擊物件進行編輯</div>
-        <div>• 兩指縮放/平移地圖</div>
-      </div>
-    `;
-                hintDiv.style.position = 'absolute';
-                hintDiv.style.top = '20px';
-                hintDiv.style.left = '20px';
-                hintDiv.style.zIndex = '2001';
-
-                // 設置5秒後自動淡出提示
-                setTimeout(() => {
-                    hintDiv.style.transition = 'opacity 1s';
-                    hintDiv.style.opacity = '0.3';
-                }, 5000);
-
-                // 點擊提示可隱藏
-                hintDiv.addEventListener('click', () => {
-                    hintDiv.style.opacity = '0';
-                    setTimeout(() => hintDiv.remove(), 1000);
-                });
-
-                mainPanel.appendChild(hintDiv);
                 mainPanel.appendChild(exitBtn);
 
                 // 重新計算尺寸
                 setTimeout(() => {
-                    if (state.svgRoot) {
-                        const container = document.getElementById('svgmap');
-                        if (container) {
-                            container.style.width = '100%';
-                            container.style.height = '100%';
-                        }
+                    const container = document.getElementById('svgmap');
+                    if (container) {
+                        container.style.width = '100%';
+                        container.style.height = '100%';
                     }
                 }, 50);
-
             } else {
                 exitFullscreen();
             }
         }
+
         function exitFullscreen() {
             const sidePanel = document.querySelector('.side');
             const mainPanel = document.querySelector('.main');
@@ -4066,10 +3974,6 @@
             if (sidePanel) sidePanel.style.display = '';
             if (backButton) backButton.style.display = '';
             if (mobileToolbar) mobileToolbar.style.display = 'flex';
-
-            // 恢復工具列上的全屏按鈕
-            const toolbarFullscreenBtn = document.querySelector('.toolbar #fullscreenDrawBtn');
-            if (toolbarFullscreenBtn) toolbarFullscreenBtn.style.display = '';
 
             mainPanel.style.position = '';
             mainPanel.style.top = '';
@@ -4087,13 +3991,9 @@
             }
 
             // 移除全屏添加的元素
-            const fullscreenElements = mainPanel.querySelectorAll('[data-fullscreen-added]');
-            fullscreenElements.forEach(el => el.remove());
-
-            // 移除所有動態添加的元素
-            const dynamicElements = mainPanel.querySelectorAll('button, div');
-            dynamicElements.forEach(el => {
-                if (el.textContent.includes('退出全屏') || el.textContent.includes('全屏操作模式')) {
+            const fullscreenElements = mainPanel.querySelectorAll('button');
+            fullscreenElements.forEach(el => {
+                if (el.textContent.includes('退出全屏')) {
                     el.remove();
                 }
             });
