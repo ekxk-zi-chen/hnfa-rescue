@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>花蓮特搜裝備管理系統</title>
@@ -1146,7 +1147,7 @@
                 showToast('連線資料庫', 'error');
 
                 // 初始化共享的 Supabase 客戶端
-                await initializeSupabaseClient();
+                initializeSupabaseClient();
 
                 showToast('驗證通行碼', 'error');
                 // 驗證用戶身份並獲取角色
@@ -1174,18 +1175,15 @@
         }
 
         // 新增：初始化共享的 Supabase 客戶端
-        async function initializeSupabaseClient() {
-            if (!supabaseClient) {
-                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
-                supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-                    realtime: {
-                        params: {
-                            eventsPerSecond: 5
-                        }
-                    }
-                });
+        // 靜態版初始化 Supabase
+        function initializeSupabaseClient() {
+            if (!window.supabaseClient) {
+                window.supabaseClient = supabase.createClient(
+                    CONFIG.SUPABASE_URL,
+                    CONFIG.SUPABASE_ANON_KEY
+                );
             }
-            return supabaseClient;
+            return window.supabaseClient;
         }
 
 
