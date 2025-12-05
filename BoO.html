@@ -987,14 +987,93 @@
             lastTapTime: 0,         // 上次點擊時間
         };
 
+        // ========== 新增：選擇游標功能 ==========
+        let selectionCursor = null;
+        let isSelectionMode = false;
+
         // 返回导航页面的函数
         function goBackToNavigation() {
             window.location.href = 'navigation.html';
         }
+        // ============游標
+        // 創建選擇游標
+        function createSelectionCursor() {
+            const svgNS = 'http://www.w3.org/2000/svg';
+            selectionCursor = document.createElementNS(svgNS, 'g');
+            selectionCursor.setAttribute('id', 'selection-cursor');
+            selectionCursor.style.display = 'none';
+            selectionCursor.style.pointerEvents = 'none';
 
+            // 游標圖形：手指箭頭
+            const cursorPath = document.createElementNS(svgNS, 'path');
+            cursorPath.setAttribute('d', 'M 0,0 L 20,10 L 12,12 L 15,25 L 5,25 L 8,12 Z');
+            cursorPath.setAttribute('fill', '#ff6b6b');
+            cursorPath.setAttribute('stroke', 'white');
+            cursorPath.setAttribute('stroke-width', '2');
+
+            // 圓圈背景
+            const cursorCircle = document.createElementNS(svgNS, 'circle');
+            cursorCircle.setAttribute('cx', 0);
+            cursorCircle.setAttribute('cy', 0);
+            cursorCircle.setAttribute('r', 25);
+            cursorCircle.setAttribute('fill', 'rgba(255, 107, 107, 0.2)');
+            cursorCircle.setAttribute('stroke', '#ff6b6b');
+            cursorCircle.setAttribute('stroke-width', '2');
+
+            selectionCursor.appendChild(cursorCircle);
+            selectionCursor.appendChild(cursorPath);
+
+            // 將游標添加到變換組之外，使其不受縮放影響
+            state.svgRoot.appendChild(selectionCursor);
+        }
+
+        // 更新選擇游標位置
+        function updateSelectionCursor(x, y) {
+            if (!selectionCursor) return;
+
+            // 將世界座標轉換為viewBox座標
+            const viewBoxX = state.pan.x + x * state.zoom;
+            const viewBoxY = state.pan.y + y * state.zoom;
+
+            selectionCursor.setAttribute('transform', `translate(${viewBoxX}, ${viewBoxY})`);
+        }
+
+        // 顯示/隱藏選擇游標
+        function toggleSelectionCursor(show) {
+            if (!selectionCursor) createSelectionCursor();
+            selectionCursor.style.display = show ? 'block' : 'none';
+            isSelectionMode = show;
+        }
+
+
+        /////// 
         // 如果需要按钮悬停效果，可以添加这些CSS
         const style = document.createElement('style');
         style.textContent = `
+        #selection-cursor {
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .hit-area {
+            pointer-events: all;
+            cursor: move;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .corner-point {
+            cursor: move;
+        }
+        
+        .corner-point:hover circle:first-child {
+            fill: #ff6b6b;
+            r: 10;
+        }
         .back-button-container button:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
@@ -1254,10 +1333,11 @@
 
             // 點擊事件
             svg.addEventListener('click', (event) => {
-                event.preventDefault();
-                const pt = getSvgPoint(event);
+                if (isSelectionMode) return; // 選擇模式下由上面的邏輯處理
 
-                console.log('點擊位置:', pt);
+
+                event.preventDefault();
+                const pt = getSvgPointFromEvent(event);
 
                 switch (state.currentMode) {
                     case 'draw':
@@ -1278,6 +1358,7 @@
                         break;
                 }
             });
+
 
             // 雙擊事件
             svg.addEventListener('dblclick', (event) => {
@@ -1320,7 +1401,17 @@
                 }
             });
 
+            // 新增選擇模式按鈕事件
+            document.getElementById('toggleSelectionMode')?.addEventListener('click', () => {
+                toggleSelectionCursor(!isSelectionMode);
+            });
+
+
             svg.addEventListener('mousemove', (event) => {
+                if (isSelectionMode) {
+                    const pt = getSvgPointFromEvent(event);
+                    updateSelectionCursor(pt.x, pt.y);
+                }
                 if (!mouseIsDragging || !mouseDragItem) return;
 
                 const pt = getSvgPoint(event);
@@ -1333,6 +1424,7 @@
             });
 
             svg.addEventListener('mouseup', () => {
+
                 mouseIsDragging = false;
                 mouseDragItem = null;
                 document.body.style.userSelect = '';
@@ -1392,6 +1484,12 @@
             }, { passive: false });
 
             svg.addEventListener('touchmove', (event) => {
+                if (isSelectionMode) {
+                    event.preventDefault();
+                    const pt = getSvgPointFromEvent(event);
+                    updateSelectionCursor(pt.x, pt.y);
+                }
+
                 event.preventDefault();
 
                 if (event.touches.length === 2 && state.touchStart) {
@@ -1520,6 +1618,9 @@
 
                 updateViewTransform();
             }, { passive: false });
+
+
+
 
         }
         // ========== 備用座標轉換方案 ==========
@@ -1689,52 +1790,115 @@
             const svgNS = 'http://www.w3.org/2000/svg';
 
             state.polygon.forEach((point, index) => {
+                const group = document.createElementNS(svgNS, 'g');
+                group.setAttribute('class', 'corner-point');
+                group.setAttribute('data-index', index);
+
+                // 圓點
                 const circle = document.createElementNS(svgNS, 'circle');
                 circle.setAttribute('cx', point[0]);
                 circle.setAttribute('cy', point[1]);
-                circle.setAttribute('r', 6);
-                circle.setAttribute('fill', '#10b981');
+                circle.setAttribute('r', 8);
+                circle.setAttribute('fill', '#ff6b6b');
                 circle.setAttribute('stroke', '#fff');
-                circle.setAttribute('stroke-width', 2);
-                circle.setAttribute('class', 'handle');
+                circle.setAttribute('stroke-width', 3);
                 circle.style.cursor = 'move';
 
-                // 頂點可拖曳調整
-                circle.addEventListener('mousedown', (event) => {
+                // 增加點擊區域的透明圓
+                const hitArea = document.createElementNS(svgNS, 'circle');
+                hitArea.setAttribute('cx', point[0]);
+                hitArea.setAttribute('cy', point[1]);
+                hitArea.setAttribute('r', 20);
+                hitArea.setAttribute('fill', 'transparent');
+                hitArea.style.cursor = 'move';
+
+                group.appendChild(hitArea);
+                group.appendChild(circle);
+
+                // ========== 修正角落點的拖曳事件 ==========
+                let isDragging = false;
+                let startX, startY;
+                let pointStart = [...point];
+
+                function startDrag(event) {
                     event.stopPropagation();
-                    let isDragging = true;
-                    const startX = event.clientX;
-                    const startY = event.clientY;
-                    const startPoint = [...point];
+                    event.preventDefault();
 
-                    function onMouseMove(moveEvent) {
-                        if (!isDragging) return;
+                    const pt = getSvgPointFromEvent(event);
+                    isDragging = true;
+                    startX = pt.x;
+                    startY = pt.y;
+                    pointStart = [...point];
 
-                        const dx = moveEvent.clientX - startX;
-                        const dy = moveEvent.clientY - startY;
+                    document.addEventListener('mousemove', drag);
+                    document.addEventListener('mouseup', stopDrag);
+                    document.addEventListener('touchmove', drag, { passive: false });
+                    document.addEventListener('touchend', stopDrag);
+                }
 
-                        point[0] = startPoint[0] + dx / state.zoom;
-                        point[1] = startPoint[1] + dy / state.zoom;
+                function drag(event) {
+                    if (!isDragging) return;
+                    event.preventDefault();
 
-                        renderPolygon();
-                        showAreaInfo();
-                    }
+                    const pt = getSvgPointFromEvent(event);
+                    const dx = pt.x - startX;
+                    const dy = pt.y - startY;
 
-                    function onMouseUp() {
-                        isDragging = false;
-                        document.removeEventListener('mousemove', onMouseMove);
-                        document.removeEventListener('mouseup', onMouseUp);
-                    }
+                    point[0] = pointStart[0] + dx;
+                    point[1] = pointStart[1] + dy;
 
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
-                });
+                    renderPolygon();
+                    showAreaInfo();
+                }
 
-                state.pointsGroup.appendChild(circle);
+                function stopDrag() {
+                    isDragging = false;
+                    document.removeEventListener('mousemove', drag);
+                    document.removeEventListener('mouseup', stopDrag);
+                    document.removeEventListener('touchmove', drag);
+                    document.removeEventListener('touchend', stopDrag);
+                }
+
+                // 綁定事件
+                group.addEventListener('mousedown', startDrag);
+                group.addEventListener('touchstart', startDrag, { passive: false });
+
+                state.pointsGroup.appendChild(group);
             });
+
             // 更新邊界長度顯示
             createEdgeLabels();
         }
+
+        // 輔助函數：從事件獲取SVG座標
+        function getSvgPointFromEvent(event) {
+            const svg = state.svgRoot;
+            if (!svg) return { x: 0, y: 0 };
+
+            let clientX, clientY;
+            if (event.type.includes('touch')) {
+                if (event.touches && event.touches.length > 0) {
+                    clientX = event.touches[0].clientX;
+                    clientY = event.touches[0].clientY;
+                } else if (event.changedTouches && event.changedTouches.length > 0) {
+                    clientX = event.changedTouches[0].clientX;
+                    clientY = event.changedTouches[0].clientY;
+                }
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            const rect = svg.getBoundingClientRect();
+            const viewBoxX = ((clientX - rect.left) / rect.width) * 1200;
+            const viewBoxY = ((clientY - rect.top) / rect.height) * 700;
+
+            const worldX = (viewBoxX - state.pan.x) / state.zoom;
+            const worldY = (viewBoxY - state.pan.y) / state.zoom;
+
+            return { x: worldX, y: worldY };
+        }
+
 
         // ========== 計算面積與周長 ==========
         function calculatePolygonArea(points) {
@@ -2010,6 +2174,64 @@
 
             return colorMap[type] || '#9fb6b0';
         }
+        // ========== 改進物件拖曳功能 ==========
+        let dragState = {
+            item: null,
+            startX: 0,
+            startY: 0,
+            itemStartX: 0,
+            itemStartY: 0,
+            isDragging: false
+        };
+
+        function startItemDrag(event, item) {
+            event.stopPropagation();
+
+            const pt = getSvgPointFromEvent(event);
+
+            dragState = {
+                item: item,
+                startX: pt.x,
+                startY: pt.y,
+                itemStartX: item.x,
+                itemStartY: item.y,
+                isDragging: true
+            };
+
+            // 選中物件
+            selectItem(item);
+
+            // 綁定移動和結束事件
+            document.addEventListener('mousemove', handleItemDrag);
+            document.addEventListener('mouseup', stopItemDrag);
+            document.addEventListener('touchmove', handleItemDrag, { passive: false });
+            document.addEventListener('touchend', stopItemDrag);
+        }
+
+        function handleItemDrag(event) {
+            if (!dragState.isDragging || !dragState.item) return;
+
+            event.preventDefault();
+
+            const pt = getSvgPointFromEvent(event);
+            const dx = pt.x - dragState.startX;
+            const dy = pt.y - dragState.startY;
+
+            dragState.item.x = dragState.itemStartX + dx;
+            dragState.item.y = dragState.itemStartY + dy;
+
+            constrainItemToPolygon(dragState.item);
+            updatePlacedGraphics();
+        }
+
+        function stopItemDrag() {
+            dragState.isDragging = false;
+
+            document.removeEventListener('mousemove', handleItemDrag);
+            document.removeEventListener('mouseup', stopItemDrag);
+            document.removeEventListener('touchmove', handleItemDrag);
+            document.removeEventListener('touchend', stopItemDrag);
+        }
 
         // ========== 放置單一物件 ==========
         function placeOneFromPool(index) {
@@ -2091,8 +2313,17 @@
                 const group = document.createElementNS(svgNS, 'g');
                 group.setAttribute('transform', `translate(${item.x}, ${item.y})`);
                 group.setAttribute('data-id', item.id);
-                group.setAttribute('class', 'draggable-item'); // 添加可拖曳類別
+                group.setAttribute('class', 'draggable-item');
                 group.style.cursor = 'move';
+
+                // 增加點擊區域的透明矩形（比實際物件大）
+                const hitRect = document.createElementNS(svgNS, 'rect');
+                hitRect.setAttribute('x', -item.width / 2 - 10);
+                hitRect.setAttribute('y', -item.height / 2 - 10);
+                hitRect.setAttribute('width', item.width + 20);
+                hitRect.setAttribute('height', item.height + 20);
+                hitRect.setAttribute('fill', 'transparent');
+                hitRect.setAttribute('class', 'hit-area');
 
                 // 矩形邊框
                 const rect = document.createElementNS(svgNS, 'rect');
@@ -2138,20 +2369,20 @@
                 const heightM = item.meta ? item.meta.heightM : (item.height / state.scale);
                 sizeLabel.textContent = `${widthM.toFixed(1)} × ${heightM.toFixed(1)} m`;
 
+                group.appendChild(hitRect); // 先添加點擊區域
                 group.appendChild(rect);
                 group.appendChild(text);
                 group.appendChild(label);
                 group.appendChild(sizeLabel);
 
-                // ========== 確保物件可拖曳 ==========
-                // 直接為每個物件添加觸控事件監聽器
-                group.addEventListener('touchstart', handleItemTouchStart, { passive: false });
-                group.addEventListener('touchmove', handleItemTouchMove, { passive: false });
-                group.addEventListener('touchend', handleItemTouchEnd, { passive: false });
+                // 綁定事件
+                group.addEventListener('mousedown', (e) => startItemDrag(e, item));
+                group.addEventListener('touchstart', (e) => startItemDrag(e, item), { passive: false });
 
                 state.placedGroup.appendChild(group);
             });
         }
+
         // ========== 新增：物件專用觸控事件處理 ==========
         let activeTouchItem = null;
         let touchStartPos = { x: 0, y: 0 };
@@ -2347,6 +2578,7 @@
                 console.log(`加入待排物件: ${item.type} x ${item.count}`);
                 for (let i = 0; i < item.count; i++) {
                     allItems.push({
+                        id: `ai_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // 確保有唯一ID
                         type: item.type,
                         customName: item.customName || getTypeLabel(item.type),
                         width: item.w * state.scale,
@@ -2372,16 +2604,16 @@
 
                 if (!alreadyInPool) {
                     allItems.push({
+                        id: item.id || `ai_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                         type: item.type,
                         customName: item.customName,
                         width: item.width,
                         height: item.height,
                         icon: item.icon,
                         color: item.color,
-                        meta: {
-                            widthM: item.meta.widthM,
-                            heightM: item.meta.heightM,
-                            originalIndex: allItems.length
+                        meta: item.meta || {
+                            widthM: item.width / state.scale,
+                            heightM: item.height / state.scale
                         }
                     });
                 }
@@ -2390,6 +2622,9 @@
             if (allItems.length === 0) {
                 console.log('使用範例物件');
                 allItems = getSampleItems();
+                allItems.forEach(item => {
+                    item.id = item.id || `ai_item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                });
             }
 
             console.log('總共需要排列的物件數:', allItems.length);
@@ -2405,15 +2640,15 @@
             // 執行排版
             const placedItems = performAutoArrange(allItems, strategy, aisleWidth, marginWidth);
 
-            console.log('排列結果:', placedItems.length, '個物件');
+            console.log('排列結果:', placedItems);
 
-            // ========== 關鍵修正：確保AI產生的物件有唯一ID和完整屬性 ==========
+            // ========== 關鍵修正：確保AI產生的物件有完整屬性 ==========
             placedItems.forEach((item, index) => {
+                // 確保所有必要屬性都存在
                 if (!item.id) {
                     item.id = `ai_item_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
                 }
 
-                // 確保所有必要屬性都存在
                 if (!item.customName) {
                     item.customName = getTypeLabel(item.type) || '物件';
                 }
@@ -2432,6 +2667,12 @@
                         heightM: item.height / state.scale
                     };
                 }
+
+                // 確保有正確的座標
+                if (typeof item.x === 'undefined' || typeof item.y === 'undefined') {
+                    item.x = 0;
+                    item.y = 0;
+                }
             });
 
             // 更新狀態
@@ -2441,8 +2682,14 @@
             updatePlacedGraphics();
             refreshItemsUI();
 
+            // 重新綁定事件
+            setTimeout(() => {
+                bindPlacedItemEvents();
+            }, 100);
+
             alert(`AI 排版完成！成功排列了 ${placedItems.length} 個物件。`);
         }
+
 
         // 新增函數：重新綁定已放置物件的事件
         function bindPlacedItemEvents() {
@@ -2599,9 +2846,9 @@
                     continue;
                 }
 
-                // 建立放置物件 - 確保有完整的屬性
+                // 建立放置物件
                 const placedItem = {
-                    id: `ai_row_${Date.now()}_${placed.length}_${Math.random().toString(36).substr(2, 9)}`,
+                    id: item.id || `ai_row_${Date.now()}_${placed.length}_${Math.random().toString(36).substr(2, 9)}`,
                     type: item.type,
                     customName: item.customName || getTypeLabel(item.type),
                     x: centerX,
@@ -2626,6 +2873,7 @@
 
             return placed;
         }
+
         // ========== 分組聚集排列 ==========
         function arrangeInClusters(items, bbox, aisleWidth) {
             // 按類型分組
@@ -2929,21 +3177,23 @@
 
         // ========== 修正點擊測試函數 ==========
         function hitTestPlaced(x, y) {
-            console.log('點擊測試座標:', x, y);
+            console.log('點擊測試座標:', x.toFixed(1), y.toFixed(1));
 
             // 從後往前檢查，這樣可以選中最上層的物件
             for (let i = state.placed.length - 1; i >= 0; i--) {
                 const item = state.placed[i];
-                console.log(`檢查物件 ${i}: ${item.customName}`, item);
 
-                // 檢查點是否在物件的矩形範圍內
-                const left = item.x - item.width / 2;
-                const right = item.x + item.width / 2;
-                const top = item.y - item.height / 2;
-                const bottom = item.y + item.height / 2;
+                // 增加點擊區域的容錯範圍
+                const tolerance = Math.max(item.width, item.height) * 0.3;
+
+                // 檢查點是否在物件的矩形範圍內（包含容錯）
+                const left = item.x - item.width / 2 - tolerance;
+                const right = item.x + item.width / 2 + tolerance;
+                const top = item.y - item.height / 2 - tolerance;
+                const bottom = item.y + item.height / 2 + tolerance;
 
                 if (x >= left && x <= right && y >= top && y <= bottom) {
-                    console.log('命中物件:', item);
+                    console.log('命中物件:', item.customName);
                     return item;
                 }
             }
@@ -2951,6 +3201,7 @@
             console.log('未命中任何物件');
             return null;
         }
+
         // ========== 匯入 AI 建議佈局 ==========
         function importAILayout() {
             if (!state.polygonClosed) {
@@ -3489,6 +3740,13 @@
         function initApp() {
             createSvg();
             initEventBindings();
+
+            // 添加選擇模式按鈕
+            addSelectionModeButton();
+
+            // 創建選擇游標
+            createSelectionCursor();
+
 
             // 重置視圖
             state.zoom = 1;
@@ -4136,7 +4394,19 @@
                 }
             });
         }
+        // ========== 在工具列添加選擇模式按鈕 ==========
+        function addSelectionModeButton() {
+            const toolbar = document.querySelector('.toolbar');
+            if (!toolbar) return;
 
+            const selectBtn = document.createElement('button');
+            selectBtn.id = 'toggleSelectionMode';
+            selectBtn.className = 'small';
+            selectBtn.innerHTML = '👆 選擇模式';
+            selectBtn.title = '切換選擇游標模式';
+
+            toolbar.appendChild(selectBtn);
+        }
     </script>
 </body>
 
