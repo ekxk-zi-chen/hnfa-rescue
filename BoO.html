@@ -37,6 +37,27 @@
       position: relative;
     }
 
+    /* 防止拖曳時選擇文字 */
+    * {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    /* 允許輸入框選擇文字 */
+    input,
+    textarea,
+    select {
+      -webkit-user-select: text;
+      -khtml-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
+    }
+
     /* 行動裝置橫向模式 */
     @media (max-width:900px) and (orientation: landscape) {
       .app {
@@ -368,27 +389,37 @@
       cursor: pointer;
     }
 
+    /* 手機工具列優化 */
     .mobile-toolbar {
       display: none;
       position: fixed;
-      bottom: 20px;
+      bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(11, 18, 32, 0.9);
-      padding: 10px;
-      border-radius: 50px;
-      gap: 10px;
-      z-index: 50;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+      background: rgba(11, 18, 32, 0.95);
+      padding: 8px 12px;
+      border-radius: 25px;
+      gap: 8px;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .mobile-toolbar button {
       border-radius: 50%;
-      width: 50px;
-      height: 50px;
+      width: 48px;
+      height: 48px;
       padding: 0;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: white;
+      border: 2px solid rgba(255, 255, 255, 0.2);
     }
+
 
     .zoom-controls {
       position: absolute;
@@ -489,6 +520,117 @@
     .icon-entrance {
       color: #ff6b6b;
     }
+
+    /* 背景圖片樣式 */
+    .bg-image {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .bg-image.active {
+      opacity: 0.7;
+    }
+
+    .bg-image.hidden {
+      display: none;
+    }
+
+    /* 全屏按鈕樣式 */
+    #fullscreenDrawBtn {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      font-weight: bold;
+    }
+
+    #fullscreenDrawBtn:hover {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      transform: scale(1.05);
+    }
+
+    /* 手機版全屏按鈕調整 */
+    @media (max-width: 900px) {
+      #fullscreenDrawBtn {
+        padding: 12px 16px !important;
+        font-size: 16px !important;
+        min-width: 60px !important;
+        min-height: 60px !important;
+      }
+
+      /* 隱藏右下方縮放控制 */
+      .zoom-controls {
+        display: none !important;
+      }
+
+      /* 隱藏右上角圖例 */
+      .legend-collapsible {
+        display: none !important;
+      }
+
+      /* 優化上方工具欄 */
+      .toolbar {
+        padding: 6px 8px;
+        margin-bottom: 4px;
+      }
+
+      .toolbar>div:not(:first-child) {
+        display: none;
+      }
+
+      .toolbar button {
+        flex: 1;
+        min-height: 40px;
+        font-size: 13px;
+        padding: 8px 10px;
+      }
+
+      /* 顯示手機工具列 */
+      .mobile-toolbar {
+        display: flex !important;
+      }
+    }
+
+    @media (max-width: 900px) and (orientation: portrait) {
+      .app {
+        grid-template-rows: auto 1fr;
+        gap: 4px;
+      }
+
+      .side {
+        max-height: 45vh;
+        padding: 8px;
+      }
+
+      .main {
+        height: 55vh;
+      }
+
+      /* 移除右下方縮放按鈕 */
+      .zoom-controls {
+        display: none !important;
+      }
+
+      /* 優化工具欄按鈕 */
+      .toolbar {
+        padding: 6px;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .toolbar button {
+        padding: 8px 10px;
+        font-size: 12px;
+        min-height: 36px;
+      }
+
+      /* 放大背景控制按鈕 */
+      #bgToggleBtn,
+      #uploadBgBtn,
+      #fullscreenDrawBtn {
+        padding: 10px 12px !important;
+        font-size: 14px !important;
+        min-width: 44px !important;
+      }
+    }
   </style>
 </head>
 
@@ -563,6 +705,8 @@
               <button id="clearBtn" class="small">清除重畫</button>
               <button id="completeBtn" class="small">完成繪製</button>
               <button id="areaBtn" class="small">計算面積</button>
+              <button id="toggleEdgeLabels" class="small" title="切換邊界長度顯示">邊界長度📏</button>
+              <button id="fullscreenDrawBtn" class="small" title="全屏繪圖">全屏繪圖📐</button>
             </div>
             <div class="info" id="areaInfo">尚未定義場地範圍</div>
 
@@ -665,6 +809,7 @@
             <div class="export-row" style="margin-top:20px">
               <button id="exportPNG" class="small">匯出 PNG 圖片</button>
               <button id="downloadJSON" class="small secondary">下載 JSON 數據</button>
+              <button id="uploadJSON" class="small secondary">上傳 JSON 數據</button> <!-- 新增 -->
               <button id="clearPlaced" class="small">清除所有排放</button>
             </div>
           </div>
@@ -681,12 +826,19 @@
       <div class="toolbar">
         <div class="small">目前模式：<span id="modeLabel" style="color:#10b981;font-weight:bold">繪製場地</span></div>
         <div style="flex:1"></div>
+        <!-- 全屏繪圖按鈕 -->
+        <button id="fullscreenDrawBtn" class="small" title="全屏繪圖">全屏繪圖🖼️</button>
+
+        <!-- 背景控制按鈕 -->
+        <button id="bgToggleBtn" class="small" title="切換背景">切換背景📷</button>
+        <button id="uploadBgBtn" class="small" title="上傳背景圖片">上傳背景圖片⬆️</button>
+
         <div class="small muted" id="coordinateDisplay">點擊查看座標</div>
         <button id="centerViewBtn" class="small">置中視圖</button>
       </div>
 
       <div id="svgmap" tabindex="0">
-        <!-- SVG 將由 JavaScript 動態建立 -->
+        <!-- SVG 將由 JS動態建立 -->
       </div>
 
       <div class="zoom-controls">
@@ -831,6 +983,7 @@
 
 
     };
+
     // 返回导航页面的函数
     function goBackToNavigation() {
       window.location.href = 'navigation.html';
@@ -853,12 +1006,55 @@
         /* 手机响应式调整 */
         @media (max-width: 900px) {
             .back-button-container {
-                top: 10px;
-                left: 10px;
+              top: 5px;
+              left: 5px;
+              z-index: 1001;
             }
+            
             .back-button-container button {
-                padding: 10px 16px;
-                font-size: 14px;
+              padding: 10px 15px;
+              font-size: 14px;
+              border-radius: 6px;
+            }
+            .app {
+              grid-template-columns: 1fr;
+              grid-template-rows: auto 1fr;
+              padding: 4px;
+              gap: 4px;
+            }
+            .side {
+              height: auto;
+              max-height: 40vh;
+              overflow-y: auto;
+              font-size: 14px;
+            }
+            
+            .main {
+              height: 60vh;
+            }
+            
+            /* 放大觸控目標 */
+            button, input, select {
+              min-height: 44px;
+              min-width: 44px;
+            }
+            
+            .mobile-toolbar {
+              display: flex !important;
+            }
+            
+            /* 隱藏不必要的元素 */
+            .legend-collapsible {
+              display: none;
+            }
+            
+            .toolbar .small:not(:first-child) {
+              display: none;
+            }
+            
+            .back-button-container button {
+              padding: 8px 12px;
+              font-size: 14px;
             }
         }
     `;
@@ -895,7 +1091,8 @@
 
       // 建立座標格線
       createGrid(svg);
-
+      // 建立背景圖層
+      createBackgroundLayer();
 
       // === 新增：中央參考點（紅色圓點）===
       const centerMarker = document.createElementNS(svgNS, 'g');
@@ -1117,7 +1314,25 @@
 
           // 視覺回饋
           selectItem(hit);
+
+          // 防止選擇文字
           event.preventDefault();
+          event.stopPropagation();
+
+          // 防止拖曳時出現選擇框
+          document.body.style.userSelect = 'none';
+          document.body.style.webkitUserSelect = 'none';
+
+          // 拖曳結束時恢復
+          const onMouseUp = () => {
+            isDragging = false;
+            dragItem = null;
+            document.body.style.userSelect = '';
+            document.body.style.webkitUserSelect = '';
+            document.removeEventListener('mouseup', onMouseUp);
+          };
+
+          document.addEventListener('mouseup', onMouseUp);
         }
       });
 
@@ -1142,6 +1357,10 @@
 
       // 觸控事件支援
       svg.addEventListener('touchstart', (event) => {
+        if (isFullscreen) {
+          // 全屏模式下允許所有觸控操作
+          event.preventDefault();
+        }
         if (event.touches.length === 1) {
           // 單指觸摸 - 新增頂點或出入口
           event.preventDefault();
@@ -1182,6 +1401,10 @@
       });
       // 
       svg.addEventListener('touchmove', (event) => {
+        if (isFullscreen) {
+          // 全屏模式下允許拖曳和縮放
+          event.preventDefault();
+        }
         if (event.touches.length === 2 && state.touchStart) {
           // 双指缩放
           event.preventDefault();
@@ -1411,6 +1634,10 @@
 
       // 更新狀態顯示
       updateStatusDisplay();
+      // 更新邊界標籤的變換
+      if (edgeLabelsGroup) {
+        edgeLabelsGroup.setAttribute('transform', state.transformGroup.getAttribute('transform'));
+      }
     }
 
     // 更新調試網格
@@ -1504,6 +1731,8 @@
 
         state.pointsGroup.appendChild(circle);
       });
+      // 更新邊界長度顯示
+      createEdgeLabels();
     }
 
     // ========== 計算面積與周長 ==========
@@ -2941,7 +3170,7 @@
         setMode('draw');
         document.getElementById('areaInfo').textContent = '場地已清除';
       });
-
+      // 完成場地繪製
       document.getElementById('completeBtn').addEventListener('click', () => {
         if (state.polygon.length >= 3) {
           state.polygonClosed = true;
@@ -2952,20 +3181,23 @@
           alert('至少需要 3 個點來定義場地範圍');
         }
       });
-
+      // 顯示場地面積
       document.getElementById('areaBtn').addEventListener('click', showAreaInfo);
-
+      // 在initEventBindings函數中添加事件監聽
+      document.getElementById('uploadJSON').addEventListener('click', importJSON);
       // 出入口管理
       document.getElementById('addEntranceBtn').addEventListener('click', () => {
         setMode('entrance');
       });
-
+      // 全屏按鈕
+      document.getElementById('fullscreenDrawBtn').addEventListener('click', toggleFullscreen);
       document.getElementById('clearEntranceBtn').addEventListener('click', () => {
         state.entrances = [];
         updateEntranceGraphics();
         updateEntranceInfo();
       });
-
+      document.getElementById('bgToggleBtn').addEventListener('click', toggleBackground);
+      document.getElementById('uploadBgBtn').addEventListener('click', uploadBackgroundImage);
       // 物件管理
       document.getElementById('addItemBtn').addEventListener('click', () => {
         const type = document.getElementById('itemType').value;
@@ -3150,40 +3382,7 @@
 
       // 設定初始模式
       setMode('draw');
-      // 添加調試按鈕
-      const debugBtn = document.createElement('button');
-      debugBtn.textContent = '查看狀態';
-      debugBtn.className = 'small';
-      debugBtn.style.position = 'absolute';
-      debugBtn.style.top = '50px';
-      debugBtn.style.right = '10px';
-      debugBtn.style.zIndex = '1000';
-      debugBtn.onclick = function () {
-        alert(`當前狀態：
-    縮放：${state.zoom}
-    平移：x=${state.pan.x.toFixed(2)}, y=${state.pan.y.toFixed(2)}
-    比例尺：${state.scale} px/m
-    場地頂點數：${state.polygon.length}
-    場地是否封閉：${state.polygonClosed}`);
-      };
 
-      // 添加重置按鈕
-      const resetBtn = document.createElement('button');
-      resetBtn.textContent = '重置視圖';
-      resetBtn.className = 'small';
-      resetBtn.style.position = 'absolute';
-      resetBtn.style.top = '90px';
-      resetBtn.style.right = '10px';
-      resetBtn.style.zIndex = '1000';
-      resetBtn.onclick = function () {
-        state.zoom = 1;
-        state.pan = { x: 0, y: 0 };
-        updateViewTransform();
-        alert('視圖已重置');
-      };
-
-      document.body.appendChild(debugBtn);
-      document.body.appendChild(resetBtn);
       // 加入一些範例資料
       setTimeout(() => {
         // 自动建立一个示例场地（如果没有场地）
@@ -3317,9 +3516,118 @@
 
       return placed;
     }
+    // 全屏繪圖
+    document.getElementById('fullscreenDrawBtn').addEventListener('click', function () {
+      setMode('draw');
+
+      // 如果已經在繪圖模式，切換到全屏
+      if (state.currentMode === 'draw') {
+        // 隱藏側邊欄
+        document.querySelector('.side').style.display = 'none';
+
+        // 擴大地圖區域
+        document.querySelector('.main').style.width = '100%';
+        document.querySelector('.main').style.height = '100vh';
+        document.querySelector('.main').style.position = 'fixed';
+        document.querySelector('.main').style.top = '0';
+        document.querySelector('.main').style.left = '0';
+        document.querySelector('.main').style.zIndex = '1000';
+
+        // 添加退出全屏按鈕
+        const exitBtn = document.createElement('button');
+        exitBtn.textContent = '退出全屏';
+        exitBtn.style.position = 'absolute';
+        exitBtn.style.top = '10px';
+        exitBtn.style.right = '10px';
+        exitBtn.style.zIndex = '1001';
+        exitBtn.className = 'small';
+        exitBtn.onclick = function () {
+          document.querySelector('.side').style.display = '';
+          document.querySelector('.main').style = '';
+          this.remove();
+        };
+        document.querySelector('.main').appendChild(exitBtn);
+      }
+    });
     // ========== 頁面載入時初始化 ==========
     document.addEventListener('DOMContentLoaded', initApp);
+    // ========== 邊界長度顯示 ==========
+    let edgeLabelsGroup = null;
 
+    function createEdgeLabels() {
+      if (!state.transformGroup) return;
+
+      const svgNS = 'http://www.w3.org/2000/svg';
+
+      // 移除舊的邊界標籤
+      if (edgeLabelsGroup) {
+        edgeLabelsGroup.remove();
+      }
+
+      // 建立新的邊界標籤群組
+      edgeLabelsGroup = document.createElementNS(svgNS, 'g');
+      edgeLabelsGroup.setAttribute('id', 'edge-labels');
+      edgeLabelsGroup.setAttribute('transform', state.transformGroup.getAttribute('transform'));
+
+      // 檢查是否有多邊形
+      if (state.polygon.length < 2 || !state.polygonClosed) {
+        state.svgRoot.appendChild(edgeLabelsGroup);
+        return;
+      }
+
+      const n = state.polygon.length;
+
+      for (let i = 0; i < n; i++) {
+        const [x1, y1] = state.polygon[i];
+        const [x2, y2] = state.polygon[(i + 1) % n];
+
+        // 計算邊長（像素）
+        const edgeLengthPx = Math.hypot(x2 - x1, y2 - y1);
+
+        // 轉換為公尺
+        const edgeLengthM = (edgeLengthPx / state.scale).toFixed(1);
+
+        // 計算中點位置
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+
+        // 計算角度
+        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+
+        // 創建背景矩形
+        const bgRect = document.createElementNS(svgNS, 'rect');
+        bgRect.setAttribute('x', midX - 25);
+        bgRect.setAttribute('y', midY - 12);
+        bgRect.setAttribute('width', 50);
+        bgRect.setAttribute('height', 24);
+        bgRect.setAttribute('rx', 4);
+        bgRect.setAttribute('ry', 4);
+        bgRect.setAttribute('fill', 'rgba(0, 0, 0, 0.7)');
+        bgRect.setAttribute('stroke', '#10b981');
+        bgRect.setAttribute('stroke-width', 1);
+
+        // 創建文字
+        const text = document.createElementNS(svgNS, 'text');
+        text.setAttribute('x', midX);
+        text.setAttribute('y', midY + 4);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.setAttribute('fill', '#fff');
+        text.setAttribute('font-size', '10');
+        text.setAttribute('font-weight', 'bold');
+        text.textContent = `${edgeLengthM} m`;
+
+        // 旋轉文字使其與邊平行（可選）
+        if (Math.abs(angle) > 45 && Math.abs(angle) < 135) {
+          text.setAttribute('transform', `rotate(${angle}, ${midX}, ${midY})`);
+        }
+
+        edgeLabelsGroup.appendChild(bgRect);
+        edgeLabelsGroup.appendChild(text);
+      }
+
+      state.svgRoot.appendChild(edgeLabelsGroup);
+    }
     // ========== 修正 iOS 觸控問題 ==========
     document.addEventListener('touchstart', (e) => {
       if (e.touches.length > 1) {
@@ -3390,6 +3698,391 @@
         });
       }
     });
+
+
+    // 顯示/隱藏邊線長度標籤
+    document.getElementById('toggleEdgeLabels').addEventListener('click', function () {
+      if (edgeLabelsGroup) {
+        const isVisible = edgeLabelsGroup.style.display !== 'none';
+        edgeLabelsGroup.style.display = isVisible ? 'none' : '';
+        this.textContent = isVisible ? '📏' : '📏✓';
+      }
+    });
+    // 圖例收合功能改進
+    document.addEventListener('DOMContentLoaded', function () {
+      const legend = document.querySelector('.legend-collapsible');
+      const header = document.querySelector('.legend-header');
+      const content = document.querySelector('.legend-content');
+      const toggle = document.querySelector('.legend-toggle');
+
+      let isExpanded = true;
+
+      // 點擊收合/展開
+      header.addEventListener('click', function (e) {
+        e.stopPropagation(); // 防止事件冒泡
+        toggleLegend();
+      });
+
+      // 觸控事件
+      header.addEventListener('touchstart', function (e) {
+        e.stopPropagation();
+      });
+
+      header.addEventListener('touchend', function (e) {
+        e.stopPropagation();
+        toggleLegend();
+      });
+
+      function toggleLegend() {
+        isExpanded = !isExpanded;
+
+        if (isExpanded) {
+          content.style.display = 'grid';
+          content.style.opacity = '1';
+          toggle.style.transform = 'rotate(0deg)';
+          legend.style.maxWidth = '200px';
+        } else {
+          content.style.display = 'none';
+          content.style.opacity = '0';
+          toggle.style.transform = 'rotate(-90deg)';
+          legend.style.maxWidth = '130px';
+        }
+      }
+
+      // 防止地圖點擊關閉圖例
+      legend.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    });
+    // ========== 背景圖片功能 ==========
+    let bgImage = null;
+    let showBackground = false;
+    let customBackground = null;
+    // 建立背景層
+    function createBackgroundLayer() {
+      if (!state.svgRoot) return;
+
+      const svgNS = 'http://www.w3.org/2000/svg';
+      bgImage = document.createElementNS(svgNS, 'image');
+      bgImage.setAttribute('id', 'background-image');
+      bgImage.setAttribute('class', 'bg-image hidden');
+      bgImage.setAttribute('x', 0);
+      bgImage.setAttribute('y', 0);
+      bgImage.setAttribute('width', 1200);
+      bgImage.setAttribute('height', 700);
+      bgImage.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+      // 插入到背景層
+      const gridGroup = document.getElementById('grid-group');
+      if (gridGroup) {
+        state.svgRoot.insertBefore(bgImage, gridGroup);
+      }
+    }
+    // 切換背景顯示
+    function toggleBackground() {
+      showBackground = !showBackground;
+
+      if (bgImage) {
+        if (showBackground && customBackground) {
+          bgImage.classList.remove('hidden');
+          bgImage.classList.add('active');
+        } else {
+          bgImage.classList.remove('active');
+          bgImage.classList.add('hidden');
+        }
+      }
+
+      // 更新按鈕文字
+      const btn = document.getElementById('bgToggleBtn');
+      if (btn) {
+        btn.textContent = showBackground ? '📷✓' : '📷';
+        btn.title = showBackground ? '隱藏背景' : '顯示背景';
+      }
+    }
+    // 上傳背景圖片
+    function uploadBackgroundImage() {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+
+      // 手機優化：增加點擊區域
+      fileInput.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    z-index: 10000;
+  `;
+
+      fileInput.onchange = function (event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // 檢查檔案類型
+        if (!file.type.startsWith('image/')) {
+          alert('請選擇圖片檔案');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          customBackground = e.target.result;
+
+          if (bgImage) {
+            bgImage.setAttribute('href', customBackground);
+
+            // 自動顯示背景
+            showBackground = true;
+            bgImage.classList.remove('hidden');
+            bgImage.classList.add('active');
+
+            // 手機提示
+            if (window.innerWidth <= 900) {
+              alert('背景圖片已載入！點擊"切換背景"按鈕可開關顯示。');
+            }
+          }
+        };
+
+        reader.onerror = function () {
+          alert('圖片讀取失敗，請重試');
+        };
+
+        reader.readAsDataURL(file);
+
+        // 移除 input
+        document.body.removeChild(fileInput);
+      };
+
+      document.body.appendChild(fileInput);
+      fileInput.click();
+    }
+    // ========== 匯入JSON功能 ==========
+    function importJSON() {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.json';
+
+      fileInput.onchange = function (event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const data = JSON.parse(e.target.result);
+            loadJSONData(data);
+            alert('JSON 數據載入成功！');
+          } catch (error) {
+            alert('檔案格式錯誤，請確認上傳的是有效的JSON檔案');
+            console.error('JSON解析錯誤:', error);
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      fileInput.click();
+    }
+
+    function loadJSONData(data) {
+      // 清除現有數據
+      state.polygon = [];
+      state.placed = [];
+      state.itemsPool = [];
+      state.entrances = [];
+
+      // 載入比例尺
+      if (data.scale) {
+        state.scale = data.scale;
+        document.getElementById('scale').value = data.scale;
+      }
+
+      // 載入場地多邊形
+      if (data.polygon && Array.isArray(data.polygon)) {
+        state.polygon = data.polygon;
+        state.polygonClosed = data.polygon.length >= 3;
+        renderPolygon();
+      }
+
+      // 載入出入口
+      if (data.entrances && Array.isArray(data.entrances)) {
+        state.entrances = data.entrances;
+        updateEntranceGraphics();
+        updateEntranceInfo();
+      }
+
+      // 載入已放置物件
+      if (data.placed && Array.isArray(data.placed)) {
+        state.placed = data.placed;
+        updatePlacedGraphics();
+      }
+
+      // 載入待排物件清單
+      if (data.itemsPool && Array.isArray(data.itemsPool)) {
+        state.itemsPool = data.itemsPool;
+        refreshItemsUI();
+      }
+
+      // 更新顯示
+      if (state.polygonClosed) {
+        showAreaInfo();
+        setMode('select');
+      }
+    }
+    // 全屏模式功能（新增）
+    let isFullscreen = false;
+    function toggleFullscreen() {
+      const sidePanel = document.querySelector('.side');
+      const mainPanel = document.querySelector('.main');
+      const backButton = document.querySelector('.back-button-container');
+      const mobileToolbar = document.querySelector('.mobile-toolbar');
+
+      if (!isFullscreen) {
+        // 進入全屏模式
+        isFullscreen = true;
+
+        // 儲存當前模式以便恢復
+        state.preFullscreenMode = state.currentMode;
+
+        // 強制切換到選擇模式（以便操作物件）
+        setMode('select');
+
+        // 隱藏側邊欄、返回按鈕和手機工具列
+        if (sidePanel) sidePanel.style.display = 'none';
+        if (backButton) backButton.style.display = 'none';
+        if (mobileToolbar) mobileToolbar.style.display = 'none';
+
+        // 擴大地圖區域
+        mainPanel.style.position = 'fixed';
+        mainPanel.style.top = '0';
+        mainPanel.style.left = '0';
+        mainPanel.style.width = '100vw';
+        mainPanel.style.height = '100vh';
+        mainPanel.style.zIndex = '2000';
+        mainPanel.style.padding = '0';
+        mainPanel.style.borderRadius = '0';
+        mainPanel.style.background = 'linear-gradient(180deg, #061018, #071425)';
+
+        // 添加大型退出全屏按鈕
+        const exitBtn = document.createElement('button');
+        exitBtn.innerHTML = '❌ 退出全屏';
+        exitBtn.style.position = 'absolute';
+        exitBtn.style.top = '20px';
+        exitBtn.style.right = '20px';
+        exitBtn.style.zIndex = '2001';
+        exitBtn.style.padding = '20px 30px';
+        exitBtn.style.fontSize = '20px';
+        exitBtn.style.fontWeight = 'bold';
+        exitBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        exitBtn.style.color = 'white';
+        exitBtn.style.border = '3px solid white';
+        exitBtn.style.borderRadius = '15px';
+        exitBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.7)';
+        exitBtn.style.cursor = 'pointer';
+        exitBtn.style.minWidth = '160px';
+        exitBtn.style.minHeight = '70px';
+
+        exitBtn.onclick = function () {
+          exitFullscreen();
+          this.remove();
+        };
+
+        // 添加全屏操作提示
+        const hintDiv = document.createElement('div');
+        hintDiv.innerHTML = `
+      <div style="
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 10px;
+        font-size: 16px;
+        line-height: 1.5;
+        max-width: 300px;
+        backdrop-filter: blur(10px);
+      ">
+        <div style="font-weight: bold; margin-bottom: 8px; color: #10b981">📱 全屏操作模式</div>
+        <div>• 可拖曳移動物件</div>
+        <div>• 雙擊物件進行編輯</div>
+        <div>• 兩指縮放/平移地圖</div>
+      </div>
+    `;
+        hintDiv.style.position = 'absolute';
+        hintDiv.style.top = '20px';
+        hintDiv.style.left = '20px';
+        hintDiv.style.zIndex = '2001';
+
+        // 設置5秒後自動淡出提示
+        setTimeout(() => {
+          hintDiv.style.transition = 'opacity 1s';
+          hintDiv.style.opacity = '0.3';
+        }, 5000);
+
+        // 點擊提示可隱藏
+        hintDiv.addEventListener('click', () => {
+          hintDiv.style.opacity = '0';
+          setTimeout(() => hintDiv.remove(), 1000);
+        });
+
+        mainPanel.appendChild(hintDiv);
+        mainPanel.appendChild(exitBtn);
+
+        // 重新計算尺寸
+        setTimeout(() => {
+          if (state.svgRoot) {
+            const container = document.getElementById('svgmap');
+            if (container) {
+              container.style.width = '100%';
+              container.style.height = '100%';
+            }
+          }
+        }, 50);
+
+      } else {
+        exitFullscreen();
+      }
+    }
+    function exitFullscreen() {
+      const sidePanel = document.querySelector('.side');
+      const mainPanel = document.querySelector('.main');
+      const backButton = document.querySelector('.back-button-container');
+      const mobileToolbar = document.querySelector('.mobile-toolbar');
+
+      isFullscreen = false;
+
+      // 恢復正常佈局
+      if (sidePanel) sidePanel.style.display = '';
+      if (backButton) backButton.style.display = '';
+      if (mobileToolbar) mobileToolbar.style.display = 'flex';
+
+      mainPanel.style.position = '';
+      mainPanel.style.top = '';
+      mainPanel.style.left = '';
+      mainPanel.style.width = '';
+      mainPanel.style.height = '';
+      mainPanel.style.zIndex = '';
+      mainPanel.style.padding = '';
+      mainPanel.style.borderRadius = '';
+      mainPanel.style.background = '';
+
+      // 恢復之前的模式
+      if (state.preFullscreenMode) {
+        setMode(state.preFullscreenMode);
+      }
+
+      // 移除全屏添加的元素
+      const fullscreenElements = mainPanel.querySelectorAll('[data-fullscreen-added]');
+      fullscreenElements.forEach(el => el.remove());
+
+      // 移除所有動態添加的元素
+      const dynamicElements = mainPanel.querySelectorAll('button, div');
+      dynamicElements.forEach(el => {
+        if (el.textContent.includes('退出全屏') || el.textContent.includes('全屏操作模式')) {
+          el.remove();
+        }
+      });
+    }
+
   </script>
 </body>
 
