@@ -326,7 +326,7 @@
 
         // 全局變數
         let ID_TOKEN = null;
-        let SESSION_TOKEN = sessionStorage.getItem('sessionToken') || null;
+        let SESSION_TOKEN = localStorage.getItem('sessionToken') || null;
         let PROFILE = null;
 
         // ---------- 工具函數 ----------
@@ -498,7 +498,6 @@
                     } else {
                         addDebugInfo('sessionToken 無效，清除本地資料');
                         localStorage.removeItem('sessionToken');
-                        sessionStorage.removeItem('sessionToken');
                         SESSION_TOKEN = null;
                         // 繼續執行後面的流程
                     }
@@ -558,7 +557,7 @@
 
                 // 處理不同狀態
                 if (data.status === 'ok') {
-                    sessionStorage.setItem('sessionToken', data.sessionToken);
+                    localStorage.setItem('sessionToken', data.sessionToken);
                     SESSION_TOKEN = data.sessionToken;
 
                     showStatus('驗證成功，即將進入系統...', 'success');
@@ -571,7 +570,7 @@
                 if (data.status === 'needsignup') {
                     // 需要註冊，儲存臨時 sessionToken 並顯示註冊表單
                     if (data.sessionToken) {
-                        sessionStorage.setItem('sessionToken', data.sessionToken);
+                        localStorage.setItem('sessionToken', data.sessionToken);
                         SESSION_TOKEN = data.sessionToken;
                     }
 
@@ -623,7 +622,7 @@
                 
                 // 如果後端回傳新的 sessionToken 就保存
                 if (data.sessionToken) {
-                    sessionStorage.setItem('sessionToken', data.sessionToken);
+                    localStorage.setItem('sessionToken', data.sessionToken);
                     SESSION_TOKEN = data.sessionToken;
                     addDebugInfo(`保存新的 sessionToken: ${data.sessionToken.substring(0, 20)}...`);
                 }
@@ -743,7 +742,7 @@
 
                     // 保存新的 sessionToken
                     if (data.sessionToken) {
-                        sessionStorage.setItem('sessionToken', data.sessionToken);
+                        localStorage.setItem('sessionToken', data.sessionToken);
                         SESSION_TOKEN = data.sessionToken;
                     }
 
