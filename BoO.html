@@ -2075,9 +2075,23 @@
             const svgNS = 'http://www.w3.org/2000/svg';
 
             state.placed.forEach(item => {
+                // 確保物件有必要的屬性
+                if (!item.id) {
+                    item.id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                }
+
+                if (!item.color) {
+                    item.color = getTypeColor(item.type) || '#10b981';
+                }
+
+                if (!item.icon) {
+                    item.icon = getDefaultIcon(item.type) || '📦';
+                }
+
                 const group = document.createElementNS(svgNS, 'g');
                 group.setAttribute('transform', `translate(${item.x}, ${item.y})`);
                 group.setAttribute('data-id', item.id);
+                group.setAttribute('class', 'draggable-item'); // 添加可拖曳類別
                 group.style.cursor = 'move';
 
                 // 矩形邊框
@@ -2088,7 +2102,7 @@
                 rect.setAttribute('height', item.height);
                 rect.setAttribute('rx', 6);
                 rect.setAttribute('ry', 6);
-                rect.setAttribute('fill', `${item.color}20`); // 20 表示 12% 透明度
+                rect.setAttribute('fill', `${item.color}20`);
                 rect.setAttribute('stroke', item.color);
                 rect.setAttribute('stroke-width', 2);
                 rect.setAttribute('class', 'placed-item');
@@ -2110,7 +2124,7 @@
                 label.setAttribute('text-anchor', 'middle');
                 label.setAttribute('font-size', 12);
                 label.setAttribute('fill', '#bfeee0');
-                label.textContent = item.customName;
+                label.textContent = item.customName || getTypeLabel(item.type) || '物件';
 
                 // 尺寸標籤
                 const sizeLabel = document.createElementNS(svgNS, 'text');
@@ -2119,32 +2133,109 @@
                 sizeLabel.setAttribute('text-anchor', 'middle');
                 sizeLabel.setAttribute('font-size', 10);
                 sizeLabel.setAttribute('fill', '#9fb6b0');
-                sizeLabel.textContent = `${item.meta.widthM} × ${item.meta.heightM} m`;
+
+                const widthM = item.meta ? item.meta.widthM : (item.width / state.scale);
+                const heightM = item.meta ? item.meta.heightM : (item.height / state.scale);
+                sizeLabel.textContent = `${widthM.toFixed(1)} × ${heightM.toFixed(1)} m`;
 
                 group.appendChild(rect);
                 group.appendChild(text);
                 group.appendChild(label);
                 group.appendChild(sizeLabel);
 
-                // 點擊事件 - 選擇物件
-                group.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    if (state.currentMode === 'select') {
-                        selectItem(item);
-                    }
-                });
-
-                // 雙擊事件 - 編輯物件
-                group.addEventListener('dblclick', (event) => {
-                    event.stopPropagation();
-                    openEditModal(item);
-                });
+                // ========== 確保物件可拖曳 ==========
+                // 直接為每個物件添加觸控事件監聽器
+                group.addEventListener('touchstart', handleItemTouchStart, { passive: false });
+                group.addEventListener('touchmove', handleItemTouchMove, { passive: false });
+                group.addEventListener('touchend', handleItemTouchEnd, { passive: false });
 
                 state.placedGroup.appendChild(group);
             });
-            // 綁定事件
-            bindPlacedItemEvents();
         }
+        // ========== 新增：物件專用觸控事件處理 ==========
+        let activeTouchItem = null;
+        let touchStartPos = { x: 0, y: 0 };
+        let itemStartPos = { x: 0, y: 0 };
+
+        function handleItemTouchStart(event) {
+            if (state.currentMode !== 'select') return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const touch = event.touches[0];
+            const svg = state.svgRoot;
+            const rect = svg.getBoundingClientRect();
+
+            // 獲取觸控位置
+            const clientX = touch.clientX;
+            const clientY = touch.clientY;
+
+            // 轉換為SVG座標
+            const viewBoxX = ((clientX - rect.left) / rect.width) * 1200;
+            const viewBoxY = ((clientY - rect.top) / rect.height) * 700;
+
+            // 轉換為世界座標
+            const worldX = (viewBoxX - state.pan.x) / state.zoom;
+            const worldY = (viewBoxY - state.pan.y) / state.zoom;
+
+            // 找到點擊的物件
+            const itemId = event.currentTarget.getAttribute('data-id');
+            const item = state.placed.find(item => item.id === itemId);
+
+            if (item) {
+                activeTouchItem = item;
+                touchStartPos = { x: worldX, y: worldY };
+                itemStartPos = { x: item.x, y: item.y };
+
+                // 選中物件
+                selectItem(item);
+            }
+        }
+
+        function handleItemTouchMove(event) {
+            if (!activeTouchItem) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const touch = event.touches[0];
+            const svg = state.svgRoot;
+            const rect = svg.getBoundingClientRect();
+
+            // 獲取觸控位置
+            const clientX = touch.clientX;
+            const clientY = touch.clientY;
+
+            // 轉換為SVG座標
+            const viewBoxX = ((clientX - rect.left) / rect.width) * 1200;
+            const viewBoxY = ((clientY - rect.top) / rect.height) * 700;
+
+            // 轉換為世界座標
+            const worldX = (viewBoxX - state.pan.x) / state.zoom;
+            const worldY = (viewBoxY - state.pan.y) / state.zoom;
+
+            // 計算移動距離
+            const dx = worldX - touchStartPos.x;
+            const dy = worldY - touchStartPos.y;
+
+            // 更新物件位置
+            activeTouchItem.x = itemStartPos.x + dx;
+            activeTouchItem.y = itemStartPos.y + dy;
+
+            // 確保物件在場地內
+            constrainItemToPolygon(activeTouchItem);
+
+            // 更新顯示
+            updatePlacedGraphics();
+        }
+
+        function handleItemTouchEnd(event) {
+            activeTouchItem = null;
+            touchStartPos = { x: 0, y: 0 };
+            itemStartPos = { x: 0, y: 0 };
+        }
+
 
         // ========== 選擇物件功能 ==========
         function selectItem(item) {
@@ -2237,7 +2328,6 @@
                 return;
             }
 
-            // 調試：顯示當前物件池狀態
             console.log('AI排版前物件池:', state.itemsPool);
 
             if (state.itemsPool.length === 0 && state.placed.length === 0) {
@@ -2274,7 +2364,6 @@
 
             // 2. 加入已放置但未在待排清單中的物件
             tempPlaced.forEach(item => {
-                // 檢查是否已經在待排清單中
                 const alreadyInPool = state.itemsPool.some(poolItem =>
                     poolItem.type === item.type &&
                     poolItem.w === item.meta.widthM &&
@@ -2298,7 +2387,6 @@
                 }
             });
 
-            // 如果沒有物件，使用預設範例
             if (allItems.length === 0) {
                 console.log('使用範例物件');
                 allItems = getSampleItems();
@@ -2317,26 +2405,45 @@
             // 執行排版
             const placedItems = performAutoArrange(allItems, strategy, aisleWidth, marginWidth);
 
-            // 調試：顯示排列結果
             console.log('排列結果:', placedItems.length, '個物件');
+
+            // ========== 關鍵修正：確保AI產生的物件有唯一ID和完整屬性 ==========
+            placedItems.forEach((item, index) => {
+                if (!item.id) {
+                    item.id = `ai_item_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+                }
+
+                // 確保所有必要屬性都存在
+                if (!item.customName) {
+                    item.customName = getTypeLabel(item.type) || '物件';
+                }
+
+                if (!item.icon) {
+                    item.icon = getDefaultIcon(item.type);
+                }
+
+                if (!item.color) {
+                    item.color = getTypeColor(item.type);
+                }
+
+                if (!item.meta) {
+                    item.meta = {
+                        widthM: item.width / state.scale,
+                        heightM: item.height / state.scale
+                    };
+                }
+            });
 
             // 更新狀態
             state.placed = placedItems;
-
-            // 清空待排清單（使用者可以重新添加）
-            // state.itemsPool = []; // 註解掉這行，不清空待排清單
 
             // 更新顯示
             updatePlacedGraphics();
             refreshItemsUI();
 
-            // 重新綁定事件
-            setTimeout(() => {
-                bindPlacedItemEvents();
-            }, 100);
-
             alert(`AI 排版完成！成功排列了 ${placedItems.length} 個物件。`);
         }
+
         // 新增函數：重新綁定已放置物件的事件
         function bindPlacedItemEvents() {
             const svgNS = 'http://www.w3.org/2000/svg';
@@ -2492,18 +2599,22 @@
                     continue;
                 }
 
-                // 建立放置物件
+                // 建立放置物件 - 確保有完整的屬性
                 const placedItem = {
-                    id: `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    id: `ai_row_${Date.now()}_${placed.length}_${Math.random().toString(36).substr(2, 9)}`,
                     type: item.type,
-                    customName: item.customName,
+                    customName: item.customName || getTypeLabel(item.type),
                     x: centerX,
                     y: centerY,
                     width: item.width,
                     height: item.height,
-                    icon: item.icon,
-                    color: item.color,
-                    meta: item.meta
+                    icon: item.icon || getDefaultIcon(item.type),
+                    color: item.color || getTypeColor(item.type),
+                    meta: {
+                        widthM: item.meta ? item.meta.widthM : (item.width / state.scale),
+                        heightM: item.meta ? item.meta.heightM : (item.height / state.scale),
+                        originalIndex: placed.length
+                    }
                 };
 
                 placed.push(placedItem);
@@ -2515,7 +2626,6 @@
 
             return placed;
         }
-
         // ========== 分組聚集排列 ==========
         function arrangeInClusters(items, bbox, aisleWidth) {
             // 按類型分組
@@ -2561,16 +2671,20 @@
 
                     if (isPointInPolygon(centerX, centerY, state.polygon)) {
                         const placedItem = {
-                            id: `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            id: `ai_cluster_${Date.now()}_${placed.length}_${Math.random().toString(36).substr(2, 9)}`,
                             type: item.type,
-                            customName: item.customName,
+                            customName: item.customName || getTypeLabel(item.type),
                             x: centerX,
                             y: centerY,
                             width: item.width,
                             height: item.height,
-                            icon: item.icon,
-                            color: item.color,
-                            meta: item.meta
+                            icon: item.icon || getDefaultIcon(item.type),
+                            color: item.color || getTypeColor(item.type),
+                            meta: {
+                                widthM: item.meta ? item.meta.widthM : (item.width / state.scale),
+                                heightM: item.meta ? item.meta.heightM : (item.height / state.scale),
+                                originalIndex: placed.length
+                            }
                         };
 
                         placed.push(placedItem);
@@ -2813,21 +2927,30 @@
             }
         }
 
-        // 點擊測試
+        // ========== 修正點擊測試函數 ==========
         function hitTestPlaced(x, y) {
+            console.log('點擊測試座標:', x, y);
+
+            // 從後往前檢查，這樣可以選中最上層的物件
             for (let i = state.placed.length - 1; i >= 0; i--) {
                 const item = state.placed[i];
-                const dx = Math.abs(x - item.x);
-                const dy = Math.abs(y - item.y);
+                console.log(`檢查物件 ${i}: ${item.customName}`, item);
 
-                if (dx < item.width / 2 && dy < item.height / 2) {
+                // 檢查點是否在物件的矩形範圍內
+                const left = item.x - item.width / 2;
+                const right = item.x + item.width / 2;
+                const top = item.y - item.height / 2;
+                const bottom = item.y + item.height / 2;
+
+                if (x >= left && x <= right && y >= top && y <= bottom) {
+                    console.log('命中物件:', item);
                     return item;
                 }
             }
 
+            console.log('未命中任何物件');
             return null;
         }
-
         // ========== 匯入 AI 建議佈局 ==========
         function importAILayout() {
             if (!state.polygonClosed) {
@@ -3342,6 +3465,21 @@
                             updateViewTransform();
                         }
                         break;
+                }
+            });
+
+            // 確保物件點擊事件工作正常
+            document.addEventListener('click', (e) => {
+                // 如果點擊的是物件，確保物件被選中
+                if (e.target.closest('.draggable-item') || e.target.closest('.placed-item')) {
+                    const itemGroup = e.target.closest('.draggable-item');
+                    if (itemGroup) {
+                        const itemId = itemGroup.getAttribute('data-id');
+                        const item = state.placed.find(item => item.id === itemId);
+                        if (item) {
+                            selectItem(item);
+                        }
+                    }
                 }
             });
         }
