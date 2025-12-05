@@ -379,7 +379,7 @@
 
         async function initializeApp() {
             try {
-                const sessionToken = sessionStorage.getItem('sessionToken');
+                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
                 if (!sessionToken) {
                     window.location.href = 'index.html';
                     return;
