@@ -1139,13 +1139,16 @@
                 const sessionToken = sessionStorage.getItem('sessionToken');
 
                 if (!sessionToken) {
+                    showToast('找不到session', 'error');
                     window.location.href = 'index.html';
                     return;
                 }
+                showToast('連線資料庫', 'error');
 
                 // 初始化共享的 Supabase 客戶端
                 await initializeSupabaseClient();
 
+                showToast('驗證通行碼', 'error');
                 // 驗證用戶身份並獲取角色
                 await verifyUser(sessionToken);
 
