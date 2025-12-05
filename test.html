@@ -1134,7 +1134,10 @@
         async function initializeApp() {
             try {
                 // 檢查 Session Token
-                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
+                //const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
+                
+                const sessionToken = sessionStorage.getItem('sessionToken');
+
                 if (!sessionToken) {
                     window.location.href = 'index.html';
                     return;
@@ -1547,9 +1550,9 @@
                 };
 
                 sessionStorage.setItem('sessionToken', sessionToken);
-                if (localStorage.getItem('sessionToken')) {
-                    localStorage.removeItem('sessionToken');
-                }
+                
+                localStorage.removeItem('sessionToken');
+                
 
                 updateUserInterface();
             } catch (error) {
