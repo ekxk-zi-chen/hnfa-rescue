@@ -2,7 +2,6 @@
 <html lang="zh-Hant">
 
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>花蓮特搜裝備管理系統</title>
@@ -1135,21 +1134,15 @@
         async function initializeApp() {
             try {
                 // 檢查 Session Token
-                //const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
-                
-                const sessionToken = sessionStorage.getItem('sessionToken');
-
+                const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
                 if (!sessionToken) {
-                    showToast('找不到session', 'error');
                     window.location.href = 'index.html';
                     return;
                 }
-                showToast('連線資料庫', 'error');
 
                 // 初始化共享的 Supabase 客戶端
-                initializeSupabaseClient();
+                await initializeSupabaseClient();
 
-                showToast('驗證通行碼', 'error');
                 // 驗證用戶身份並獲取角色
                 await verifyUser(sessionToken);
 
@@ -1175,15 +1168,18 @@
         }
 
         // 新增：初始化共享的 Supabase 客戶端
-        // 靜態版初始化 Supabase
-        function initializeSupabaseClient() {
-            if (!window.supabaseClient) {
-                window.supabaseClient = supabase.createClient(
-                    CONFIG.SUPABASE_URL,
-                    CONFIG.SUPABASE_ANON_KEY
-                );
+        async function initializeSupabaseClient() {
+            if (!supabaseClient) {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+                supabaseClient = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+                    realtime: {
+                        params: {
+                            eventsPerSecond: 5
+                        }
+                    }
+                });
             }
-            return window.supabaseClient;
+            return supabaseClient;
         }
 
 
@@ -1551,9 +1547,9 @@
                 };
 
                 sessionStorage.setItem('sessionToken', sessionToken);
-                
-                localStorage.removeItem('sessionToken');
-                
+                if (localStorage.getItem('sessionToken')) {
+                    localStorage.removeItem('sessionToken');
+                }
 
                 updateUserInterface();
             } catch (error) {
