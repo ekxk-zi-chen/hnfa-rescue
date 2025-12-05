@@ -498,6 +498,7 @@
                     } else {
                         addDebugInfo('sessionToken 無效，清除本地資料');
                         localStorage.removeItem('sessionToken');
+                        sessionStorage.removeItem('sessionToken');
                         SESSION_TOKEN = null;
                         // 繼續執行後面的流程
                     }
