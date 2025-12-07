@@ -12,6 +12,8 @@ body {
     overflow-x: hidden;
 }
 
+
+
 /* 標題區 - 縮小 */
 .header {
     background-color: #FFFFFF;
@@ -24,6 +26,30 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
+}
+
+.back-btn {
+    background: var(--gray-200);
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1.25rem;
+    transition: all 0.3s ease;
+    background: rgba(26, 186, 146, 0.95);
+}
+
+.back-btn:hover {
+    background: var(--gray-300);
+    transform: translateX(-4px);
+    
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 .logo {
@@ -331,12 +357,14 @@ body {
 
 /* 當前狀態的按鈕用深色 */
 .status-btn.boo.active {
-    background-color: #4CAF50;  /* 深綠色 */
+    background-color: #4CAF50;
+    /* 深綠色 */
     color: white;
 }
 
 .status-btn.out.active {
-    background-color: #F44336;  /* 深紅色 */
+    background-color: #F44336;
+    /* 深紅色 */
     color: white;
 }
 
@@ -352,9 +380,12 @@ body {
 
 /* 卡片原因顯示 - 只在外出/應勤狀態顯示 */
 .card.out .card-reason {
-    background-color: #c6fee8;  /* 淺灰色背景 */
-    color: #1527ec;  /* 深灰色文字 */
-    border: 2px solid #31092a;  /* 實線邊框 */
+    background-color: #c6fee8;
+    /* 淺灰色背景 */
+    color: #1527ec;
+    /* 深灰色文字 */
+    border: 2px solid #31092a;
+    /* 實線邊框 */
     border-radius: 3px;
     font-size: 11px;
     margin-top: 5px;
@@ -1618,6 +1649,11 @@ body {
 
 /* 群組控制樣式優化 - 手機版 */
 @media (max-width: 768px) {
+    .header-left {
+        width: 100%;
+        justify-content: center;
+    }
+
     .group-control-item {
         display: flex;
         flex-direction: column;
