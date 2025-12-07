@@ -1,0 +1,22 @@
+[
+  {
+    "id": 201,
+    "name": "救援車1號",
+    "type": "救援車輛",
+    "photo": "vehicle1.jpg",
+    "status": "在隊",
+    "time_status": "12/15 08:00",
+    "time_history": "在隊 12/15 08:00\n出勤 12/14 10:00\n在隊 12/14 08:00",
+    "reasons": ""
+  },
+  {
+    "id": 202,
+    "name": "指揮車",
+    "type": "指揮車輛",
+    "photo": "vehicle2.jpg",
+    "status": "出勤",
+    "time_status": "12/15 09:30",
+    "time_history": "出勤 12/15 09:30\n在隊 12/14 17:00",
+    "reasons": "火警支援"
+  }
+]
