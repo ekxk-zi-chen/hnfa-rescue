@@ -1,3 +1,8 @@
+// 返回導航頁面
+function goBack() {
+    window.location.href = 'navigation.html';
+}
+
 console.log('=== 路徑偵測開始 ===');
 console.log('當前 URL:', window.location.href);
 console.log('當前路徑:', window.location.pathname);
