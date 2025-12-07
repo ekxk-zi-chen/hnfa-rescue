@@ -12,7 +12,7 @@ let userRole = '一般用戶';
 
 // 檢查 Supabase 是否可用
 let supabase = null;
-if (typeof createClient !== 'undefined') {
+if (window.supabase && typeof window.supabase.createClient === 'function') {
     // 建立 Supabase 客戶端
     supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
     console.log('Supabase 客戶端建立成功');
