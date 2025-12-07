@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import jwt from "jsonwebtoken";
 import fetch from "node-fetch";
-
+import { handlePersonnelControl } from './personnelControlModule.js';
 
 
 
@@ -60,6 +60,28 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     return res.status(404).json({ status: "error", message: "User not found" });
   }
 
+  ///////////// 這裡新增人員管控的移交.js模組處理 /////////////
+  // 人員管制相關的action列表
+  const personnelControlActions = [
+    'getMissionPersonnel',
+    'getMissionEquipment',
+    'getMasterPersonnel',
+    'getMasterEquipment',
+    'updatePersonnelStatus',
+    'updateEquipmentStatus',
+    'batchUpdateGroupStatus',
+    'manageMissionPersonnel',
+    'manageMissionEquipment',
+    'addToMasterPersonnel',
+    'addToMasterEquipment',
+    'refreshData'
+  ];
+
+  // 如果是人員管制相關的action，轉交給模組處理
+  if (personnelControlActions.includes(action)) {
+    return await handlePersonnelControl(action, body, supabase, userData, res);
+  }
+  ///////////// 新增移交結束 /////////////
   const userRole = userData.管理員 || "一般用戶";
 
   // ====== 讀取裝備 ======
@@ -123,7 +145,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
 
     equipmentData.裝備編號 = newNumber; // ✅ 直接用數字
     equipmentData.填表人 = userData.display_name || userData.姓名;
-    
+
     const now = new Date();
     const timestamp = now.toLocaleString('zh-TW', {
       timeZone: 'Asia/Taipei',
@@ -440,7 +462,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     const now = new Date();
     const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
     const batchDate = new Date().toISOString(); // 存储标准 ISO 时间
-    
+
     const batchIdentifier = `batch_${Date.now()}`;
 
     try {
@@ -622,7 +644,7 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
       const now = new Date();
       const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
       const batchDate = new Date().toISOString();
-      
+
       // ✅ 生成新的批次標識符
       const newBatchIdentifier = `batch_${Date.now()}_transfer`;
 
