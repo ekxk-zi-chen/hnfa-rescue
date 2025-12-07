@@ -1,4 +1,3 @@
-
 // 新增在 script.js 開頭的 CONFIG
 const CONFIG = {
     API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
@@ -10,9 +9,17 @@ const CONFIG = {
 let currentUser = null;
 let userRole = '一般用戶';
 
-// 建立 Supabase 客戶端
-const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
+// 檢查 Supabase 是否可用
+let supabase = null;
+if (typeof createClient !== 'undefined') {
+    // 建立 Supabase 客戶端
+    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    console.log('Supabase 客戶端建立成功');
+} else {
+    console.error('createClient 未定義，請檢查 Supabase CDN 是否正確引入');
+    // 可以添加錯誤處理或使用替代方案
+}
 // 全域變數
 let currentData = {
     employees: [],
