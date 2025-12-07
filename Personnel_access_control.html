@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>管制系統</title>
+    <link rel="stylesheet" href="Personnelcontrol/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- 標題區 - 縮小 -->
+    <header class="header">
+        <div class="logo">管制系統</div>
+        <div class="view-switcher">
+            <button class="view-btn active" data-view="personnel">
+                <i class="fas fa-users"></i>人員
+            </button>
+            <button class="view-btn" data-view="equipment">
+                <i class="fas fa-tools"></i>器材
+            </button>
+            <button class="view-btn" data-view="vehicle">
+                <i class="fas fa-car"></i>車輛
+            </button>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <div class="container">
+        <!-- 頂部統計區 - 重點顯示 -->
+        <div class="stats-section">
+            <div class="stats-container">
+                <div class="stat-card boo-stat" onclick="showStatusDetail('boo')" style="cursor: pointer;">
+                    <div class="stat-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">基地人數</div>
+                        <div class="stat-value" id="boo-count">0</div>
+                    </div>
+                </div>
+                <div class="stat-card out-stat" onclick="showStatusDetail('out')" style="cursor: pointer;">
+                    <div class="stat-icon">
+                        <i class="fas fa-walking"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">外出人數</div>
+                        <div class="stat-value" id="out-count">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 控制按鈕區 -->
+        <div class="control-section">
+            <div class="control-buttons">
+                <button class="control-btn" onclick="showGroupControl()">
+                    <i class="fas fa-users-cog"></i>
+                    <span>群組控制</span>
+                </button>
+                <button class="control-btn" onclick="showQuickControl()">
+                    <i class="fas fa-bolt"></i>
+                    <span>快速控制</span>
+                </button>
+
+                <button class="control-btn" onclick="toggleHistoryPanel()">
+                    <i class="fas fa-history"></i>
+                    <span>歷史</span>
+                </button>
+                <button class="control-btn" onclick="manageReasons()">
+                    <i class="fas fa-edit"></i>
+                    <span>原因管理</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 卡片顯示區 - 主要內容 -->
+        <div class="cards-section">
+            <div class="cards-container active" id="personnel-cards">
+                <!-- 人員卡片動態生成 -->
+            </div>
+            <div class="cards-container" id="equipment-cards">
+                <!-- 器材卡片動態生成 -->
+            </div>
+            <div class="cards-container" id="vehicle-cards">
+                <!-- 車輛卡片動態生成 -->
+            </div>
+        </div>
+
+        <!-- 可折疊資訊面板 -->
+        <div class="info-panel" id="info-panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-info-circle"></i> 備註與詳細資料</h3>
+                <button class="close-panel" onclick="toggleInfoPanel()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="panel-content">
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('info')">系統說明</button>
+                    <button class="tab-btn" onclick="switchTab('detail')">詳細資料</button>
+                </div>
+
+                <div class="tab-content active" id="info-content">
+                    <div class="info-item">
+                        <i class="fas fa-check-circle"></i>
+                        <span>綠色表示在隊/基地</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>紅色表示應勤/外出</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span>點擊名稱查看歷史</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-expand"></i>
+                        <span>點擊圖片放大</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-users"></i>
+                        <span>使用群組控制批量操作</span>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="detail-content">
+                    <!-- 詳細資訊動態顯示 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 可折疊歷史面板 -->
+        <div class="history-panel" id="history-panel">
+            <div class="panel-header">
+                <h3><i class="fas fa-history"></i> 時序紀錄</h3>
+                <button class="close-panel" onclick="toggleHistoryPanel()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="panel-content">
+                <div id="history-content">
+                    <p class="placeholder">點擊人員或器材查看歷史紀錄</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 群組控制彈窗 -->
+    <div class="modal" id="group-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('group-modal')">&times;</span>
+            <h3><i class="fas fa-users-cog"></i> 群組控制</h3>
+            <div class="modal-body">
+                <div class="group-controls" id="group-controls">
+                    <!-- 動態生成群組控制 -->
+                </div>
+                <div class="modal-actions">
+                    <button class="action-btn" onclick="batchAll('BoO')">
+                        全部歸隊
+                    </button>
+                    <button class="action-btn warning" onclick="batchAll('out')">
+                        全部外出
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 快速控制彈窗 -->
+    <div class="modal" id="quick-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('quick-modal')">&times;</span>
+            <h3><i class="fas fa-bolt"></i> 快速控制</h3>
+            <div class="modal-body">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="搜尋人員或器材...">
+                    <i class="fas fa-search"></i>
+                </div>
+                <div class="quick-control-list" id="quick-control-list">
+                    <!-- 動態生成快速控制項目 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 圖片預覽彈窗 -->
+    <div class="modal" id="image-modal">
+        <div class="modal-content image-modal-content">
+            <span class="close" onclick="closeModal('image-modal')">&times;</span>
+            <div class="image-container">
+                <img id="modal-image" src="" alt="放大圖片">
+            </div>
+            <div class="image-info" id="image-info"></div>
+        </div>
+    </div>
+
+    <!-- 歷史詳情彈窗 -->
+    <div class="modal" id="history-detail-modal">
+        <div class="modal-content large">
+            <span class="close" onclick="closeModal('history-detail-modal')">&times;</span>
+            <h3 id="history-title">歷史紀錄詳情</h3>
+            <div class="history-detail" id="history-detail"></div>
+        </div>
+    </div>
+    <!-- 狀態詳情彈窗 -->
+    <div class="modal" id="status-detail-modal">
+        <div class="modal-content status-detail-content">
+            <span class="close" onclick="closeModal('status-detail-modal')">&times;</span>
+            <h3 id="status-detail-title">人員名單</h3>
+            <div class="status-detail-container" id="status-detail-container"></div>
+        </div>
+    </div>
+
+    <!-- 原因管理彈窗 -->
+    <div class="modal" id="reason-management-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('reason-management-modal')">&times;</span>
+            <h3><i class="fas fa-edit"></i> 原因管理</h3>
+            <div class="modal-body">
+                <p>管理常用外出/應勤原因：</p>
+                <div id="current-reasons-list" style="margin: 15px 0; max-height: 300px; overflow-y: auto;">
+                    <!-- 動態生成原因列表 -->
+                </div>
+                <div class="add-reason-form" style="margin-top: 20px;">
+                    <input type="text" id="new-reason-input" placeholder="新增原因..." style="width: 70%; padding: 8px;">
+                    <button onclick="addCustomReason()"
+                        style="padding: 8px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; margin-left: 10px;">新增</button>
+                </div>
+                <div class="reason-actions" style="margin-top: 20px;">
+                    <button onclick="closeModal('reason-management-modal')"
+                        style="padding: 10px 20px; background-color: #f0f0f0; border: none; border-radius: 5px;">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="Personnelcontrol/script.js"></script>
+</body>
+
+</html>
