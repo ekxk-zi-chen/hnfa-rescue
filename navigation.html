@@ -87,10 +87,11 @@
 
         .system-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
+
 
         @media (min-width: 640px) {
             .system-grid {
@@ -154,9 +155,15 @@
         .system-card.shore .system-icon {
             background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%);
         }
+
         .system-card.boo .system-icon {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
+
+        .system-card.personnel .system-icon {
+            background: linear-gradient(135deg, #ff6b35 0%, #ff3d00 100%);
+        }
+
         .system-card h2 {
             color: var(--gray-900);
             font-size: 1.5rem;
@@ -301,8 +308,6 @@
                 font-size: 1.25rem;
             }
         }
-
-
     </style>
 </head>
 
@@ -357,6 +362,14 @@
                     </div>
                     <h2>現場佈局助手</h2>
                     <p>BoO 規劃、帳篷配置、AI排版</p>
+                </a>
+                新增人員管制卡片
+                <a href="Personnel_access_control.html" class="system-card personnel">
+                    <div class="system-icon">
+                        👥
+                    </div>
+                    <h2>人員管制系統</h2>
+                    <p>人員進出、管制(開發中目前單機)</p>
                 </a>
             </div>
 
