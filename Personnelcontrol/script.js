@@ -1,7 +1,18 @@
 
-console.log('=== 路徑偵測開始 ===');
-console.log('當前 URL:', window.location.href);
-console.log('當前路徑:', window.location.pathname);
+// 新增在 script.js 開頭的 CONFIG
+const CONFIG = {
+    API_BASE: "https://hnfa-rescue.vercel.app/api/verify",
+    SUPABASE_URL: 'https://gltzwtqcrdpdumzitbib.supabase.co',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsdHp3dHFjcmRwZHVteml0YmliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczNzQyODcsImV4cCI6MjA3Mjk1MDI4N30.6svHYwJUM8aZF71pY0N3Wx4KiaSMN-GiibyLGZDsygE'
+};
+
+// 新增全域變數
+let currentUser = null;
+let userRole = '一般用戶';
+
+// 建立 Supabase 客戶端
+const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
 // 全域變數
 let currentData = {
     employees: [],
@@ -38,15 +49,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 // 初始化應用
+// 修改 initializeApp 函數
 async function initializeApp() {
     try {
-        console.log('開始載入 JSON 資料...');
-        await loadData();
+        console.log('開始驗證用戶...');
 
-        // **非同步啟動圖片載入（不等待）**
+        // 1. 先驗證用戶（與 navigation.html 相同邏輯）
+        await verifyUser();
+
+        console.log('用戶驗證成功，開始載入資料...');
+
+        // 2. 初始化常用原因（保持不變）
+        initReasons();
+
+        // 3. 載入資料（改為從 Supabase 載入）
+        await loadDataFromSupabase();
+
+        // 4. 非同步啟動圖片載入（保持不變）
         initDriveImagesAsync();
 
-        // 初始化畫面
+        // 5. 初始化畫面
         updateStats();
         renderGroupControls();
         renderCards();
@@ -54,109 +76,160 @@ async function initializeApp() {
         console.log('應用初始化完成');
 
         const totalItems = currentData.employees.length + currentData.equipment.length;
-        showNotification(`系統已載入 ${totalItems} 筆資料`);
+        showNotification(`系統已載入 ${totalItems} 筆資料 (線上版本)`);
+
+        // 6. 如果是管理員，啟用管理功能
+        if (userRole === '管理') {
+            enableAdminFeatures();
+        }
 
     } catch (error) {
         console.error('初始化失敗：', error);
         showNotification(`初始化失敗：${error.message}`);
-        createTestData();
+        // 可以選擇載入離線備用資料
+        // createTestData();
     }
 }
+// 新增 verifyUser 函數
+async function verifyUser() {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken');
+        if (!sessionToken) {
+            window.location.href = 'index.html';
+            return;
+        }
 
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionToken })
+        });
+
+        if (!response.ok) throw new Error('驗證失敗');
+
+        const data = await response.json();
+        if (data.status !== 'ok') throw new Error('用戶驗證失敗');
+
+        currentUser = {
+            userId: data.userId,
+            displayName: data.displayName,
+            role: data.role || '一般用戶'
+        };
+
+        userRole = currentUser.role;
+
+        // 顯示用戶資訊
+        const userInfoElement = document.querySelector('.user-info');
+        if (userInfoElement) {
+            userInfoElement.innerHTML = `
+                <strong>${currentUser.displayName}</strong>
+                <span class="user-badge">${currentUser.role}</span>
+            `;
+        }
+
+        return currentUser;
+
+    } catch (error) {
+        console.error('用戶驗證錯誤:', error);
+        throw error;
+    }
+}
 // 返回導航頁面
 function goBack() {
     window.location.href = 'navigation.html';
 }
 
-// 載入 JSON 資料 - 簡化版本
-async function loadData() {
+// 新增 loadDataFromSupabase 函數，替換原有的 loadData
+async function loadDataFromSupabase() {
     try {
-        console.log('開始載入 JSON 資料...');
-
-        // 顯示當前網頁路徑
-        console.log('當前網頁路徑:', window.location.pathname);
-        console.log('當前網頁URL:', window.location.href);
-
-        // 測試檔案路徑
-        const personnelPath = 'Personnelcontrol/data/personnel.json';
-        const equipmentPath = 'Personnelcontrol/data/equipment.json';
-
-        console.log('嘗試載入路徑:');
-        console.log('- 人員資料:', personnelPath);
-        console.log('- 器材資料:', equipmentPath);
-
-        // 建立完整的 URL（處理相對路徑）
-        const personnelUrl = new URL(personnelPath, window.location.href).href;
-        const equipmentUrl = new URL(equipmentPath, window.location.href).href;
-
-        console.log('完整URL:');
-        console.log('- 人員資料:', personnelUrl);
-        console.log('- 器材資料:', equipmentUrl);
-
-        // 先測試檔案是否存在
-        console.log('測試檔案存取...');
-
-        try {
-            const test1 = await fetch(personnelPath);
-            console.log('人員檔案狀態:', test1.status, test1.statusText);
-        } catch (e) {
-            console.error('人員檔案測試失敗:', e.message);
+        console.log('開始從 Supabase 載入資料...');
+        
+        // 根據當前視圖載入對應資料
+        if (currentView === 'personnel') {
+            const { data, error } = await supabase
+                .from('personnel_control')
+                .select('*')
+                .eq('is_active', true)
+                .order('group_name', { ascending: true })
+                .order('name', { ascending: true });
+                
+            if (error) throw error;
+            
+            currentData.employees = processSupabasePersonnelData(data || []);
+            console.log('人員資料載入完成：', currentData.employees.length, '筆');
+            
+        } else {
+            const { data, error } = await supabase
+                .from('equipment_control')
+                .select('*')
+                .eq('is_active', true)
+                .order('category', { ascending: true })
+                .order('name', { ascending: true });
+                
+            if (error) throw error;
+            
+            currentData.equipment = processSupabaseEquipmentData(data || []);
+            console.log('器材資料載入完成：', currentData.equipment.length, '筆');
         }
-
-        try {
-            const test2 = await fetch(equipmentPath);
-            console.log('器材檔案狀態:', test2.status, test2.statusText);
-        } catch (e) {
-            console.error('器材檔案測試失敗:', e.message);
-        }
-
-        // 同時載入兩個 JSON 檔案
-        const [personnelResponse, equipmentResponse] = await Promise.all([
-            fetch(personnelPath),
-            fetch(equipmentPath)
-        ]);
-
-        if (!personnelResponse.ok) {
-            throw new Error(`無法載入 personnel.json: ${personnelResponse.status} ${personnelResponse.statusText}`);
-        }
-
-        if (!equipmentResponse.ok) {
-            throw new Error(`無法載入 equipment.json: ${equipmentResponse.status} ${equipmentResponse.statusText}`);
-        }
-
-        // 解析 JSON
-        const personnelData = await personnelResponse.json();
-        const equipmentData = await equipmentResponse.json();
-
-        console.log('JSON 解析成功：');
-        console.log('人員資料類型：', Array.isArray(personnelData) ? '陣列' : typeof personnelData);
-        console.log('人員資料第一筆：', personnelData[0]);
-        console.log('器材資料類型：', Array.isArray(equipmentData) ? '陣列' : typeof equipmentData);
-        console.log('器材資料第一筆：', equipmentData[0]);
-
-        // 使用處理函數處理資料
-        currentData.employees = processPersonnelData(personnelData);
-        currentData.equipment = processEquipmentData(equipmentData);
-
-        console.log('資料處理完成：');
-        console.log(`- 人員：${currentData.employees.length} 筆`);
-        console.log(`- 器材：${currentData.equipment.length} 筆`);
-
+        
     } catch (error) {
-        console.error('載入 JSON 資料失敗：', error);
-        console.error('錯誤堆疊：', error.stack);
-
-        // 顯示詳細錯誤訊息
-        showNotification(`載入失敗：${error.message}`);
-
-        // 建立偵錯資訊
-        createDebugInfo();
-
-        // 如果載入失敗，使用備用資料
-        console.log('使用備用資料...');
-        currentData = getBackupData();
+        console.error('載入資料失敗：', error);
+        throw error;
     }
 }
+
+// 新增處理 Supabase 人員資料的函數
+function processSupabasePersonnelData(data) {
+    return data.map(item => {
+        // 解析最後一次的原因
+        const lastReason = parseReasonFromHistory(item.time_history);
+
+        return {
+            id: item.id,
+            name: item.name,
+            group: item.group_name || item.group || '未分組',
+            photo: item.photo || 'default.jpg',
+            status: item.status || 'BoO',
+            time_status: item.time_status || getCurrentTime(),
+            time_history: item.time_history || '',
+            lastReason: lastReason,
+            rawData: item
+        };
+    });
+}
+
+// 新增處理 Supabase 器材資料的函數
+function processSupabaseEquipmentData(data) {
+    return data.map(item => {
+        const lastReason = parseReasonFromHistory(item.time_history);
+
+        return {
+            id: item.id,
+            name: item.name,
+            detail_name: item.detail_name || item.name,
+            category: item.category || '未分類',
+            photo: item.photo || 'default.jpg',
+            status: item.status || '在隊',
+            time_status: item.time_status || getCurrentTime(),
+            time_history: item.time_history || '',
+            lastReason: lastReason,
+            rawData: item
+        };
+    });
+}
+
+// 新增解析歷史中原因的函數
+function parseReasonFromHistory(historyText) {
+    if (!historyText) return '';
+    const lines = historyText.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return '';
+
+    const lastLine = lines[0];
+    const match = lastLine.match(/\(([^)]+)\)/);
+    return match ? match[1] : '';
+}
+
+
 
 // 建立偵錯資訊
 function createDebugInfo() {
@@ -623,14 +696,25 @@ function renderGroupControls() {
         // 群組按鈕
         const groupButtons = document.createElement('div');
         groupButtons.className = 'group-buttons';
-        groupButtons.innerHTML = `
-            <button class="boo-btn" onclick="batchUpdateGroupStatus('${groupName}', '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
-                全部${currentView === 'personnel' ? '歸隊' : '在隊'}
-            </button>
-            <button class="out-btn" onclick="batchUpdateGroupStatus('${groupName}', '${currentView === 'personnel' ? '外出' : '應勤'}')">
-                全部${currentView === 'personnel' ? '外出' : '應勤'}
-            </button>
-        `;
+
+        if (userRole === '管理') {
+            // 管理員看到按鈕
+            groupButtons.innerHTML = `
+                <button class="boo-btn" onclick="batchUpdateGroupStatus('${groupName}', '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
+                    全部${currentView === 'personnel' ? '歸隊' : '在隊'}
+                </button>
+                <button class="out-btn" onclick="batchUpdateGroupStatus('${groupName}', '${currentView === 'personnel' ? '外出' : '應勤'}')">
+                    全部${currentView === 'personnel' ? '外出' : '應勤'}
+                </button>
+            `;
+        } else {
+            // 一般用戶看不到按鈕，只看到提示
+            groupButtons.innerHTML = `
+                <div class="group-status-info">
+                    群組操作僅限管理員使用
+                </div>
+            `;
+        }
 
         // 成員列表（預設隱藏）
         const membersList = document.createElement('div');
@@ -665,14 +749,20 @@ function renderGroupControls() {
                     <span class="member-status ${statusClass}">${statusText}</span>
                 </div>
                 <div class="member-buttons">
-                    <button class="mini-btn boo ${member.status === 'BoO' || member.status === '在隊' ? 'active' : ''}"
-                            onclick="updateStatus(${member.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
-                        ${currentView === 'personnel' ? 'BoO' : '在隊'}
-                    </button>
-                    <button class="mini-btn out ${member.status === '外出' || member.status === '應勤' ? 'active' : ''}"
-                            onclick="updateStatus(${member.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
-                        ${currentView === 'personnel' ? '外出' : '應勤'}
-                    </button>
+                    ${userRole === '管理' ? `
+                        <button class="mini-btn boo ${member.status === 'BoO' || member.status === '在隊' ? 'active' : ''}"
+                                onclick="updateStatus(${member.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
+                            ${currentView === 'personnel' ? 'BoO' : '在隊'}
+                        </button>
+                        <button class="mini-btn out ${member.status === '外出' || member.status === '應勤' ? 'active' : ''}"
+                                onclick="updateStatus(${member.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
+                            ${currentView === 'personnel' ? '外出' : '應勤'}
+                        </button>
+                    ` : `
+                        <div class="mini-status ${statusClass}">
+                            ${statusText}
+                        </div>
+                    `}
                 </div>
             `;
 
@@ -762,44 +852,54 @@ function toggleGroupMembers(groupName) {
 }
 
 // 批次更新群組狀態
-function batchUpdateGroupStatus(groupName, newStatus) {
+async function batchUpdateGroupStatus(groupName, newStatus) {
+    // 檢查權限
+    if (userRole !== '管理') {
+        showNotification('只有管理員可以批次更新');
+        return;
+    }
+
     // 如果是要設定為外出或應勤，先詢問原因
     if (newStatus === '外出' || newStatus === '應勤') {
         showGroupReasonModal(groupName, newStatus);
     } else {
-        // 如果是歸隊/在隊，不需要原因，直接更新
-        const data = currentView === 'personnel' ? currentData.employees : currentData.equipment;
-        let updatedCount = 0;
+        // 歸隊或在隊，直接更新
+        await performBatchGroupUpdateViaAPI(groupName, newStatus, '');
+    }
+}
 
-        data.forEach(item => {
-            const groupKey = currentView === 'personnel' ? item.group : item.category;
-            if (groupKey === groupName) {
-                const oldStatus = item.status;
-                item.status = newStatus;
-                const currentTime = getCurrentTime();
-                item.time_status = currentTime;
+// 新增透過 API 批次更新的函數
+async function performBatchGroupUpdateViaAPI(groupName, newStatus, reason) {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
 
-                // 更新歷史紀錄（不包含原因）
-                const historyText = item.time_history || '';
-                const historyLines = historyText.split('\n').filter(line => line.trim());
-                const historyEntry = `${newStatus} ${currentTime}`;
-                historyLines.unshift(historyEntry);
-
-                if (historyLines.length > 10) {
-                    historyLines.length = 10;
-                }
-
-                item.time_history = historyLines.join('\n');
-                updatedCount++;
-
-                // 更新單一卡片
-                updateSingleCard(item);
-            }
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'batchUpdateGroupStatus',
+                sessionToken,
+                groupName,
+                status: newStatus,
+                reason,
+                viewType: currentView
+            })
         });
 
-        // 顯示通知
-        showNotification(`${groupName} 已更新 ${updatedCount} 筆資料為 ${getStatusDisplayText(newStatus)}`);
-        saveData();
+        if (!response.ok) throw new Error('批次更新失敗');
+
+        const result = await response.json();
+        if (result.status !== 'ok') throw new Error(result.message || '批次更新失敗');
+
+        // 重新載入資料
+        await loadDataFromSupabase();
+        renderView();
+
+        showNotification(result.message);
+
+    } catch (error) {
+        console.error('批次更新失敗：', error);
+        showNotification(`批次更新失敗：${error.message}`);
     }
 }
 
@@ -1197,6 +1297,39 @@ function createCardSync(item) {
     };
 
     const cardContent = document.createElement('div');
+
+    // === 這裡是要修改的部分 ===
+    // 管理員看到按鈕，一般用戶看到狀態標籤
+    let buttonsHTML = '';
+
+    if (userRole === '管理') {
+        // 管理員看到按鈕
+        buttonsHTML = `
+            <div class="card-buttons">
+                <button class="status-btn boo ${item.status === 'BoO' || item.status === '在隊' ? 'active' : ''}"
+                        onclick="updateStatus(${item.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
+                    ${currentView === 'personnel' ? 'BoO' : '在隊'}
+                </button>
+                <button class="status-btn out ${item.status === '外出' || item.status === '應勤' ? 'active' : ''}"
+                        onclick="updateStatus(${item.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
+                    ${currentView === 'personnel' ? '外出' : '應勤'}
+                </button>
+            </div>
+        `;
+    } else {
+        // 一般用戶只看到狀態標籤
+        const statusClass = getStatusClass(item.status);
+        const displayStatus = getStatusDisplayText(item.status);
+        buttonsHTML = `
+            <div class="card-buttons">
+                <div class="status-display ${statusClass}">
+                    ${displayStatus}
+                </div>
+            </div>
+        `;
+    }
+
+    // 完整的卡片內容
     cardContent.innerHTML = `
         ${currentView === 'equipment' && item.category ?
             `<div class="card-category">${item.category}</div>` : ''}
@@ -1215,16 +1348,7 @@ function createCardSync(item) {
         ${currentReason && (item.status === '外出' || item.status === '應勤') ?
             `<div class="card-reason" title="原因：${currentReason}">${currentReason}</div>` : ''}
         
-        <div class="card-buttons">
-            <button class="status-btn boo ${item.status === 'BoO' || item.status === '在隊' ? 'active' : ''}"
-                    onclick="updateStatus(${item.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
-                ${currentView === 'personnel' ? 'BoO' : '在隊'}
-            </button>
-            <button class="status-btn out ${item.status === '外出' || item.status === '應勤' ? 'active' : ''}"
-                    onclick="updateStatus(${item.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
-                ${currentView === 'personnel' ? '外出' : '應勤'}
-            </button>
-        </div>
+        ${buttonsHTML}
     `;
 
     card.appendChild(imgElement);
@@ -1246,6 +1370,12 @@ function createCardSync(item) {
     return card;
 }
 
+// 在 HTML 中添加登出按鈕，然後在 script.js 中添加
+function logout() {
+    sessionStorage.removeItem('sessionToken');
+    localStorage.removeItem('sessionToken');
+    window.location.href = 'index.html';
+}
 
 // 手動刷新圖片
 function refreshDriveImages() {
@@ -1447,13 +1577,67 @@ function getDefaultPhotoPath() {
 }
 
 // 更新單一項目狀態
-function updateStatus(id, newStatus) {
+// 修改原有的 updateStatus 函數
+async function updateStatus(id, newStatus) {
+    // 檢查權限
+    if (userRole !== '管理') {
+        showNotification('只有管理員可以更新狀態');
+        return;
+    }
+
     // 如果是要設定為外出或應勤，先詢問原因
     if (newStatus === '外出' || newStatus === '應勤') {
         showReasonModal(id, newStatus);
     } else {
         // 歸隊或在隊，直接更新
-        performStatusUpdate(id, newStatus, '');
+        await performStatusUpdateViaAPI(id, newStatus, '');
+    }
+}
+
+// 新增透過 API 更新狀態的函數
+async function performStatusUpdateViaAPI(id, newStatus, reason) {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        const action = currentView === 'personnel' ? 'updatePersonnelStatus' : 'updateEquipmentStatus';
+        
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: action,
+                sessionToken,
+                id,
+                status: newStatus,
+                reason
+            })
+        });
+        
+        if (!response.ok) throw new Error('更新失敗');
+        
+        const result = await response.json();
+        if (result.status !== 'ok') throw new Error(result.message || '更新失敗');
+        
+        // 更新本地資料
+        const dataArray = currentView === 'personnel' ? currentData.employees : currentData.equipment;
+        const itemIndex = dataArray.findIndex(item => item.id === id);
+        
+        if (itemIndex !== -1 && result[currentView === 'personnel' ? 'personnel' : 'equipment']) {
+            const updatedData = result[currentView === 'personnel' ? 'personnel' : 'equipment'];
+            // 處理更新後的資料
+            const processedData = currentView === 'personnel' 
+                ? processSupabasePersonnelData([updatedData])[0]
+                : processSupabaseEquipmentData([updatedData])[0];
+            dataArray[itemIndex] = processedData;
+        }
+        
+        // 更新畫面
+        updateSingleCard(id);
+        updateStats();
+        showNotification('狀態更新成功');
+        
+    } catch (error) {
+        console.error('更新狀態失敗：', error);
+        showNotification(`更新失敗：${error.message}`);
     }
 }
 
@@ -1546,7 +1730,7 @@ window.handleReasonOptionClick = function (element, itemId, newStatus) {
 };
 
 // 處理確認原因 - 全局函數
-window.handleConfirmReason = function (itemId, newStatus) {
+window.handleConfirmReason = async function (itemId, newStatus) {
     const reasonModal = document.getElementById('reason-modal');
     if (!reasonModal) return;
 
@@ -1556,7 +1740,6 @@ window.handleConfirmReason = function (itemId, newStatus) {
     if (selectedOption) {
         selectedReason = selectedOption.textContent;
 
-        // 如果是「其他」，讀取自訂輸入
         if (selectedReason === '其他') {
             const customInput = reasonModal.querySelector('#custom-reason-input input');
             selectedReason = customInput?.value.trim() || '';
@@ -1571,9 +1754,53 @@ window.handleConfirmReason = function (itemId, newStatus) {
     // 移除彈窗
     reasonModal.remove();
 
-    // 執行狀態更新
-    performStatusUpdate(itemId, newStatus, selectedReason);
+    // 執行狀態更新（使用 API 版本）
+    await performStatusUpdateViaAPI(itemId, newStatus, selectedReason);
 };
+
+// 新增啟用管理員功能的函數
+function enableAdminFeatures() {
+    // 添加管理工具列
+    const adminToolbar = document.createElement('div');
+    adminToolbar.id = 'admin-toolbar';
+    adminToolbar.style.cssText = `
+        position: fixed;
+        top: 70px;
+        right: 10px;
+        z-index: 1000;
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    `;
+
+    adminToolbar.innerHTML = `
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-users"></i> 管理任務人員
+        </button>
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-sync"></i> 刷新資料
+        </button>
+    `;
+
+    document.body.appendChild(adminToolbar);
+}
+
+// 新增刷新資料函數
+async function refreshData() {
+    try {
+        showNotification('正在刷新資料...');
+        await loadDataFromSupabase();
+        renderView();
+        showNotification('資料刷新完成');
+    } catch (error) {
+        console.error('刷新資料失敗：', error);
+        showNotification(`刷新失敗：${error.message}`);
+    }
+}
 
 // 確認原因並更新狀態
 function confirmReason(itemId, newStatus) {
@@ -2563,6 +2790,7 @@ function collapseAllQuickGroups() {
 }
 
 // 建立快速控制項目
+// 建立快速控制項目
 function createQuickItem(item, groupName) {
     const quickItem = document.createElement('div');
     quickItem.className = 'quick-item';
@@ -2583,6 +2811,34 @@ function createQuickItem(item, groupName) {
         }
     }
 
+    // === 修改這裡：根據用戶角色顯示不同的按鈕 ===
+    let buttonsHTML = '';
+
+    if (userRole === '管理') {
+        // 管理員看到完整的按鈕
+        buttonsHTML = `
+            <div class="quick-item-buttons">
+                <button class="status-btn mini boo ${item.status === 'BoO' || item.status === '在隊' ? 'active' : ''}"
+                        onclick="event.stopPropagation(); quickUpdateStatus(${item.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
+                    ${currentView === 'personnel' ? '歸隊' : '在隊'}
+                </button>
+                <button class="status-btn mini out ${item.status === '外出' || item.status === '應勤' ? 'active' : ''}"
+                        onclick="event.stopPropagation(); quickUpdateStatus(${item.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
+                    ${currentView === 'personnel' ? '外出' : '應勤'}
+                </button>
+            </div>
+        `;
+    } else {
+        // 一般用戶看到不可點擊的狀態標籤
+        buttonsHTML = `
+            <div class="quick-item-buttons">
+                <div class="status-display ${statusClass}">
+                    ${statusText}
+                </div>
+            </div>
+        `;
+    }
+
     quickItem.innerHTML = `
         <div class="quick-item-info">
             <div class="quick-item-name" data-name="${displayName}" data-original-name="${item.name}">${displayName}</div>
@@ -2591,20 +2847,19 @@ function createQuickItem(item, groupName) {
             `<div class="quick-item-reason">原因：${lastReason}</div>` : ''}
         </div>
         <div class="quick-item-status ${statusClass}">${statusText}</div>
-        <div class="quick-item-buttons">
-            <button class="status-btn mini boo ${item.status === 'BoO' || item.status === '在隊' ? 'active' : ''}"
-                    onclick="event.stopPropagation(); quickUpdateStatus(${item.id}, '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
-                ${currentView === 'personnel' ? '歸隊' : '在隊'}
-            </button>
-            <button class="status-btn mini out ${item.status === '外出' || item.status === '應勤' ? 'active' : ''}"
-                    onclick="event.stopPropagation(); quickUpdateStatus(${item.id}, '${currentView === 'personnel' ? '外出' : '應勤'}')">
-                ${currentView === 'personnel' ? '外出' : '應勤'}
-            </button>
-        </div>
+        ${buttonsHTML}
     `;
 
     quickItem.addEventListener('click', function (e) {
-        if (!e.target.closest('.status-btn')) {
+        // 如果是管理員，點擊按鈕區域不觸發查看歷史
+        // 如果是一般用戶，整個項目都可以點擊查看歷史
+        if (userRole === '管理') {
+            if (!e.target.closest('.status-btn')) {
+                showHistory(item.name);
+                closeModal('quick-modal');
+            }
+        } else {
+            // 一般用戶點擊任何地方都查看歷史
             showHistory(item.name);
             closeModal('quick-modal');
         }
@@ -2614,11 +2869,19 @@ function createQuickItem(item, groupName) {
 }
 
 // 快速更新狀態
+
 function quickUpdateStatus(id, newStatus) {
+    // 檢查權限
+    if (userRole !== '管理') {
+        showNotification('只有管理員可以更新狀態');
+        return;
+    }
+
     // 如果是要設定為外出或應勤，先詢問原因
     if (newStatus === '外出' || newStatus === '應勤') {
         showReasonModal(id, newStatus);
     } else {
+        // 歸隊或在隊，直接更新
         performStatusUpdate(id, newStatus, '');
     }
 }
