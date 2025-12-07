@@ -11,14 +11,23 @@ let userRole = '一般用戶';
 
 
 // 檢查 Supabase 是否可用
+// 檢查 Supabase 是否可用
 let supabase = null;
 if (window.supabase && typeof window.supabase.createClient === 'function') {
     // 建立 Supabase 客戶端
-    supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
     console.log('Supabase 客戶端建立成功');
 } else {
     console.error('createClient 未定義，請檢查 Supabase CDN 是否正確引入');
-    // 可以添加錯誤處理或使用替代方案
+    // 創建一個假的 supabase 避免後續代碼崩潰
+    supabase = {
+        from: () => ({
+            select: () => Promise.resolve({ data: [], error: null }),
+            insert: () => Promise.resolve({ error: 'Supabase not loaded' }),
+            update: () => Promise.resolve({ error: 'Supabase not loaded' }),
+            delete: () => Promise.resolve({ error: 'Supabase not loaded' })
+        })
+    };
 }
 // 全域變數
 let currentData = {
