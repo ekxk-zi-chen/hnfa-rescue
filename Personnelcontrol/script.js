@@ -1,7 +1,3 @@
-// 返回導航頁面
-function goBack() {
-    window.location.href = 'navigation.html';
-}
 
 console.log('=== 路徑偵測開始 ===');
 console.log('當前 URL:', window.location.href);
@@ -40,6 +36,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
+
 // 初始化應用
 async function initializeApp() {
     try {
@@ -66,6 +63,10 @@ async function initializeApp() {
     }
 }
 
+// 返回導航頁面
+function goBack() {
+    window.location.href = 'navigation.html';
+}
 
 // 載入 JSON 資料 - 簡化版本
 async function loadData() {
