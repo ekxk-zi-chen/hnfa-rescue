@@ -1922,7 +1922,7 @@ function enableAdminFeatures() {
     adminToolbar.style.cssText = `
         position: fixed;
         top: 60px;  // 從 70px 改為 60px，往上移一點
-        right: 10px;
+        left: 10px;
         z-index: 1000;
         background-color: rgba(255, 255, 255, 0.95);
         padding: 0;  // 移除原本的 padding
