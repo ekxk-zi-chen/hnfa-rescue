@@ -1937,10 +1937,13 @@ function enableAdminFeatures() {
             <i class="fas fa-users"></i> 管理任務人員
         </button>
         <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px;">
-            <i class="fas fa-sync"></i> 刷新資料
+            <i class="fas fa-sync"></i> 手動刷新
+        </button>
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
         </button>
     `;
-
+    
     document.body.appendChild(adminToolbar);
 }
 
@@ -3387,24 +3390,7 @@ function updateChangedCards() {
     renderCards();
 }
 
-// 新增手動刷新按鈕到管理工具列
-function enableAdminFeatures() {
-    // 現有的管理工具列代碼...
-    
-    adminToolbar.innerHTML = `
-        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">
-            <i class="fas fa-users"></i> 管理任務人員
-        </button>
-        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px;">
-            <i class="fas fa-sync"></i> 手動刷新
-        </button>
-        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px;">
-            <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
-        </button>
-    `;
-    
-    document.body.appendChild(adminToolbar);
-}
+
 
 // 切換自動刷新
 function toggleAutoRefresh() {
