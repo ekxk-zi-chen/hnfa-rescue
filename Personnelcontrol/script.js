@@ -3905,7 +3905,7 @@ async function removeSelectedFromMission() {
         showNotification(`移除任務失敗：${error.message}`);
     }
 }
-
+window.showMissionManagement = showMissionManagement;
 /////////////////////////////////////////////////////
 // 新增 CSS 動畫
 const style = document.createElement('style');
