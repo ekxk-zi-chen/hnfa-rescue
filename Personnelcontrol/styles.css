@@ -2020,3 +2020,59 @@ body {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* 任務管理樣式 */
+.mission-master-item:hover,
+.mission-current-item:hover {
+    background-color: #f0f0f0 !important;
+}
+
+.master-checkbox,
+.current-checkbox {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
+/* 管理員工具列按鈕樣式 */
+#admin-toolbar button {
+    white-space: normal;
+    line-height: 1.4;
+    text-align: left;
+    padding: 8px 12px;
+    margin: 2px 0;
+    font-size: 14px;
+}
+
+#admin-toolbar button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* 模態框樣式優化 */
+.modal-content.large {
+    max-width: 800px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+/* 搜尋框樣式 */
+.search-box {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 10px 10px 35px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.search-box i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+}
