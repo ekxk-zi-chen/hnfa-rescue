@@ -1920,22 +1920,22 @@ function enableAdminFeatures() {
     adminToolbar.id = 'admin-toolbar';
     adminToolbar.style.cssText = `
         position: fixed;
-        top: 60px;  // 從 70px 改為 60px，往上移一點
-        left: 10px;
+        top: 60px;
+        left: 10px;  // 放在左邊
         z-index: 1000;
         background-color: rgba(255, 255, 255, 0.95);
-        padding: 0;  // 移除原本的 padding
+        padding: 0;
         border-radius: 5px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
-        flex-direction: row;
-        width: 50px;  // 初始寬度設為 50px（收合狀態）
-        height: 40px; // 設定高度
-        overflow: hidden;  // 隱藏超出部分
+        flex-direction: row-reverse;  // 改為 row-reverse，這樣按鈕就會在右邊
+        width: 50px;  // 初始寬度
+        height: 40px;
+        overflow: hidden;
         transition: all 0.3s ease;
     `;
 
-    // 建立縮放按鈕
+    // 建立縮放按鈕（放在右邊）
     const expandButton = document.createElement('button');
     expandButton.id = 'admin-expand-btn';
     expandButton.innerHTML = '<i class="fas fa-tools"></i>';
@@ -1946,34 +1946,38 @@ function enableAdminFeatures() {
         border: none;
         cursor: pointer;
         font-size: 16px;
-        width: 100%;
-        height: 40px;
+        width: 50px;  // 固定寬度
+        height: 40px; // 固定高度
         text-align: center;
         transition: all 0.3s ease;
         flex-shrink: 0;
+        order: 1;  // 確保在右邊
     `;
 
-    // 建立工具列內容（初始隱藏）
+    // 建立工具列內容（放在左邊，初始隱藏）
     const toolbarContent = document.createElement('div');
     toolbarContent.id = 'toolbar-content';
     toolbarContent.style.cssText = `
         display: none;  // 初始隱藏
-        flex-direction: column;
+        flex-direction: column;  // 垂直排列
         padding: 10px;
         gap: 8px;
         opacity: 0;
         transition: opacity 0.3s ease;
+        width: 0;  // 初始寬度為0
+        overflow: hidden;
+        order: 0;  // 放在左邊
     `;
 
-    // 工具列按鈕
+    // 工具列按鈕（垂直排列）
     toolbarContent.innerHTML = `
-        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 180px; white-space: nowrap;">
             <i class="fas fa-users"></i> 管理任務人員
         </button>
-        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 180px; white-space: nowrap;">
             <i class="fas fa-sync"></i> 手動刷新
         </button>
-        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 180px; white-space: nowrap;">
             <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
         </button>
     `;
@@ -1985,10 +1989,10 @@ function enableAdminFeatures() {
         isExpanded = !isExpanded;
         
         if (isExpanded) {
-            // 展開狀態
-            adminToolbar.style.width = '320px';
-            adminToolbar.style.height = 'auto';
+            // 展開狀態：從左邊展開
+            adminToolbar.style.width = '240px';  // 50px + 190px
             toolbarContent.style.display = 'flex';
+            toolbarContent.style.width = '190px';  // 顯示內容區域
             setTimeout(() => {
                 toolbarContent.style.opacity = '1';
             }, 10);
@@ -1999,8 +2003,8 @@ function enableAdminFeatures() {
             toolbarContent.style.opacity = '0';
             setTimeout(() => {
                 toolbarContent.style.display = 'none';
+                toolbarContent.style.width = '0';
                 adminToolbar.style.width = '50px';
-                adminToolbar.style.height = '40px';
             }, 300);
             expandButton.innerHTML = '<i class="fas fa-tools"></i>';
             expandButton.style.backgroundColor = '#2c3e50';
@@ -2013,8 +2017,8 @@ function enableAdminFeatures() {
             toolbarContent.style.opacity = '0';
             setTimeout(() => {
                 toolbarContent.style.display = 'none';
+                toolbarContent.style.width = '0';
                 adminToolbar.style.width = '50px';
-                adminToolbar.style.height = '40px';
             }, 300);
             expandButton.innerHTML = '<i class="fas fa-tools"></i>';
             expandButton.style.backgroundColor = '#2c3e50';
@@ -2035,9 +2039,9 @@ function enableAdminFeatures() {
         }
     };
 
-    // 組裝工具列
-    adminToolbar.appendChild(expandButton);
+    // 組裝工具列（順序：先內容再按鈕，但因為 flex-direction: row-reverse，按鈕會在右邊）
     adminToolbar.appendChild(toolbarContent);
+    adminToolbar.appendChild(expandButton);
     
     document.body.appendChild(adminToolbar);
 }
