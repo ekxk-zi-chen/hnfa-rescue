@@ -3502,7 +3502,7 @@ async function showMissionManagement() {
     const type = currentView; // 'personnel' 或 'equipment'
     const title = type === 'personnel' ? '管理任務人員' : '管理任務器材';
     
-    // 創建任務管理彈窗
+    // 創建任務管理彈窗（完全重寫 HTML）
     const modalId = 'mission-management-modal';
     let modal = document.getElementById(modalId);
     
@@ -3511,78 +3511,72 @@ async function showMissionManagement() {
         modal.id = modalId;
         modal.className = 'modal';
         modal.innerHTML = `
-            <div class="modal-content large" style="max-width: 800px; max-height: 80vh;">
+            <div class="modal-content" style="max-width: 95%; max-height: 90vh; margin: 2vh auto;">
                 <span class="close" onclick="closeModal('${modalId}')">&times;</span>
-                <h3><i class="fas fa-users"></i> ${title}</h3>
-                <div class="modal-body" style="padding: 20px;">
-                    <!-- 左側：總資料庫（可加入任務的項目） -->
-                    <div style="display: flex; flex-direction: column; height: 60vh;">
-                        <div style="margin-bottom: 15px;">
-                            <h4 style="margin-bottom: 10px;">總資料庫 (未在任務中)</h4>
-                            <div class="search-box" style="margin-bottom: 10px;">
-                                <input type="text" id="master-search" placeholder="搜尋..." style="width: 100%;">
-                                <i class="fas fa-search"></i>
-                            </div>
-                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                <button onclick="selectAllMaster()" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px;">全選</button>
-                                <button onclick="deselectAllMaster()" style="padding: 5px 10px; background: #f0f0f0; border: none; border-radius: 3px;">取消全選</button>
-                            </div>
-                        </div>
-                        
-                        <div id="master-list-container" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
-                            <!-- 總資料庫列表會在這裡動態生成 -->
-                            <div style="text-align: center; color: #666; padding: 20px;">
-                                載入中...
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 10px;">
-                            <button onclick="addSelectedToMission()" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 16px;">
-                                <i class="fas fa-plus"></i> 將選取項目加入任務
-                            </button>
-                        </div>
+                <h3 style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <i class="fas fa-users"></i> ${title}
+                    <span style="font-size: 14px; color: #666; margin-left: auto;">
+                        <span id="total-selected-count">0</span> 個已選取
+                    </span>
+                </h3>
+                
+                <!-- 搜尋區域 -->
+                <div style="margin-bottom: 15px;">
+                    <div class="search-box" style="margin-bottom: 10px;">
+                        <input type="text" id="mission-search-all" placeholder="搜尋所有項目（名稱、群組）..." style="width: 100%; padding: 10px;">
+                        <i class="fas fa-search"></i>
                     </div>
-                    
-                    <!-- 分隔線 -->
-                    <hr style="margin: 20px 0;">
-                    
-                    <!-- 右側：當前任務中的項目 -->
-                    <div style="display: flex; flex-direction: column; height: 40vh;">
-                        <div style="margin-bottom: 15px;">
-                            <h4 style="margin-bottom: 10px;">當前任務中的項目</h4>
-                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                                <button onclick="selectAllCurrent()" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 3px;">全選</button>
-                                <button onclick="deselectAllCurrent()" style="padding: 5px 10px; background: #f0f0f0; border: none; border-radius: 3px;">取消全選</button>
-                            </div>
-                        </div>
-                        
-                        <div id="current-list-container" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
-                            <!-- 當前任務列表會在這裡動態生成 -->
-                        </div>
-                        
-                        <div style="margin-top: 10px;">
-                            <button onclick="removeSelectedFromMission()" style="width: 100%; padding: 10px; background: #f44336; color: white; border: none; border-radius: 5px; font-size: 16px;">
-                                <i class="fas fa-minus"></i> 將選取項目從任務移除
-                            </button>
-                        </div>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button onclick="selectAllItems()" style="flex: 1; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 14px;">
+                            <i class="fas fa-check-square"></i> 全選
+                        </button>
+                        <button onclick="deselectAllItems()" style="flex: 1; padding: 8px; background: #f0f0f0; border: none; border-radius: 4px; font-size: 14px;">
+                            <i class="far fa-square"></i> 取消全選
+                        </button>
+                        <button onclick="expandAllGroups()" style="flex: 1; padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; font-size: 14px;">
+                            <i class="fas fa-expand"></i> 展開全部
+                        </button>
+                        <button onclick="collapseAllGroups()" style="flex: 1; padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; font-size: 14px;">
+                            <i class="fas fa-compress"></i> 收合全部
+                        </button>
                     </div>
-                    
-                    <!-- 統計資訊 -->
-                    <div style="margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; text-align: center;">
-                        <div style="display: flex; justify-content: space-around;">
-                            <div>
-                                <strong>總資料庫:</strong> <span id="master-count">0</span>
-                            </div>
-                            <div>
-                                <strong>選取項目:</strong> <span id="selected-master-count">0</span>
-                            </div>
-                            <div>
-                                <strong>當前任務:</strong> <span id="current-count">0</span>
-                            </div>
-                            <div>
-                                <strong>選取項目:</strong> <span id="selected-current-count">0</span>
-                            </div>
-                        </div>
+                </div>
+                
+                <!-- 切換標籤頁 -->
+                <div style="margin-bottom: 15px; border-bottom: 1px solid #ddd;">
+                    <button class="mission-tab active" onclick="switchMissionTab('all')" style="padding: 10px 15px; border: none; background: none; font-weight: bold; color: #4CAF50; border-bottom: 2px solid #4CAF50;">
+                        所有項目
+                    </button>
+                    <button class="mission-tab" onclick="switchMissionTab('current')" style="padding: 10px 15px; border: none; background: none; font-weight: bold; color: #666;">
+                        僅任務中
+                    </button>
+                    <button class="mission-tab" onclick="switchMissionTab('available')" style="padding: 10px 15px; border: none; background: none; font-weight: bold; color: #666;">
+                        僅可加入
+                    </button>
+                </div>
+                
+                <!-- 項目列表 -->
+                <div id="mission-items-container" style="height: 50vh; overflow-y: auto; padding: 10px 5px;">
+                    <!-- 這裡會動態生成 -->
+                    <div style="text-align: center; color: #666; padding: 20px;">
+                        載入中...
+                    </div>
+                </div>
+                
+                <!-- 行動按鈕區（手機固定在底部） -->
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; position: sticky; bottom: 0; background: white;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button onclick="addSelectedToMission()" id="add-to-mission-btn" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-plus"></i> 加入任務
+                        </button>
+                        <button onclick="removeSelectedFromMission()" id="remove-from-mission-btn" style="flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 8px; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-minus"></i> 移出任務
+                        </button>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+                        <div>總項目: <span id="total-items-count">0</span></div>
+                        <div>任務中: <span id="current-mission-count">0</span></div>
+                        <div>可加入: <span id="available-count">0</span></div>
                     </div>
                 </div>
             </div>
@@ -3597,18 +3591,98 @@ async function showMissionManagement() {
     await loadMissionManagementData(type);
     
     // 設置搜尋功能
-    setupMissionSearch();
+    setupEnhancedMissionSearch();
     
     // 更新統計
     updateMissionStats();
+    
+    // 手機優化：觸發重新佈局
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, 100);
+}
+
+// 增強版搜尋功能 - 可搜尋所有項目
+function setupEnhancedMissionSearch() {
+    const searchInput = document.getElementById('mission-search-all');
+    if (!searchInput) return;
+    
+    searchInput.oninput = function() {
+        const searchTerm = this.value.trim().toLowerCase();
+        const items = document.querySelectorAll('.mission-item');
+        const groups = document.querySelectorAll('.mission-group');
+        
+        if (!searchTerm) {
+            // 沒有搜尋詞，顯示所有項目和群組
+            items.forEach(item => item.style.display = 'flex');
+            groups.forEach(group => {
+                const groupItems = group.querySelectorAll('.mission-item');
+                const hasVisible = Array.from(groupItems).some(item => item.style.display !== 'none');
+                group.style.display = hasVisible ? 'block' : 'none';
+            });
+            return;
+        }
+        
+        let foundAny = false;
+        
+        // 先隱藏所有群組標題
+        groups.forEach(group => {
+            group.style.display = 'none';
+        });
+        
+        // 搜尋每個項目
+        items.forEach(item => {
+            const name = item.querySelector('.mission-item-name').textContent.toLowerCase();
+            const group = item.querySelector('.mission-item-group').textContent.toLowerCase();
+            const status = item.querySelector('.mission-item-status').textContent.toLowerCase();
+            
+            const matches = name.includes(searchTerm) || 
+                          group.includes(searchTerm) || 
+                          status.includes(searchTerm);
+            
+            if (matches) {
+                item.style.display = 'flex';
+                foundAny = true;
+                
+                // 顯示所屬群組
+                const groupElement = item.closest('.mission-group');
+                if (groupElement) {
+                    groupElement.style.display = 'block';
+                }
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // 如果沒有找到任何項目，顯示提示
+        const noResults = document.getElementById('mission-no-results');
+        if (!foundAny) {
+            if (!noResults) {
+                const container = document.getElementById('mission-items-container');
+                const message = document.createElement('div');
+                message.id = 'mission-no-results';
+                message.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: #666;">
+                        <i class="fas fa-search" style="font-size: 40px; margin-bottom: 10px; opacity: 0.5;"></i>
+                        <p style="font-size: 16px;">找不到符合 "${searchTerm}" 的項目</p>
+                        <p style="font-size: 14px; opacity: 0.8;">請嘗試其他關鍵字</p>
+                    </div>
+                `;
+                container.appendChild(message);
+            }
+        } else if (noResults) {
+            noResults.remove();
+        }
+    };
 }
 
 // 載入任務管理資料
+// 重新設計渲染函數，支援群組分組
 async function loadMissionManagementData(type) {
     try {
         const sessionToken = sessionStorage.getItem('sessionToken');
         
-        // 獲取總資料庫（is_master = true）
+        // 獲取總資料庫
         const masterAction = type === 'personnel' ? 'getMasterPersonnel' : 'getMasterEquipment';
         const masterResponse = await fetch(CONFIG.API_BASE, {
             method: 'POST',
@@ -3623,7 +3697,7 @@ async function loadMissionManagementData(type) {
         const masterResult = await masterResponse.json();
         if (masterResult.status !== 'ok') throw new Error(masterResult.message);
         
-        // 獲取當前任務（is_active = true）
+        // 獲取當前任務
         const missionAction = type === 'personnel' ? 'getMissionPersonnel' : 'getMissionEquipment';
         const missionResponse = await fetch(CONFIG.API_BASE, {
             method: 'POST',
@@ -3638,21 +3712,287 @@ async function loadMissionManagementData(type) {
         const missionResult = await missionResponse.json();
         if (missionResult.status !== 'ok') throw new Error(missionResult.message);
         
+        // 處理資料
+        const allItems = masterResult[type === 'personnel' ? 'masterPersonnel' : 'masterEquipment'] || [];
+        const currentItems = missionResult[type === 'personnel' ? 'personnel' : 'equipment'] || [];
+        
+        // 標記哪些在任務中
+        const currentIds = new Set(currentItems.map(item => item.id));
+        const processedItems = allItems.map(item => {
+            return {
+                ...item,
+                inMission: currentIds.has(item.id),
+                group: type === 'personnel' ? (item.group_name || '未分組') : (item.category || '未分類'),
+                status: item.status || (type === 'personnel' ? 'BoO' : '在隊')
+            };
+        });
+        
         // 儲存資料
         window.missionData = {
-            master: masterResult[type === 'personnel' ? 'masterPersonnel' : 'masterEquipment'] || [],
-            current: missionResult[type === 'personnel' ? 'personnel' : 'equipment'] || [],
-            type: type
+            all: processedItems,
+            current: currentItems,
+            type: type,
+            currentTab: 'all'
         };
         
         // 渲染列表
-        renderMissionLists();
+        renderMissionGroups();
         
     } catch (error) {
         console.error('載入任務管理資料失敗：', error);
         showNotification(`載入失敗：${error.message}`);
     }
 }
+
+function renderMissionGroups() {
+    const { all, type, currentTab } = window.missionData || { all: [], type: 'personnel' };
+    const container = document.getElementById('mission-items-container');
+    
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // 過濾項目
+    let filteredItems = all;
+    if (currentTab === 'current') {
+        filteredItems = all.filter(item => item.inMission);
+    } else if (currentTab === 'available') {
+        filteredItems = all.filter(item => !item.inMission);
+    }
+    
+    // 按群組分組
+    const groups = {};
+    filteredItems.forEach(item => {
+        if (!groups[item.group]) {
+            groups[item.group] = [];
+        }
+        groups[item.group].push(item);
+    });
+    
+    // 渲染每個群組
+    Object.keys(groups).sort().forEach(groupName => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'mission-group';
+        groupDiv.style.cssText = `
+            margin-bottom: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            overflow: hidden;
+        `;
+        
+        // 群組標題
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'mission-group-header';
+        groupHeader.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #e8f5e8;
+            border-left: 4px solid #4CAF50;
+            cursor: pointer;
+            user-select: none;
+        `;
+        
+        groupHeader.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-chevron-down" style="transition: transform 0.3s; font-size: 12px;"></i>
+                <div>
+                    <div style="font-weight: bold; color: #333;">${groupName}</div>
+                    <div style="font-size: 12px; color: #666;">${groups[groupName].length} 個項目</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <input type="checkbox" class="group-checkbox" data-group="${groupName}" style="transform: scale(1.2);">
+                <button onclick="event.stopPropagation(); toggleGroupSelection('${groupName}')" style="background: none; border: none; color: #2196F3; font-size: 14px; cursor: pointer;">
+                    全選群組
+                </button>
+            </div>
+        `;
+        
+        // 群組內容（初始展開）
+        const groupContent = document.createElement('div');
+        groupContent.className = 'mission-group-content';
+        groupContent.id = `group-content-${groupName.replace(/\s+/g, '-')}`;
+        groupContent.style.cssText = `
+            padding: 10px;
+            display: block;
+        `;
+        
+        // 群組內項目
+        groups[groupName].forEach(item => {
+            const displayName = type === 'personnel' ? item.name : (item.detail_name || item.name);
+            const statusText = type === 'personnel' ? 
+                (item.status === 'BoO' ? '基地' : '外出') : 
+                (item.status === '在隊' ? '在隊' : '應勤');
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'mission-item';
+            itemDiv.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 10px;
+                margin-bottom: 5px;
+                background: white;
+                border-radius: 6px;
+                border: 1px solid #eee;
+                transition: all 0.2s;
+            `;
+            
+            itemDiv.innerHTML = `
+                <input type="checkbox" class="item-checkbox" data-id="${item.id}" data-group="${groupName}" style="margin-right: 10px; transform: scale(1.2);">
+                <div style="flex: 1; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="mission-item-name" style="font-weight: bold; margin-bottom: 2px;">${displayName}</div>
+                        <div class="mission-item-group" style="font-size: 12px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; display: inline-block;">
+                            ${groupName}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span class="mission-item-status" style="font-size: 12px; padding: 4px 8px; border-radius: 4px; background: ${item.inMission ? '#FFEBEE' : '#E8F5E9'}; color: ${item.inMission ? '#C62828' : '#2E7D32'};">
+                            ${item.inMission ? '任務中' : '未加入'}
+                        </span>
+                        <span style="font-size: 12px; color: #666;">
+                            ${statusText}
+                        </span>
+                    </div>
+                </div>
+            `;
+            
+            // 懸停效果
+            itemDiv.onmouseenter = () => {
+                itemDiv.style.backgroundColor = '#f5f5f5';
+                itemDiv.style.transform = 'translateX(3px)';
+            };
+            itemDiv.onmouseleave = () => {
+                itemDiv.style.backgroundColor = 'white';
+                itemDiv.style.transform = 'translateX(0)';
+            };
+            
+            groupContent.appendChild(itemDiv);
+        });
+        
+        // 點擊群組標題展開/收合
+        groupHeader.addEventListener('click', function() {
+            const icon = this.querySelector('i');
+            const content = document.getElementById(`group-content-${groupName.replace(/\s+/g, '-')}`);
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(0deg)';
+                this.style.background = '#e8f5e8';
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(-90deg)';
+                this.style.background = '#f0f0f0';
+            }
+        });
+        
+        groupDiv.appendChild(groupHeader);
+        groupDiv.appendChild(groupContent);
+        container.appendChild(groupDiv);
+    });
+    
+    // 添加事件監聽器
+    setupMissionEventListeners();
+    
+    // 更新統計
+    updateMissionStats();
+}
+
+// 設置事件監聽器
+function setupMissionEventListeners() {
+    // 項目勾選框事件
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateMissionStats);
+    });
+    
+    // 群組勾選框事件
+    document.querySelectorAll('.group-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const groupName = this.dataset.group;
+            const groupCheckboxes = document.querySelectorAll(`.item-checkbox[data-group="${groupName}"]`);
+            groupCheckboxes.forEach(cb => {
+                cb.checked = this.checked;
+            });
+            updateMissionStats();
+        });
+    });
+}
+
+// 切換標籤頁
+function switchMissionTab(tab) {
+    window.missionData.currentTab = tab;
+    
+    // 更新標籤樣式
+    document.querySelectorAll('.mission-tab').forEach(tabBtn => {
+        tabBtn.style.borderBottom = '2px solid transparent';
+        tabBtn.style.color = '#666';
+        tabBtn.classList.remove('active');
+    });
+    
+    const activeTab = document.querySelector(`.mission-tab[onclick*="${tab}"]`);
+    if (activeTab) {
+        activeTab.style.borderBottom = '2px solid #4CAF50';
+        activeTab.style.color = '#4CAF50';
+        activeTab.classList.add('active');
+    }
+    
+    // 重新渲染
+    renderMissionGroups();
+}
+
+// 全選所有項目
+function selectAllItems() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    document.querySelectorAll('.group-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateMissionStats();
+}
+
+// 取消全選
+function deselectAllItems() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    document.querySelectorAll('.group-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateMissionStats();
+}
+
+// 切換群組選取
+function toggleGroupSelection(groupName) {
+    const groupCheckbox = document.querySelector(`.group-checkbox[data-group="${groupName}"]`);
+    if (groupCheckbox) {
+        groupCheckbox.checked = !groupCheckbox.checked;
+        groupCheckbox.dispatchEvent(new Event('change'));
+    }
+}
+
+// 展開所有群組
+function expandAllGroups() {
+    document.querySelectorAll('.mission-group-content').forEach(content => {
+        content.style.display = 'block';
+    });
+    document.querySelectorAll('.mission-group-header i').forEach(icon => {
+        icon.style.transform = 'rotate(0deg)';
+    });
+}
+
+// 收合所有群組
+function collapseAllGroups() {
+    document.querySelectorAll('.mission-group-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    document.querySelectorAll('.mission-group-header i').forEach(icon => {
+        icon.style.transform = 'rotate(-90deg)';
+    });
+}
+
 
 // 渲染任務列表
 function renderMissionLists() {
@@ -3767,21 +4107,52 @@ function setupMissionSearch() {
 
 // 更新任務統計
 function updateMissionStats() {
-    const { master, current } = window.missionData || { master: [], current: [] };
+    const { all } = window.missionData || { all: [] };
     
-    // 過濾：總資料庫中排除已經在當前任務中的項目
-    const currentIds = new Set(current.map(item => item.id));
-    const availableMaster = master.filter(item => !currentIds.has(item.id));
+    // 計算各種數量
+    const totalItems = all.length;
+    const currentItems = all.filter(item => item.inMission).length;
+    const availableItems = totalItems - currentItems;
     
-    document.getElementById('master-count').textContent = availableMaster.length;
-    document.getElementById('current-count').textContent = current.length;
+    // 計算選取數量
+    const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
+    const selectedCount = selectedCheckboxes.length;
     
-    // 計算選中的項目
-    const selectedMaster = document.querySelectorAll('.master-checkbox:checked').length;
-    const selectedCurrent = document.querySelectorAll('.current-checkbox:checked').length;
+    // 更新顯示
+    document.getElementById('total-items-count').textContent = totalItems;
+    document.getElementById('current-mission-count').textContent = currentItems;
+    document.getElementById('available-count').textContent = availableItems;
+    document.getElementById('total-selected-count').textContent = selectedCount;
     
-    document.getElementById('selected-master-count').textContent = selectedMaster;
-    document.getElementById('selected-current-count').textContent = selectedCurrent;
+    // 計算選取項目的狀態
+    let inMissionSelected = 0;
+    let availableSelected = 0;
+    
+    selectedCheckboxes.forEach(checkbox => {
+        const itemId = parseInt(checkbox.dataset.id);
+        const item = all.find(item => item.id === itemId);
+        if (item) {
+            if (item.inMission) {
+                inMissionSelected++;
+            } else {
+                availableSelected++;
+            }
+        }
+    });
+    
+    // 更新按鈕狀態
+    const addBtn = document.getElementById('add-to-mission-btn');
+    const removeBtn = document.getElementById('remove-from-mission-btn');
+    
+    if (addBtn) {
+        addBtn.disabled = availableSelected === 0;
+        addBtn.style.opacity = availableSelected === 0 ? '0.5' : '1';
+    }
+    
+    if (removeBtn) {
+        removeBtn.disabled = inMissionSelected === 0;
+        removeBtn.style.opacity = inMissionSelected === 0 ? '0.5' : '1';
+    }
 }
 
 // 選擇所有總資料庫項目
@@ -3819,14 +4190,21 @@ function deselectAllCurrent() {
 // 將選中的項目加入任務
 async function addSelectedToMission() {
     const { type } = window.missionData || { type: 'personnel' };
-    const checkboxes = document.querySelectorAll('.master-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
     
-    if (checkboxes.length === 0) {
-        showNotification('請選擇要加入任務的項目');
+    // 只選取未在任務中的項目
+    const availableCheckboxes = Array.from(checkboxes).filter(cb => {
+        const itemId = parseInt(cb.dataset.id);
+        const item = window.missionData.all.find(item => item.id === itemId);
+        return item && !item.inMission;
+    });
+    
+    if (availableCheckboxes.length === 0) {
+        showNotification('請選擇未在任務中的項目');
         return;
     }
     
-    const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+    const ids = availableCheckboxes.map(cb => parseInt(cb.dataset.id));
     
     try {
         const sessionToken = sessionStorage.getItem('sessionToken');
@@ -3848,7 +4226,7 @@ async function addSelectedToMission() {
         const result = await response.json();
         if (result.status !== 'ok') throw new Error(result.message);
         
-        showNotification(result.message);
+        showNotification(`已將 ${ids.length} 個項目加入任務`);
         
         // 重新載入資料
         await loadMissionManagementData(type);
@@ -3864,14 +4242,21 @@ async function addSelectedToMission() {
 // 從任務移除選中的項目
 async function removeSelectedFromMission() {
     const { type } = window.missionData || { type: 'personnel' };
-    const checkboxes = document.querySelectorAll('.current-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
     
-    if (checkboxes.length === 0) {
-        showNotification('請選擇要從任務移除的項目');
+    // 只選取已在任務中的項目
+    const currentCheckboxes = Array.from(checkboxes).filter(cb => {
+        const itemId = parseInt(cb.dataset.id);
+        const item = window.missionData.all.find(item => item.id === itemId);
+        return item && item.inMission;
+    });
+    
+    if (currentCheckboxes.length === 0) {
+        showNotification('請選擇已在任務中的項目');
         return;
     }
     
-    const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+    const ids = currentCheckboxes.map(cb => parseInt(cb.dataset.id));
     
     try {
         const sessionToken = sessionStorage.getItem('sessionToken');
@@ -3893,7 +4278,7 @@ async function removeSelectedFromMission() {
         const result = await response.json();
         if (result.status !== 'ok') throw new Error(result.message);
         
-        showNotification(result.message);
+        showNotification(`已將 ${ids.length} 個項目從任務移除`);
         
         // 重新載入資料
         await loadMissionManagementData(type);
@@ -3905,6 +4290,7 @@ async function removeSelectedFromMission() {
         showNotification(`移除任務失敗：${error.message}`);
     }
 }
+
 window.showMissionManagement = showMissionManagement;
 /////////////////////////////////////////////////////
 // 新增 CSS 動畫
