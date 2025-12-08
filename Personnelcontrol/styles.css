@@ -1965,3 +1965,58 @@ body {
         /* 展開時顯示 */
     }
 }
+
+/* 通知連線相關樣式 */
+/* 同步狀態樣式 */
+.sync-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #2196F3;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(20px);
+}
+
+.sync-status.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.sync-status i {
+    font-size: 16px;
+}
+
+.sync-status.connected {
+    background-color: #4CAF50;
+}
+
+.sync-status.disconnected {
+    background-color: #FF9800;
+}
+
+.sync-status.error {
+    background-color: #F44336;
+}
+
+.sync-status.syncing {
+    background-color: #2196F3;
+}
+
+.sync-status.syncing i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
