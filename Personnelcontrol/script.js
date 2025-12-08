@@ -1958,7 +1958,6 @@ function enableAdminFeatures() {
     toolbarContent.id = 'toolbar-content';
     toolbarContent.style.cssText = `
         display: none;  // 初始隱藏
-        flex-direction: column;
         padding: 10px;
         gap: 8px;
         opacity: 0;
