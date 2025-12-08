@@ -1914,7 +1914,6 @@ window.handleConfirmReason = async function (itemId, newStatus) {
 };
 
 // 新增啟用管理員功能的函數
-// 新增啟用管理員功能的函數
 function enableAdminFeatures() {
     // 添加管理工具列
     const adminToolbar = document.createElement('div');
@@ -1922,21 +1921,21 @@ function enableAdminFeatures() {
     adminToolbar.style.cssText = `
         position: fixed;
         top: 60px;  // 從 70px 改為 60px，往上移一點
-        left: 10px;
+        right: 10px;
         z-index: 1000;
         background-color: rgba(255, 255, 255, 0.95);
         padding: 0;  // 移除原本的 padding
         border-radius: 5px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
-        flex-direction: column;  // 直向排列（正確）
+        flex-direction: column;
         width: 50px;  // 初始寬度設為 50px（收合狀態）
         height: 40px; // 設定高度
         overflow: hidden;  // 隱藏超出部分
         transition: all 0.3s ease;
     `;
 
-    // 建立縮放按鈕（放在上方）
+    // 建立縮放按鈕
     const expandButton = document.createElement('button');
     expandButton.id = 'admin-expand-btn';
     expandButton.innerHTML = '<i class="fas fa-tools"></i>';
@@ -1954,12 +1953,12 @@ function enableAdminFeatures() {
         flex-shrink: 0;
     `;
 
-    // 建立工具列內容（放在下方，初始隱藏）
+    // 建立工具列內容（初始隱藏）
     const toolbarContent = document.createElement('div');
     toolbarContent.id = 'toolbar-content';
     toolbarContent.style.cssText = `
         display: none;  // 初始隱藏
-        flex-direction: column;  // 按鈕一列一列排列
+        flex-direction: column;
         padding: 10px;
         gap: 8px;
         opacity: 0;
@@ -1968,13 +1967,13 @@ function enableAdminFeatures() {
 
     // 工具列按鈕
     toolbarContent.innerHTML = `
-        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-users"></i> 管理任務人員
         </button>
-        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-sync"></i> 手動刷新
         </button>
-        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
         </button>
     `;
@@ -1987,8 +1986,8 @@ function enableAdminFeatures() {
         
         if (isExpanded) {
             // 展開狀態
-            adminToolbar.style.width = '180px';  // 適合按鈕寬度
-            adminToolbar.style.height = 'auto';   // 自動高度
+            adminToolbar.style.width = '200px';
+            adminToolbar.style.height = 'auto';
             toolbarContent.style.display = 'flex';
             setTimeout(() => {
                 toolbarContent.style.opacity = '1';
@@ -2036,7 +2035,7 @@ function enableAdminFeatures() {
         }
     };
 
-    // 組裝工具列（順序：先縮放按鈕，再內容）
+    // 組裝工具列
     adminToolbar.appendChild(expandButton);
     adminToolbar.appendChild(toolbarContent);
     
