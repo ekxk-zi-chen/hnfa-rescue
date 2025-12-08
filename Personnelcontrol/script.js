@@ -1920,29 +1920,92 @@ function enableAdminFeatures() {
     adminToolbar.id = 'admin-toolbar';
     adminToolbar.style.cssText = `
         position: fixed;
-        top: 70px;
+        top: 60px;  // 從 70px 改為 60px，往上移一點
         right: 10px;
         z-index: 1000;
         background-color: rgba(255, 255, 255, 0.95);
-        padding: 10px;
+        padding: 0;  // 移除原本的 padding
         border-radius: 5px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        min-width: 50px;
+        overflow: hidden;
+        transition: all 0.3s ease;
     `;
 
-    adminToolbar.innerHTML = `
-        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">
+    // 建立縮放按鈕
+    const expandButton = document.createElement('button');
+    expandButton.id = 'admin-expand-btn';
+    expandButton.innerHTML = '<i class="fas fa-tools"></i>';
+    expandButton.style.cssText = `
+        padding: 10px;
+        background-color: #2c3e50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        width: 100%;
+        text-align: center;
+        transition: all 0.3s ease;
+    `;
+
+    // 建立工具列內容（初始隱藏）
+    const toolbarContent = document.createElement('div');
+    toolbarContent.id = 'toolbar-content';
+    toolbarContent.style.cssText = `
+        display: none;
+        flex-direction: column;
+        padding: 10px;
+        gap: 8px;
+    `;
+
+    // 工具列按鈕
+    toolbarContent.innerHTML = `
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
             <i class="fas fa-users"></i> 管理任務人員
         </button>
-        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px;">
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
             <i class="fas fa-sync"></i> 手動刷新
         </button>
-        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px;">
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
             <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
         </button>
     `;
+
+    // 展開/收起功能
+    let isExpanded = false;
+    expandButton.onclick = (e) => {
+        e.stopPropagation();
+        isExpanded = !isExpanded;
+        
+        if (isExpanded) {
+            toolbarContent.style.display = 'flex';
+            expandButton.innerHTML = '<i class="fas fa-times"></i>';
+            expandButton.style.backgroundColor = '#e74c3c';
+            adminToolbar.style.minWidth = '200px';
+        } else {
+            toolbarContent.style.display = 'none';
+            expandButton.innerHTML = '<i class="fas fa-tools"></i>';
+            expandButton.style.backgroundColor = '#2c3e50';
+            adminToolbar.style.minWidth = '50px';
+        }
+    };
+
+    // 點擊頁面其他地方關閉工具列
+    document.addEventListener('click', (e) => {
+        if (!adminToolbar.contains(e.target) && isExpanded) {
+            toolbarContent.style.display = 'none';
+            expandButton.innerHTML = '<i class="fas fa-tools"></i>';
+            expandButton.style.backgroundColor = '#2c3e50';
+            adminToolbar.style.minWidth = '50px';
+            isExpanded = false;
+        }
+    });
+
+    // 組裝工具列
+    adminToolbar.appendChild(expandButton);
+    adminToolbar.appendChild(toolbarContent);
     
     document.body.appendChild(adminToolbar);
 }
