@@ -3490,7 +3490,421 @@ function setupNetworkListeners() {
     });
 }
 
+///////////// 新增管理編組任/////////////////////////////
+// 顯示任務管理界面（人員加入/移除）
+async function showMissionManagement() {
+    // 檢查權限
+    if (userRole !== '管理') {
+        showNotification('只有管理員可以管理任務');
+        return;
+    }
 
+    const type = currentView; // 'personnel' 或 'equipment'
+    const title = type === 'personnel' ? '管理任務人員' : '管理任務器材';
+    
+    // 創建任務管理彈窗
+    const modalId = 'mission-management-modal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content large" style="max-width: 800px; max-height: 80vh;">
+                <span class="close" onclick="closeModal('${modalId}')">&times;</span>
+                <h3><i class="fas fa-users"></i> ${title}</h3>
+                <div class="modal-body" style="padding: 20px;">
+                    <!-- 左側：總資料庫（可加入任務的項目） -->
+                    <div style="display: flex; flex-direction: column; height: 60vh;">
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="margin-bottom: 10px;">總資料庫 (未在任務中)</h4>
+                            <div class="search-box" style="margin-bottom: 10px;">
+                                <input type="text" id="master-search" placeholder="搜尋..." style="width: 100%;">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <button onclick="selectAllMaster()" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px;">全選</button>
+                                <button onclick="deselectAllMaster()" style="padding: 5px 10px; background: #f0f0f0; border: none; border-radius: 3px;">取消全選</button>
+                            </div>
+                        </div>
+                        
+                        <div id="master-list-container" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
+                            <!-- 總資料庫列表會在這裡動態生成 -->
+                            <div style="text-align: center; color: #666; padding: 20px;">
+                                載入中...
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 10px;">
+                            <button onclick="addSelectedToMission()" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 16px;">
+                                <i class="fas fa-plus"></i> 將選取項目加入任務
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 分隔線 -->
+                    <hr style="margin: 20px 0;">
+                    
+                    <!-- 右側：當前任務中的項目 -->
+                    <div style="display: flex; flex-direction: column; height: 40vh;">
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="margin-bottom: 10px;">當前任務中的項目</h4>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <button onclick="selectAllCurrent()" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 3px;">全選</button>
+                                <button onclick="deselectAllCurrent()" style="padding: 5px 10px; background: #f0f0f0; border: none; border-radius: 3px;">取消全選</button>
+                            </div>
+                        </div>
+                        
+                        <div id="current-list-container" style="flex: 1; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
+                            <!-- 當前任務列表會在這裡動態生成 -->
+                        </div>
+                        
+                        <div style="margin-top: 10px;">
+                            <button onclick="removeSelectedFromMission()" style="width: 100%; padding: 10px; background: #f44336; color: white; border: none; border-radius: 5px; font-size: 16px;">
+                                <i class="fas fa-minus"></i> 將選取項目從任務移除
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 統計資訊 -->
+                    <div style="margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; text-align: center;">
+                        <div style="display: flex; justify-content: space-around;">
+                            <div>
+                                <strong>總資料庫:</strong> <span id="master-count">0</span>
+                            </div>
+                            <div>
+                                <strong>選取項目:</strong> <span id="selected-master-count">0</span>
+                            </div>
+                            <div>
+                                <strong>當前任務:</strong> <span id="current-count">0</span>
+                            </div>
+                            <div>
+                                <strong>選取項目:</strong> <span id="selected-current-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // 顯示模態框
+    modal.style.display = 'block';
+    
+    // 載入資料
+    await loadMissionManagementData(type);
+    
+    // 設置搜尋功能
+    setupMissionSearch();
+    
+    // 更新統計
+    updateMissionStats();
+}
+
+// 載入任務管理資料
+async function loadMissionManagementData(type) {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        
+        // 獲取總資料庫（is_master = true）
+        const masterAction = type === 'personnel' ? 'getMasterPersonnel' : 'getMasterEquipment';
+        const masterResponse = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: masterAction,
+                sessionToken
+            })
+        });
+        
+        if (!masterResponse.ok) throw new Error('獲取總資料庫失敗');
+        const masterResult = await masterResponse.json();
+        if (masterResult.status !== 'ok') throw new Error(masterResult.message);
+        
+        // 獲取當前任務（is_active = true）
+        const missionAction = type === 'personnel' ? 'getMissionPersonnel' : 'getMissionEquipment';
+        const missionResponse = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: missionAction,
+                sessionToken
+            })
+        });
+        
+        if (!missionResponse.ok) throw new Error('獲取當前任務失敗');
+        const missionResult = await missionResponse.json();
+        if (missionResult.status !== 'ok') throw new Error(missionResult.message);
+        
+        // 儲存資料
+        window.missionData = {
+            master: masterResult[type === 'personnel' ? 'masterPersonnel' : 'masterEquipment'] || [],
+            current: missionResult[type === 'personnel' ? 'personnel' : 'equipment'] || [],
+            type: type
+        };
+        
+        // 渲染列表
+        renderMissionLists();
+        
+    } catch (error) {
+        console.error('載入任務管理資料失敗：', error);
+        showNotification(`載入失敗：${error.message}`);
+    }
+}
+
+// 渲染任務列表
+function renderMissionLists() {
+    const { master, current, type } = window.missionData || { master: [], current: [], type: 'personnel' };
+    
+    // 過濾：總資料庫中排除已經在當前任務中的項目
+    const currentIds = new Set(current.map(item => item.id));
+    const availableMaster = master.filter(item => !currentIds.has(item.id));
+    
+    // 渲染總資料庫列表
+    const masterContainer = document.getElementById('master-list-container');
+    masterContainer.innerHTML = '';
+    
+    if (availableMaster.length === 0) {
+        masterContainer.innerHTML = `
+            <div style="text-align: center; color: #666; padding: 20px;">
+                沒有可加入的項目
+            </div>
+        `;
+    } else {
+        availableMaster.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'mission-master-item';
+            itemDiv.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 8px;
+                margin-bottom: 5px;
+                background: #f9f9f9;
+                border-radius: 4px;
+                border: 1px solid #eee;
+            `;
+            
+            const displayName = type === 'personnel' ? item.name : (item.detail_name || item.name);
+            const groupName = type === 'personnel' ? (item.group_name || '未分組') : (item.category || '未分類');
+            
+            itemDiv.innerHTML = `
+                <input type="checkbox" class="master-checkbox" data-id="${item.id}" style="margin-right: 10px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: bold;">${displayName}</div>
+                    <div style="font-size: 12px; color: #666;">${groupName}</div>
+                </div>
+            `;
+            
+            masterContainer.appendChild(itemDiv);
+        });
+    }
+    
+    // 渲染當前任務列表
+    const currentContainer = document.getElementById('current-list-container');
+    currentContainer.innerHTML = '';
+    
+    if (current.length === 0) {
+        currentContainer.innerHTML = `
+            <div style="text-align: center; color: #666; padding: 20px;">
+                任務中沒有項目
+            </div>
+        `;
+    } else {
+        current.forEach(item => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'mission-current-item';
+            itemDiv.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 8px;
+                margin-bottom: 5px;
+                background: #f0f8ff;
+                border-radius: 4px;
+                border: 1px solid #ddeeff;
+            `;
+            
+            const displayName = type === 'personnel' ? item.name : (item.detail_name || item.name);
+            const groupName = type === 'personnel' ? (item.group_name || '未分組') : (item.category || '未分類');
+            const status = item.status || (type === 'personnel' ? 'BoO' : '在隊');
+            
+            itemDiv.innerHTML = `
+                <input type="checkbox" class="current-checkbox" data-id="${item.id}" style="margin-right: 10px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: bold;">${displayName}</div>
+                    <div style="font-size: 12px; color: #666;">${groupName} | 狀態: ${status}</div>
+                </div>
+            `;
+            
+            currentContainer.appendChild(itemDiv);
+        });
+    }
+    
+    // 更新統計
+    updateMissionStats();
+}
+
+// 設置搜尋功能
+function setupMissionSearch() {
+    const searchInput = document.getElementById('master-search');
+    if (searchInput) {
+        searchInput.oninput = function() {
+            const searchTerm = this.value.toLowerCase();
+            const items = document.querySelectorAll('.mission-master-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        };
+    }
+}
+
+// 更新任務統計
+function updateMissionStats() {
+    const { master, current } = window.missionData || { master: [], current: [] };
+    
+    // 過濾：總資料庫中排除已經在當前任務中的項目
+    const currentIds = new Set(current.map(item => item.id));
+    const availableMaster = master.filter(item => !currentIds.has(item.id));
+    
+    document.getElementById('master-count').textContent = availableMaster.length;
+    document.getElementById('current-count').textContent = current.length;
+    
+    // 計算選中的項目
+    const selectedMaster = document.querySelectorAll('.master-checkbox:checked').length;
+    const selectedCurrent = document.querySelectorAll('.current-checkbox:checked').length;
+    
+    document.getElementById('selected-master-count').textContent = selectedMaster;
+    document.getElementById('selected-current-count').textContent = selectedCurrent;
+}
+
+// 選擇所有總資料庫項目
+function selectAllMaster() {
+    document.querySelectorAll('.master-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateMissionStats();
+}
+
+// 取消選擇所有總資料庫項目
+function deselectAllMaster() {
+    document.querySelectorAll('.master-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateMissionStats();
+}
+
+// 選擇所有當前任務項目
+function selectAllCurrent() {
+    document.querySelectorAll('.current-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateMissionStats();
+}
+
+// 取消選擇所有當前任務項目
+function deselectAllCurrent() {
+    document.querySelectorAll('.current-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateMissionStats();
+}
+
+// 將選中的項目加入任務
+async function addSelectedToMission() {
+    const { type } = window.missionData || { type: 'personnel' };
+    const checkboxes = document.querySelectorAll('.master-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        showNotification('請選擇要加入任務的項目');
+        return;
+    }
+    
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+    
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        const action = type === 'personnel' ? 'manageMissionPersonnel' : 'manageMissionEquipment';
+        
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: action,
+                sessionToken,
+                personnelIds: type === 'personnel' ? ids : undefined,
+                equipmentIds: type === 'equipment' ? ids : undefined,
+                actionType: 'add'
+            })
+        });
+        
+        if (!response.ok) throw new Error('加入任務失敗');
+        const result = await response.json();
+        if (result.status !== 'ok') throw new Error(result.message);
+        
+        showNotification(result.message);
+        
+        // 重新載入資料
+        await loadMissionManagementData(type);
+        // 刷新主畫面
+        await refreshData();
+        
+    } catch (error) {
+        console.error('加入任務失敗：', error);
+        showNotification(`加入任務失敗：${error.message}`);
+    }
+}
+
+// 從任務移除選中的項目
+async function removeSelectedFromMission() {
+    const { type } = window.missionData || { type: 'personnel' };
+    const checkboxes = document.querySelectorAll('.current-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        showNotification('請選擇要從任務移除的項目');
+        return;
+    }
+    
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+    
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        const action = type === 'personnel' ? 'manageMissionPersonnel' : 'manageMissionEquipment';
+        
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: action,
+                sessionToken,
+                personnelIds: type === 'personnel' ? ids : undefined,
+                equipmentIds: type === 'equipment' ? ids : undefined,
+                actionType: 'remove'
+            })
+        });
+        
+        if (!response.ok) throw new Error('移除任務失敗');
+        const result = await response.json();
+        if (result.status !== 'ok') throw new Error(result.message);
+        
+        showNotification(result.message);
+        
+        // 重新載入資料
+        await loadMissionManagementData(type);
+        // 刷新主畫面
+        await refreshData();
+        
+    } catch (error) {
+        console.error('移除任務失敗：', error);
+        showNotification(`移除任務失敗：${error.message}`);
+    }
+}
 
 /////////////////////////////////////////////////////
 // 新增 CSS 動畫
