@@ -715,6 +715,7 @@ function renderGroupControls() {
 
         if (userRole === '管理') {
             // 管理員看到按鈕
+            // 群組按鈕的部分應該像這樣：
             groupButtons.innerHTML = `
                 <button class="boo-btn" onclick="batchUpdateGroupStatus('${groupName}', '${currentView === 'personnel' ? 'BoO' : '在隊'}')">
                     全部${currentView === 'personnel' ? '歸隊' : '在隊'}
@@ -868,6 +869,7 @@ function toggleGroupMembers(groupName) {
 }
 
 // 批次更新群組狀態
+// 批次更新群組狀態 - 修正版
 async function batchUpdateGroupStatus(groupName, newStatus) {
     // 檢查權限
     if (userRole !== '管理') {
@@ -879,8 +881,58 @@ async function batchUpdateGroupStatus(groupName, newStatus) {
     if (newStatus === '外出' || newStatus === '應勤') {
         showGroupReasonModal(groupName, newStatus);
     } else {
-        // 歸隊或在隊，直接更新
-        await performBatchGroupUpdateViaAPI(groupName, newStatus, '');
+        // 歸隊或在隊，直接更新（無需原因）
+        const reason = ''; // 歸隊不需原因
+        await performBatchGroupUpdateViaAPI(groupName, newStatus, reason);
+    }
+}
+
+// 新增透過 API 批次更新的函數 - 確認這個函數被正確呼叫
+async function performBatchGroupUpdateViaAPI(groupName, newStatus, reason) {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        if (!sessionToken) {
+            showNotification('請重新登入');
+            return;
+        }
+
+        console.log(`執行批次更新: groupName=${groupName}, newStatus=${newStatus}, reason=${reason}, viewType=${currentView}`);
+
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'batchUpdateGroupStatus',
+                sessionToken,
+                groupName,
+                status: newStatus,
+                reason,
+                viewType: currentView
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API 回應錯誤: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        if (result.status !== 'ok') {
+            throw new Error(result.message || '批次更新失敗');
+        }
+
+        // 顯示成功訊息
+        showNotification(result.message || `已更新 ${groupName} 群組狀態`);
+
+        // 延遲一下後重新載入資料
+        setTimeout(async () => {
+            await loadDataFromSupabase();
+            renderView();
+        }, 500);
+
+    } catch (error) {
+        console.error('批次更新失敗：', error);
+        showNotification(`批次更新失敗：${error.message}`);
     }
 }
 
@@ -942,6 +994,7 @@ function showGroupReasonModal(groupName, newStatus) {
     reasonModal.id = 'group-reason-modal';
     reasonModal.className = 'modal';
 
+    // 修改原因選項點擊事件處理
     reasonModal.innerHTML = `
         <div class="modal-content reason-modal-content">
             <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
@@ -950,14 +1003,14 @@ function showGroupReasonModal(groupName, newStatus) {
                 <p>將為 ${groupItems.length} 個項目設定相同原因：</p>
                 <div class="reason-options" id="group-reason-options">
                     ${currentReasons.map(reason =>
-        `<div class="reason-option" onclick="handleGroupReasonOptionClick(this, '${groupName}', '${newStatus}')">${reason}</div>`
-    ).join('')}
+                        `<div class="reason-option" onclick="selectGroupReason(this, '${groupName}', '${newStatus}')">${reason}</div>`
+                    ).join('')}
                 </div>
                 <div class="custom-reason-input" id="group-custom-reason-input" style="display: none;">
                     <input type="text" placeholder="請輸入自訂原因..." maxlength="50">
                 </div>
                 <div class="reason-actions">
-                    <button onclick="handleConfirmGroupReason('${groupName}', '${newStatus}')">確認</button>
+                    <button onclick="confirmGroupReasonUpdate('${groupName}', '${newStatus}')">確認</button>
                     <button onclick="this.closest('.modal').remove()">取消</button>
                 </div>
             </div>
@@ -969,6 +1022,61 @@ function showGroupReasonModal(groupName, newStatus) {
     reasonModal.dataset.groupName = groupName;
     reasonModal.dataset.newStatus = newStatus;
 }
+
+// 確認群組原因並更新
+async function confirmGroupReasonUpdate(groupName, newStatus) {
+    const reasonModal = document.getElementById('group-reason-modal');
+    if (!reasonModal) return;
+
+    let selectedReason = '';
+    const selectedOption = reasonModal.querySelector('.reason-option.selected');
+
+    if (selectedOption) {
+        selectedReason = selectedOption.textContent;
+
+        if (selectedReason === '其他') {
+            const customInput = reasonModal.querySelector('#group-custom-reason-input input');
+            selectedReason = customInput?.value.trim() || '';
+        }
+    }
+
+    if (!selectedReason && (newStatus === '外出' || newStatus === '應勤')) {
+        showNotification('請選擇或輸入原因');
+        return;
+    }
+
+    // 移除彈窗
+    reasonModal.remove();
+
+    // 執行 API 批次更新
+    await performBatchGroupUpdateViaAPI(groupName, newStatus, selectedReason);
+}
+
+// 選擇群組原因
+function selectGroupReason(element, groupName, newStatus) {
+    const reasonModal = document.getElementById('group-reason-modal');
+    if (!reasonModal) return;
+
+    reasonModal.querySelectorAll('.reason-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+
+    element.classList.add('selected');
+
+    if (element.textContent === '其他') {
+        const customInput = reasonModal.querySelector('#group-custom-reason-input');
+        if (customInput) {
+            customInput.style.display = 'block';
+            customInput.querySelector('input')?.focus();
+        }
+    } else {
+        const customInput = reasonModal.querySelector('#group-custom-reason-input');
+        if (customInput) {
+            customInput.style.display = 'none';
+        }
+    }
+}
+
 
 // 處理群組原因選項點擊
 window.handleGroupReasonOptionClick = function (element, groupName, newStatus) {
