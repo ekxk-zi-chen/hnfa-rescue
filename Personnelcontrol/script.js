@@ -1929,8 +1929,9 @@ function enableAdminFeatures() {
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
         flex-direction: column;
-        min-width: 50px;
-        overflow: hidden;
+        width: 50px;  // 初始寬度設為 50px（收合狀態）
+        height: 40px; // 設定高度
+        overflow: hidden;  // 隱藏超出部分
         transition: all 0.3s ease;
     `;
 
@@ -1946,29 +1947,33 @@ function enableAdminFeatures() {
         cursor: pointer;
         font-size: 16px;
         width: 100%;
+        height: 40px;
         text-align: center;
         transition: all 0.3s ease;
+        flex-shrink: 0;
     `;
 
     // 建立工具列內容（初始隱藏）
     const toolbarContent = document.createElement('div');
     toolbarContent.id = 'toolbar-content';
     toolbarContent.style.cssText = `
-        display: none;
+        display: none;  // 初始隱藏
         flex-direction: column;
         padding: 10px;
         gap: 8px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
     `;
 
     // 工具列按鈕
     toolbarContent.innerHTML = `
-        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
             <i class="fas fa-users"></i> 管理任務人員
         </button>
-        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
             <i class="fas fa-sync"></i> 手動刷新
         </button>
-        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: nowrap;">
             <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
         </button>
     `;
@@ -1980,28 +1985,55 @@ function enableAdminFeatures() {
         isExpanded = !isExpanded;
         
         if (isExpanded) {
+            // 展開狀態
+            adminToolbar.style.width = '200px';
+            adminToolbar.style.height = 'auto';
             toolbarContent.style.display = 'flex';
+            setTimeout(() => {
+                toolbarContent.style.opacity = '1';
+            }, 10);
             expandButton.innerHTML = '<i class="fas fa-times"></i>';
             expandButton.style.backgroundColor = '#e74c3c';
-            adminToolbar.style.minWidth = '200px';
         } else {
-            toolbarContent.style.display = 'none';
+            // 收合狀態
+            toolbarContent.style.opacity = '0';
+            setTimeout(() => {
+                toolbarContent.style.display = 'none';
+                adminToolbar.style.width = '50px';
+                adminToolbar.style.height = '40px';
+            }, 300);
             expandButton.innerHTML = '<i class="fas fa-tools"></i>';
             expandButton.style.backgroundColor = '#2c3e50';
-            adminToolbar.style.minWidth = '50px';
         }
     };
 
     // 點擊頁面其他地方關閉工具列
     document.addEventListener('click', (e) => {
         if (!adminToolbar.contains(e.target) && isExpanded) {
-            toolbarContent.style.display = 'none';
+            toolbarContent.style.opacity = '0';
+            setTimeout(() => {
+                toolbarContent.style.display = 'none';
+                adminToolbar.style.width = '50px';
+                adminToolbar.style.height = '40px';
+            }, 300);
             expandButton.innerHTML = '<i class="fas fa-tools"></i>';
             expandButton.style.backgroundColor = '#2c3e50';
-            adminToolbar.style.minWidth = '50px';
             isExpanded = false;
         }
     });
+
+    // 添加滑鼠懸停效果
+    expandButton.onmouseenter = () => {
+        if (!isExpanded) {
+            expandButton.style.backgroundColor = '#34495e';
+        }
+    };
+    
+    expandButton.onmouseleave = () => {
+        if (!isExpanded) {
+            expandButton.style.backgroundColor = '#2c3e50';
+        }
+    };
 
     // 組裝工具列
     adminToolbar.appendChild(expandButton);
