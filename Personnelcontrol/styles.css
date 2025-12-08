@@ -2020,6 +2020,7 @@ body {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+/*////////管理任務跳窗/////////*/
 
 /* 任務管理樣式 */
 .mission-master-item:hover,
@@ -2075,4 +2076,94 @@ body {
     top: 50%;
     transform: translateY(-50%);
     color: #999;
+}
+
+/* 任務管理模態框 - 手機優化 */
+@media (max-width: 768px) {
+    #mission-management-modal .modal-content {
+        width: 95%;
+        max-width: 95%;
+        margin: 1vh auto;
+        max-height: 96vh;
+    }
+    
+    #mission-items-container {
+        height: 60vh !important;
+        max-height: 60vh;
+    }
+    
+    .mission-group-header {
+        flex-wrap: wrap;
+    }
+    
+    .mission-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .mission-item > div {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .mission-item-status {
+        align-self: flex-start;
+    }
+    
+    /* 行動按鈕區 */
+    #mission-management-modal .modal-content > div:last-child {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding-bottom: 10px;
+        padding-top: 15px;
+        border-top: 2px solid #eee;
+        margin-top: 10px;
+    }
+    
+    #add-to-mission-btn,
+    #remove-from-mission-btn {
+        font-size: 14px !important;
+        padding: 10px !important;
+        white-space: nowrap;
+    }
+    
+    /* 標籤頁優化 */
+    .mission-tab {
+        font-size: 14px !important;
+        padding: 8px 10px !important;
+        flex: 1;
+        text-align: center;
+    }
+}
+
+/* 任務管理項目懸停效果 */
+.mission-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+/* 選取狀態 */
+.item-checkbox:checked + div {
+    background-color: #f0f9ff;
+}
+
+.group-checkbox:checked ~ button {
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+/* 動畫效果 */
+.mission-group-content {
+    transition: all 0.3s ease;
+    max-height: 500px;
+    overflow: hidden;
+}
+
+.mission-group-content[style*="display: none"] {
+    max-height: 0;
+    padding: 0 !important;
+    margin: 0 !important;
+    opacity: 0;
 }
