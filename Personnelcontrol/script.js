@@ -1219,7 +1219,7 @@ function performBatchGroupUpdate(groupName, newStatus, reason) {
             if (reason && (newStatus === '外出' || newStatus === '應勤')) {
                 historyEntry += ` (${reason})`;
             }
-            historyEntry += ' ' + currentTime;
+            historyEntry += ` [${currentUser?.displayName || userRole || '系統'}更新] ${currentTime}`;
 
             historyLines.unshift(historyEntry);
 
@@ -2142,7 +2142,7 @@ function performStatusUpdate(id, newStatus, reason) {
     if (reason && (newStatus === '外出' || newStatus === '應勤')) {
         historyEntry += ` (${reason})`;
     }
-    historyEntry += ' ' + currentTime;
+    historyEntry += ` [${currentUser?.displayName || userRole || '系統'}更新] ${currentTime}`;
 
     historyLines.unshift(historyEntry);
 
