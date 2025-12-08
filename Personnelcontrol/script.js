@@ -1921,14 +1921,14 @@ function enableAdminFeatures() {
     adminToolbar.style.cssText = `
         position: fixed;
         top: 60px;  // 從 70px 改為 60px，往上移一點
-        right: 10px;
+        left: 10px;
         z-index: 1000;
         background-color: rgba(255, 255, 255, 0.95);
         padding: 0;  // 移除原本的 padding
         border-radius: 5px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         width: 50px;  // 初始寬度設為 50px（收合狀態）
         height: 40px; // 設定高度
         overflow: hidden;  // 隱藏超出部分
@@ -1986,7 +1986,7 @@ function enableAdminFeatures() {
         
         if (isExpanded) {
             // 展開狀態
-            adminToolbar.style.width = '200px';
+            adminToolbar.style.width = '320px';
             adminToolbar.style.height = 'auto';
             toolbarContent.style.display = 'flex';
             setTimeout(() => {
