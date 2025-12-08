@@ -9,6 +9,17 @@ const CONFIG = {
 let currentUser = null;
 let userRole = '一般用戶';
 
+// 新增全域變數
+let syncStatus = {
+    isOnline: true,
+    isSyncing: false,
+    lastSyncTime: null
+};
+
+// 新增自動刷新功能
+let autoRefreshInterval = null;
+let autoRefreshEnabled = true; // 預設開啟自動刷新
+
 
 // 檢查 Supabase 是否可用
 // 檢查 Supabase 是否可用
@@ -52,14 +63,15 @@ let lastSelectedReason = ''; // 最後選擇的原因
 // DOM 載入完成後初始化
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM 已載入，開始初始化...');
-
+    
+    // 設置網路狀態監聽
+    setupNetworkListeners();
+    
     // 初始化常用原因
     initReasons();
-
+    
     initializeApp();
     setupEventListeners();
-
-
 });
 
 
@@ -70,18 +82,21 @@ async function initializeApp() {
     try {
         console.log('開始驗證用戶...');
 
-        // 1. 先驗證用戶（與 navigation.html 相同邏輯）
+        // 檢查網路狀態
+        checkNetworkStatus();
+
+        // 1. 先驗證用戶
         await verifyUser();
 
         console.log('用戶驗證成功，開始載入資料...');
 
-        // 2. 初始化常用原因（保持不變）
+        // 2. 初始化常用原因
         initReasons();
 
-        // 3. 載入資料（改為從 Supabase 載入）
+        // 3. 載入資料（從 Supabase）
         await loadDataFromSupabase();
 
-        // 4. 非同步啟動圖片載入（保持不變）
+        // 4. 非同步啟動圖片載入
         initDriveImagesAsync();
 
         // 5. 初始化畫面
@@ -99,13 +114,21 @@ async function initializeApp() {
             enableAdminFeatures();
         }
 
+        // 顯示同步狀態
+        updateSyncStatus('connected', '資料載入完成');
+
+        // 在成功初始化後啟動自動刷新
+        if (autoRefreshEnabled) {
+            startAutoRefresh(30000); // 30秒刷新一次
+        }
+
     } catch (error) {
         console.error('初始化失敗：', error);
         showNotification(`初始化失敗：${error.message}`);
-        // 可以選擇載入離線備用資料
-        // createTestData();
+        updateSyncStatus('error', `初始化失敗：${error.message}`);
     }
 }
+
 // 新增 verifyUser 函數
 async function verifyUser() {
     try {
@@ -158,8 +181,11 @@ function goBack() {
 // 新增 loadDataFromSupabase 函數，替換原有的 loadData
 async function loadDataFromSupabase() {
     try {
+        updateSyncStatus('syncing', '資料載入中...');
+        syncStatus.isSyncing = true;
+
         console.log('開始從 Supabase 載入資料...');
-        
+
         // 根據當前視圖載入對應資料
         if (currentView === 'personnel') {
             const { data, error } = await supabase
@@ -168,12 +194,12 @@ async function loadDataFromSupabase() {
                 .eq('is_active', true)
                 .order('group_name', { ascending: true })
                 .order('name', { ascending: true });
-                
+
             if (error) throw error;
-            
+
             currentData.employees = processSupabasePersonnelData(data || []);
             console.log('人員資料載入完成：', currentData.employees.length, '筆');
-            
+
         } else {
             const { data, error } = await supabase
                 .from('equipment_control')
@@ -181,15 +207,21 @@ async function loadDataFromSupabase() {
                 .eq('is_active', true)
                 .order('category', { ascending: true })
                 .order('name', { ascending: true });
-                
+
             if (error) throw error;
-            
+
             currentData.equipment = processSupabaseEquipmentData(data || []);
             console.log('器材資料載入完成：', currentData.equipment.length, '筆');
         }
-        
+
+        syncStatus.lastSyncTime = new Date();
+        syncStatus.isSyncing = false;
+        updateSyncStatus('connected', `資料同步完成 (${new Date().toLocaleTimeString()})`);
+
     } catch (error) {
         console.error('載入資料失敗：', error);
+        syncStatus.isSyncing = false;
+        updateSyncStatus('error', '資料載入失敗');
         throw error;
     }
 }
@@ -1003,8 +1035,8 @@ function showGroupReasonModal(groupName, newStatus) {
                 <p>將為 ${groupItems.length} 個項目設定相同原因：</p>
                 <div class="reason-options" id="group-reason-options">
                     ${currentReasons.map(reason =>
-                        `<div class="reason-option" onclick="selectGroupReason(this, '${groupName}', '${newStatus}')">${reason}</div>`
-                    ).join('')}
+        `<div class="reason-option" onclick="selectGroupReason(this, '${groupName}', '${newStatus}')">${reason}</div>`
+    ).join('')}
                 </div>
                 <div class="custom-reason-input" id="group-custom-reason-input" style="display: none;">
                     <input type="text" placeholder="請輸入自訂原因..." maxlength="50">
@@ -1212,7 +1244,6 @@ function performBatchGroupUpdate(groupName, newStatus, reason) {
 
     updateStats();  // 更新統計數字
 
-    saveData();
 }
 
 // 渲染卡片
@@ -1723,7 +1754,7 @@ async function performStatusUpdateViaAPI(id, newStatus, reason) {
     try {
         const sessionToken = sessionStorage.getItem('sessionToken');
         const action = currentView === 'personnel' ? 'updatePersonnelStatus' : 'updateEquipmentStatus';
-        
+
         const response = await fetch(CONFIG.API_BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1735,30 +1766,30 @@ async function performStatusUpdateViaAPI(id, newStatus, reason) {
                 reason
             })
         });
-        
+
         if (!response.ok) throw new Error('更新失敗');
-        
+
         const result = await response.json();
         if (result.status !== 'ok') throw new Error(result.message || '更新失敗');
-        
+
         // 更新本地資料
         const dataArray = currentView === 'personnel' ? currentData.employees : currentData.equipment;
         const itemIndex = dataArray.findIndex(item => item.id === id);
-        
+
         if (itemIndex !== -1 && result[currentView === 'personnel' ? 'personnel' : 'equipment']) {
             const updatedData = result[currentView === 'personnel' ? 'personnel' : 'equipment'];
             // 處理更新後的資料
-            const processedData = currentView === 'personnel' 
+            const processedData = currentView === 'personnel'
                 ? processSupabasePersonnelData([updatedData])[0]
                 : processSupabaseEquipmentData([updatedData])[0];
             dataArray[itemIndex] = processedData;
         }
-        
+
         // 更新畫面
         updateSingleCard(id);
         updateStats();
         showNotification('狀態更新成功');
-        
+
     } catch (error) {
         console.error('更新狀態失敗：', error);
         showNotification(`更新失敗：${error.message}`);
@@ -1915,16 +1946,28 @@ function enableAdminFeatures() {
 
 // 新增刷新資料函數
 async function refreshData() {
+    if (!syncStatus.isOnline) {
+        showNotification('網路已中斷，無法刷新資料');
+        updateSyncStatus('disconnected', '網路已中斷，無法刷新資料');
+        return;
+    }
+    
     try {
         showNotification('正在刷新資料...');
+        updateSyncStatus('syncing', '資料刷新中...');
+        
         await loadDataFromSupabase();
         renderView();
+        
         showNotification('資料刷新完成');
+        
     } catch (error) {
         console.error('刷新資料失敗：', error);
         showNotification(`刷新失敗：${error.message}`);
+        updateSyncStatus('error', '刷新失敗');
     }
 }
+
 
 // 確認原因並更新狀態
 function confirmReason(itemId, newStatus) {
@@ -2024,7 +2067,6 @@ function performStatusUpdate(id, newStatus, reason) {
 
     updateStats();  // 更新統計數字
 
-    saveData();
 }
 
 // === 新增：只更新單一卡片的函數 ===
@@ -2416,55 +2458,7 @@ function showNotification(message) {
     }, 3000);
 }
 
-// 儲存資料（可選功能）
-function saveData() {
-    // 注意：瀏覽器無法直接寫入檔案，這裡只是示範
-    // 實際應用中需要透過後端API或讓使用者下載
 
-    console.log('資料已變更，建議實作儲存功能');
-
-    // 範例：建立下載連結
-    const personnelJson = JSON.stringify(currentData.employees, null, 2);
-    const equipmentJson = JSON.stringify(currentData.equipment, null, 2);
-
-    // 建立儲存按鈕（僅供測試）
-    if (!document.getElementById('save-btn')) {
-        const saveBtn = document.createElement('button');
-        saveBtn.id = 'save-btn';
-        saveBtn.innerHTML = '<i class="fas fa-download"></i> 下載資料';
-        saveBtn.style.cssText = `
-            position: fixed;
-            bottom: 70px;
-            right: 20px;
-            padding: 10px 15px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 1000;
-        `;
-        saveBtn.addEventListener('click', () => {
-            downloadJSON(personnelJson, 'personnel_updated.json');
-            downloadJSON(equipmentJson, 'equipment_updated.json');
-            showNotification('資料已準備下載');
-        });
-        document.body.appendChild(saveBtn);
-    }
-}
-
-// 下載 JSON 檔案
-function downloadJSON(jsonData, filename) {
-    const blob = new Blob([jsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
 
 // 建立測試資料
 function createTestData() {
@@ -3284,6 +3278,183 @@ function removeReason(index) {
         showNotification(`已移除原因: ${reasonToRemove}`);
     }
 }
+
+// 新增函數：更新同步狀態顯示
+function updateSyncStatus(status, message = '') {
+    const syncElement = document.getElementById('sync-status');
+    if (!syncElement) return;
+
+    const textElement = syncElement.querySelector('.sync-text');
+    const iconElement = syncElement.querySelector('i');
+
+    // 移除所有狀態類別
+    syncElement.classList.remove('connected', 'disconnected', 'error', 'syncing');
+
+    switch (status) {
+        case 'connected':
+            syncElement.classList.add('connected');
+            iconElement.className = 'fas fa-cloud';
+            textElement.textContent = message || '已連線到雲端資料庫';
+            break;
+
+        case 'disconnected':
+            syncElement.classList.add('disconnected');
+            iconElement.className = 'fas fa-cloud-slash';
+            textElement.textContent = message || '網路已中斷，使用本地資料';
+            break;
+
+        case 'syncing':
+            syncElement.classList.add('syncing');
+            iconElement.className = 'fas fa-sync-alt';
+            textElement.textContent = message || '資料同步中...';
+            break;
+
+        case 'error':
+            syncElement.classList.add('error');
+            iconElement.className = 'fas fa-exclamation-triangle';
+            textElement.textContent = message || '同步錯誤';
+            break;
+    }
+
+    // 顯示狀態
+    syncElement.classList.add('show');
+
+    // 如果是成功狀態，3秒後自動隱藏
+    if (status === 'connected' && !syncStatus.isSyncing) {
+        setTimeout(() => {
+            syncElement.classList.remove('show');
+        }, 3000);
+    }
+}
+
+// 新增函數：檢查網路狀態
+function checkNetworkStatus() {
+    const isOnline = navigator.onLine;
+    syncStatus.isOnline = isOnline;
+
+    if (isOnline) {
+        updateSyncStatus('connected', '已連線到雲端資料庫');
+    } else {
+        updateSyncStatus('disconnected', '網路已中斷，使用本地資料');
+    }
+
+    return isOnline;
+}
+
+////////////////自動更新功能//////////////////////
+// 啟動自動刷新
+function startAutoRefresh(interval = 30000) { // 預設30秒
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+
+    autoRefreshInterval = setInterval(async () => {
+        if (!syncStatus.isOnline || syncStatus.isSyncing) {
+            return; // 網路離線或正在同步時跳過
+        }
+
+        try {
+            console.log('自動刷新資料...');
+            await loadDataFromSupabase();
+
+            // 更新統計和卡片（但不要重繪整個畫面，避免閃爍）
+            updateStats();
+            // 只更新有變化的卡片，而不是全部重繪
+            updateChangedCards();
+
+        } catch (error) {
+            console.log('自動刷新失敗:', error);
+            // 不顯示錯誤通知，避免干擾使用者
+        }
+    }, interval);
+
+    console.log(`自動刷新已啟動 (${interval / 1000}秒)`);
+}
+
+// 停止自動刷新
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        console.log('自動刷新已停止');
+    }
+}
+
+// 更新有變化的卡片（優化版）
+function updateChangedCards() {
+    // 這裡可以實作智能更新，只更新狀態有變化的卡片
+    // 目前先簡單重繪
+    renderCards();
+}
+
+// 新增手動刷新按鈕到管理工具列
+function enableAdminFeatures() {
+    // 現有的管理工具列代碼...
+    
+    adminToolbar.innerHTML = `
+        <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-users"></i> 管理任務人員
+        </button>
+        <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-sync"></i> 手動刷新
+        </button>
+        <button onclick="toggleAutoRefresh()" style="padding: 8px 12px; background-color: #FF9800; color: white; border: none; border-radius: 4px;">
+            <i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}
+        </button>
+    `;
+    
+    document.body.appendChild(adminToolbar);
+}
+
+// 切換自動刷新
+function toggleAutoRefresh() {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    
+    if (autoRefreshEnabled) {
+        startAutoRefresh(30000);
+        showNotification('已啟動自動刷新 (30秒)');
+    } else {
+        stopAutoRefresh();
+        showNotification('已停止自動刷新');
+    }
+    
+    // 更新按鈕文字
+    const toggleBtn = document.querySelector('button[onclick="toggleAutoRefresh()"]');
+    if (toggleBtn) {
+        toggleBtn.innerHTML = `<i class="fas fa-clock"></i> ${autoRefreshEnabled ? '停止自動' : '啟動自動'}`;
+    }
+}
+
+// 網路狀態監聽
+function setupNetworkListeners() {
+    // 監聽網路狀態變化
+    window.addEventListener('online', () => {
+        console.log('網路已恢復');
+        syncStatus.isOnline = true;
+        updateSyncStatus('connected', '網路已恢復，同步資料中...');
+        
+        // 自動刷新資料
+        setTimeout(() => {
+            refreshData();
+        }, 1000);
+    });
+    
+    window.addEventListener('offline', () => {
+        console.log('網路已中斷');
+        syncStatus.isOnline = false;
+        updateSyncStatus('disconnected', '網路已中斷，使用本地資料');
+    });
+    
+    // 監聽頁面可見性變化（當用戶切換回頁面時刷新）
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && syncStatus.isOnline) {
+            // 頁面重新可見且網路正常時，檢查資料更新
+            console.log('頁面重新可見，檢查資料更新');
+            refreshData();
+        }
+    });
+}
+
 /////////////////////////////////////////////////////
 // 新增 CSS 動畫
 const style = document.createElement('style');
