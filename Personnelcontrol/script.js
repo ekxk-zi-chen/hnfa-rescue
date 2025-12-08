@@ -919,54 +919,6 @@ async function batchUpdateGroupStatus(groupName, newStatus) {
     }
 }
 
-// 新增透過 API 批次更新的函數 - 確認這個函數被正確呼叫
-async function performBatchGroupUpdateViaAPI(groupName, newStatus, reason) {
-    try {
-        const sessionToken = sessionStorage.getItem('sessionToken');
-        if (!sessionToken) {
-            showNotification('請重新登入');
-            return;
-        }
-
-        console.log(`執行批次更新: groupName=${groupName}, newStatus=${newStatus}, reason=${reason}, viewType=${currentView}`);
-
-        const response = await fetch(CONFIG.API_BASE, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'batchUpdateGroupStatus',
-                sessionToken,
-                groupName,
-                status: newStatus,
-                reason,
-                viewType: currentView
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API 回應錯誤: ${response.status} - ${errorText}`);
-        }
-
-        const result = await response.json();
-        if (result.status !== 'ok') {
-            throw new Error(result.message || '批次更新失敗');
-        }
-
-        // 顯示成功訊息
-        showNotification(result.message || `已更新 ${groupName} 群組狀態`);
-
-        // 延遲一下後重新載入資料
-        setTimeout(async () => {
-            await loadDataFromSupabase();
-            renderView();
-        }, 500);
-
-    } catch (error) {
-        console.error('批次更新失敗：', error);
-        showNotification(`批次更新失敗：${error.message}`);
-    }
-}
 
 // 新增透過 API 批次更新的函數
 async function performBatchGroupUpdateViaAPI(groupName, newStatus, reason) {
@@ -1219,7 +1171,7 @@ function performBatchGroupUpdate(groupName, newStatus, reason) {
             if (reason && (newStatus === '外出' || newStatus === '應勤')) {
                 historyEntry += ` (${reason})`;
             }
-            historyEntry += ` [${currentUser?.displayName || userRole || '系統'}更新] ${currentTime}`;
+            historyEntry += ' ' + currentTime;
 
             historyLines.unshift(historyEntry);
 
@@ -1752,11 +1704,6 @@ async function updateStatus(id, newStatus) {
 // 新增透過 API 更新狀態的函數
 async function performStatusUpdateViaAPI(id, newStatus, reason) {
     try {
-        console.log('=== 除錯開始 ===');
-        console.log('1. currentUser 物件:', currentUser);
-        console.log('2. currentUser?.displayName:', currentUser?.displayName);
-        console.log('3. userRole:', userRole);
-        console.log('4. 最終操作者:', currentUser?.displayName || userRole || '系統');
 
         const operator = currentUser?.displayName || userRole || '系統';
         console.log('5. operator:', operator);
@@ -2150,7 +2097,7 @@ function performStatusUpdate(id, newStatus, reason) {
     if (reason && (newStatus === '外出' || newStatus === '應勤')) {
         historyEntry += ` (${reason})`;
     }
-    historyEntry += ` [${currentUser?.displayName || userRole || '系統'}更新] ${currentTime}`;
+    historyEntry += ' ' + currentTime;
 
     historyLines.unshift(historyEntry);
 
@@ -3542,6 +3489,8 @@ function setupNetworkListeners() {
         }
     });
 }
+
+
 
 /////////////////////////////////////////////////////
 // 新增 CSS 動畫
