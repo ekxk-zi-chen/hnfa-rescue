@@ -63,13 +63,13 @@ let lastSelectedReason = ''; // 最後選擇的原因
 // DOM 載入完成後初始化
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM 已載入，開始初始化...');
-    
+
     // 設置網路狀態監聽
     setupNetworkListeners();
-    
+
     // 初始化常用原因
     initReasons();
-    
+
     initializeApp();
     setupEventListeners();
 });
@@ -1752,6 +1752,14 @@ async function updateStatus(id, newStatus) {
 // 新增透過 API 更新狀態的函數
 async function performStatusUpdateViaAPI(id, newStatus, reason) {
     try {
+        console.log('=== 除錯開始 ===');
+        console.log('1. currentUser 物件:', currentUser);
+        console.log('2. currentUser?.displayName:', currentUser?.displayName);
+        console.log('3. userRole:', userRole);
+        console.log('4. 最終操作者:', currentUser?.displayName || userRole || '系統');
+
+        const operator = currentUser?.displayName || userRole || '系統';
+        console.log('5. operator:', operator);
         const sessionToken = sessionStorage.getItem('sessionToken');
         const action = currentView === 'personnel' ? 'updatePersonnelStatus' : 'updateEquipmentStatus';
 
@@ -1982,7 +1990,7 @@ function enableAdminFeatures() {
     expandButton.onclick = (e) => {
         e.stopPropagation();
         isExpanded = !isExpanded;
-        
+
         if (isExpanded) {
             // 展開狀態
             adminToolbar.style.width = '200px';
@@ -2027,7 +2035,7 @@ function enableAdminFeatures() {
             expandButton.style.backgroundColor = '#34495e';
         }
     };
-    
+
     expandButton.onmouseleave = () => {
         if (!isExpanded) {
             expandButton.style.backgroundColor = '#2c3e50';
@@ -2037,7 +2045,7 @@ function enableAdminFeatures() {
     // 組裝工具列
     adminToolbar.appendChild(expandButton);
     adminToolbar.appendChild(toolbarContent);
-    
+
     document.body.appendChild(adminToolbar);
 }
 
@@ -2048,16 +2056,16 @@ async function refreshData() {
         updateSyncStatus('disconnected', '網路已中斷，無法刷新資料');
         return;
     }
-    
+
     try {
         showNotification('正在刷新資料...');
         updateSyncStatus('syncing', '資料刷新中...');
-        
+
         await loadDataFromSupabase();
         renderView();
-        
+
         showNotification('資料刷新完成');
-        
+
     } catch (error) {
         console.error('刷新資料失敗：', error);
         showNotification(`刷新失敗：${error.message}`);
@@ -3489,7 +3497,7 @@ function updateChangedCards() {
 // 切換自動刷新
 function toggleAutoRefresh() {
     autoRefreshEnabled = !autoRefreshEnabled;
-    
+
     if (autoRefreshEnabled) {
         startAutoRefresh(30000);
         showNotification('已啟動自動刷新 (30秒)');
@@ -3497,7 +3505,7 @@ function toggleAutoRefresh() {
         stopAutoRefresh();
         showNotification('已停止自動刷新');
     }
-    
+
     // 更新按鈕文字
     const toggleBtn = document.querySelector('button[onclick="toggleAutoRefresh()"]');
     if (toggleBtn) {
@@ -3512,19 +3520,19 @@ function setupNetworkListeners() {
         console.log('網路已恢復');
         syncStatus.isOnline = true;
         updateSyncStatus('connected', '網路已恢復，同步資料中...');
-        
+
         // 自動刷新資料
         setTimeout(() => {
             refreshData();
         }, 1000);
     });
-    
+
     window.addEventListener('offline', () => {
         console.log('網路已中斷');
         syncStatus.isOnline = false;
         updateSyncStatus('disconnected', '網路已中斷，使用本地資料');
     });
-    
+
     // 監聽頁面可見性變化（當用戶切換回頁面時刷新）
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && syncStatus.isOnline) {
