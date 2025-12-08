@@ -1,13 +1,42 @@
 // personnelControlModule.js
 import { createClient } from "@supabase/supabase-js";
 
-// 獲取台灣時間
+// 獲取台灣時間（格式化為 MM/DD HH:mm）
 function getTaiwanTime() {
   const now = new Date();
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
   const day = now.getDate().toString().padStart(2, '0');
   const hours = now.getHours().toString().padStart(2, '0');
   const minutes = now.getMinutes().toString().padStart(2, '0');
+  return `${month}/${day} ${hours}:${minutes}`;
+}
+
+// 獲取台灣時間的 ISO 字串（UTC+8）
+function getTaiwanISOTime() {
+  const now = new Date();
+  // 台灣時間是 UTC+8，所以要加 8 小時
+  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+  return taiwanTime.toISOString();
+}
+
+// 將 UTC 時間轉換為台灣時間 ISO 字串
+function convertUTCtoTaiwanISO(utcString) {
+  if (!utcString) return getTaiwanISOTime();
+  const date = new Date(utcString);
+  // 轉換為台灣時間 (UTC+8)
+  const taiwanTime = new Date(date.getTime() + (8 * 60 * 60 * 1000));
+  return taiwanTime.toISOString();
+}
+
+// 將 ISO 時間轉換為台灣時間顯示格式
+function formatISOToTaiwanDisplay(isoString) {
+  if (!isoString) return getTaiwanTime();
+  const date = new Date(isoString);
+  // 如果已經是台灣時間（資料庫中存的是台灣時間），不需要再加8小時
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${month}/${day} ${hours}:${minutes}`;
 }
 
@@ -41,9 +70,16 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const personnelWithTaiwanTime = (data || []).map(person => ({
+        ...person,
+        created_at: formatISOToTaiwanDisplay(person.created_at),
+        updated_at: formatISOToTaiwanDisplay(person.updated_at)
+      }));
+
       return res.status(200).json({
         status: "ok",
-        personnel: data || []
+        personnel: personnelWithTaiwanTime
       });
     }
 
@@ -58,9 +94,16 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const equipmentWithTaiwanTime = (data || []).map(equipment => ({
+        ...equipment,
+        created_at: formatISOToTaiwanDisplay(equipment.created_at),
+        updated_at: formatISOToTaiwanDisplay(equipment.updated_at)
+      }));
+
       return res.status(200).json({
         status: "ok",
-        equipment: data || []
+        equipment: equipmentWithTaiwanTime
       });
     }
 
@@ -75,9 +118,16 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const masterPersonnelWithTaiwanTime = (data || []).map(person => ({
+        ...person,
+        created_at: formatISOToTaiwanDisplay(person.created_at),
+        updated_at: formatISOToTaiwanDisplay(person.updated_at)
+      }));
+
       return res.status(200).json({
         status: "ok",
-        masterPersonnel: data || []
+        masterPersonnel: masterPersonnelWithTaiwanTime
       });
     }
 
@@ -92,9 +142,16 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const masterEquipmentWithTaiwanTime = (data || []).map(equipment => ({
+        ...equipment,
+        created_at: formatISOToTaiwanDisplay(equipment.created_at),
+        updated_at: formatISOToTaiwanDisplay(equipment.updated_at)
+      }));
+
       return res.status(200).json({
         status: "ok",
-        masterEquipment: data || []
+        masterEquipment: masterEquipmentWithTaiwanTime
       });
     }
 
@@ -110,6 +167,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       const { id, status, reason } = body;
       const currentTime = getTaiwanTime();
+      const currentISOTime = getTaiwanISOTime();
 
       // 先獲取舊資料
       const { data: oldData, error: fetchError } = await supabase
@@ -139,7 +197,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       
       const newHistory = historyLines.join('\n');
 
-      // 更新資料庫
+      // 更新資料庫（使用台灣時間）
       const { data, error } = await supabase
         .from('personnel_control')
         .update({
@@ -147,7 +205,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           time_status: currentTime,
           time_history: newHistory,
           reason: reason || null,
-          updated_at: new Date().toISOString()
+          updated_at: currentISOTime  // 使用台灣時間
         })
         .eq('id', id)
         .select()
@@ -155,10 +213,17 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const updatedPersonnel = {
+        ...data,
+        created_at: formatISOToTaiwanDisplay(data.created_at),
+        updated_at: formatISOToTaiwanDisplay(data.updated_at)
+      };
+
       return res.status(200).json({
         status: "ok",
         message: "狀態更新成功",
-        personnel: data
+        personnel: updatedPersonnel
       });
     }
 
@@ -173,6 +238,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       const { id, status, reason } = body;
       const currentTime = getTaiwanTime();
+      const currentISOTime = getTaiwanISOTime();
 
       const { data: oldData, error: fetchError } = await supabase
         .from('equipment_control')
@@ -206,7 +272,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           time_status: currentTime,
           time_history: newHistory,
           reason: reason || null,
-          updated_at: new Date().toISOString()
+          updated_at: currentISOTime  // 使用台灣時間
         })
         .eq('id', id)
         .select()
@@ -214,10 +280,17 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const updatedEquipment = {
+        ...data,
+        created_at: formatISOToTaiwanDisplay(data.created_at),
+        updated_at: formatISOToTaiwanDisplay(data.updated_at)
+      };
+
       return res.status(200).json({
         status: "ok",
         message: "狀態更新成功",
-        equipment: data
+        equipment: updatedEquipment
       });
     }
 
@@ -232,6 +305,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       const { groupName, status, reason, viewType } = body;
       const currentTime = getTaiwanTime();
+      const currentISOTime = getTaiwanISOTime();
 
       let tableName, statusField, groupField;
       if (viewType === 'personnel') {
@@ -286,7 +360,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
             time_status: currentTime,
             time_history: newHistory,
             reason: reason || null,
-            updated_at: new Date().toISOString()
+            updated_at: currentISOTime  // 使用台灣時間
           })
           .eq('id', item.id);
       });
@@ -317,6 +391,8 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       }
 
       const { personnelIds, actionType } = body; // actionType: 'add' 或 'remove'
+      const currentTime = getTaiwanTime();
+      const currentISOTime = getTaiwanISOTime();
 
       if (!personnelIds || !Array.isArray(personnelIds)) {
         return res.status(400).json({
@@ -332,9 +408,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .update({ 
             is_active: true,
             status: 'BoO',
-            time_status: getTaiwanTime(),
-            time_history: `BoO ${getTaiwanTime()}`,
-            updated_at: new Date().toISOString()
+            time_status: currentTime,
+            time_history: `BoO ${currentTime}`,
+            updated_at: currentISOTime  // 使用台灣時間
           })
           .in('id', personnelIds);
 
@@ -350,7 +426,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .from('personnel_control')
           .update({ 
             is_active: false,
-            updated_at: new Date().toISOString()
+            updated_at: currentISOTime  // 使用台灣時間
           })
           .in('id', personnelIds);
 
@@ -373,6 +449,8 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       }
 
       const { equipmentIds, actionType } = body;
+      const currentTime = getTaiwanTime();
+      const currentISOTime = getTaiwanISOTime();
 
       if (!equipmentIds || !Array.isArray(equipmentIds)) {
         return res.status(400).json({
@@ -387,9 +465,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .update({ 
             is_active: true,
             status: '在隊',
-            time_status: getTaiwanTime(),
-            time_history: `在隊 ${getTaiwanTime()}`,
-            updated_at: new Date().toISOString()
+            time_status: currentTime,
+            time_history: `在隊 ${currentTime}`,
+            updated_at: currentISOTime  // 使用台灣時間
           })
           .in('id', equipmentIds);
 
@@ -404,7 +482,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .from('equipment_control')
           .update({ 
             is_active: false,
-            updated_at: new Date().toISOString()
+            updated_at: currentISOTime  // 使用台灣時間
           })
           .in('id', equipmentIds);
 
@@ -427,6 +505,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       }
 
       const { personnelData } = body;
+      const currentISOTime = getTaiwanISOTime();
 
       if (!personnelData || !personnelData.name) {
         return res.status(400).json({
@@ -439,8 +518,8 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
         ...personnelData,
         is_master: true,
         is_active: false, // 預設不在當前任務中
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: currentISOTime,  // 使用台灣時間
+        updated_at: currentISOTime   // 使用台灣時間
       };
 
       const { data, error } = await supabase
@@ -451,10 +530,17 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const newPersonnel = {
+        ...data,
+        created_at: formatISOToTaiwanDisplay(data.created_at),
+        updated_at: formatISOToTaiwanDisplay(data.updated_at)
+      };
+
       return res.status(200).json({
         status: "ok",
         message: "人員已新增到總資料庫",
-        personnel: data
+        personnel: newPersonnel
       });
     }
 
@@ -468,6 +554,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       }
 
       const { equipmentData } = body;
+      const currentISOTime = getTaiwanISOTime();
 
       if (!equipmentData || !equipmentData.name) {
         return res.status(400).json({
@@ -480,8 +567,8 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
         ...equipmentData,
         is_master: true,
         is_active: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: currentISOTime,  // 使用台灣時間
+        updated_at: currentISOTime   // 使用台灣時間
       };
 
       const { data, error } = await supabase
@@ -492,10 +579,17 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       if (error) throw error;
 
+      // 轉換時間為台灣時間顯示格式
+      const newEquipment = {
+        ...data,
+        created_at: formatISOToTaiwanDisplay(data.created_at),
+        updated_at: formatISOToTaiwanDisplay(data.updated_at)
+      };
+
       return res.status(200).json({
         status: "ok",
         message: "器材已新增到總資料庫",
-        equipment: data
+        equipment: newEquipment
       });
     }
 
@@ -514,7 +608,13 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .order('name', { ascending: true });
 
         if (error) throw error;
-        data = personnel;
+        
+        // 轉換時間為台灣時間顯示格式
+        data = (personnel || []).map(person => ({
+          ...person,
+          created_at: formatISOToTaiwanDisplay(person.created_at),
+          updated_at: formatISOToTaiwanDisplay(person.updated_at)
+        }));
       } else {
         const { data: equipment, error } = await supabase
           .from('equipment_control')
@@ -524,7 +624,13 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
           .order('name', { ascending: true });
 
         if (error) throw error;
-        data = equipment;
+        
+        // 轉換時間為台灣時間顯示格式
+        data = (equipment || []).map(equipment => ({
+          ...equipment,
+          created_at: formatISOToTaiwanDisplay(equipment.created_at),
+          updated_at: formatISOToTaiwanDisplay(equipment.updated_at)
+        }));
       }
 
       return res.status(200).json({
