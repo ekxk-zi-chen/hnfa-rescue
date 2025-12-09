@@ -1924,6 +1924,12 @@ function enableAdminFeatures() {
         <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-users"></i> 管理任務人員
         </button>
+        <button onclick="showEditPersonnelModal()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
+            <i class="fas fa-user-edit"></i> 編輯人員資料
+        </button>
+        <button onclick="showBatchAddModal()" style="padding: 8px 12px; background-color: #2196F3; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
+            <i class="fas fa-user-plus"></i> 批次新增人員
+        </button>
         <button onclick="refreshData()" style="padding: 8px 12px; background-color: #9C27B0; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-sync"></i> 手動刷新
         </button>
@@ -3720,6 +3726,159 @@ async function showMissionManagement() {
     setTimeout(() => {
         window.dispatchEvent(new Event('resize'));
     }, 100);
+}
+
+// 顯示編輯人員彈窗
+async function showEditPersonnelModal() {
+  // 載入總資料庫
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'getMasterPersonnel',
+      sessionToken
+    })
+  });
+  
+  const result = await response.json();
+  const personnel = result.masterPersonnel || [];
+  
+  // 建立彈窗（類似任務管理的樣式）
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'edit-personnel-modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+      <h3>編輯人員資料</h3>
+      <div id="edit-personnel-list"></div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  // 渲染人員列表（每個都可以編輯/刪除）
+  const listDiv = document.getElementById('edit-personnel-list');
+  personnel.forEach(p => {
+    const item = document.createElement('div');
+    item.innerHTML = `
+      <div style="display: flex; justify-content: space-between; padding: 10px; border: 1px solid #eee; margin: 5px;">
+        <div>
+          <strong>${p.name}</strong> - ${p.group_name}
+        </div>
+        <div>
+          <button onclick="editSinglePersonnel(${p.id})">編輯</button>
+          <button onclick="deleteSinglePersonnel(${p.id}, '${p.name}')">刪除</button>
+        </div>
+      </div>
+    `;
+    listDiv.appendChild(item);
+  });
+}
+
+// 編輯單一人員
+async function editSinglePersonnel(id) {
+  const newName = prompt('輸入新名稱（留空不改）:');
+  const newGroup = prompt('輸入新群組（留空不改）:');
+  
+  const updates = {};
+  if (newName) updates.name = newName;
+  if (newGroup) updates.group_name = newGroup;
+  
+  if (Object.keys(updates).length === 0) return;
+  
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'editPersonnel',
+      sessionToken,
+      id,
+      updates
+    })
+  });
+  
+  const result = await response.json();
+  if (result.status === 'ok') {
+    showNotification('更新成功');
+    showEditPersonnelModal(); // 重新載入
+  }
+}
+
+// 刪除單一人員
+async function deleteSinglePersonnel(id, name) {
+  if (!confirm(`確定要刪除 ${name}？`)) return;
+  
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'deletePersonnel',
+      sessionToken,
+      id
+    })
+  });
+  
+  const result = await response.json();
+  if (result.status === 'ok') {
+    showNotification('刪除成功');
+    showEditPersonnelModal();
+  }
+}
+
+// 批量加入彈窗
+function showBatchAddModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+      <h3>批量加入人員</h3>
+      <p>請輸入人員清單（每行一個，格式：姓名,群組）</p>
+      <textarea id="batch-add-textarea" rows="10" style="width: 100%;" placeholder="張三,管理組
+李四,搜救組
+王五,後勤組"></textarea>
+      <button onclick="processBatchAdd()">確認加入</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+}
+// 處理批量加入
+async function processBatchAdd() {
+  const textarea = document.getElementById('batch-add-textarea');
+  const lines = textarea.value.split('\n').filter(l => l.trim());
+  
+  const personnelList = lines.map(line => {
+    const [name, group_name] = line.split(',').map(s => s.trim());
+    return { name, group_name: group_name || '未分組' };
+  });
+  
+  if (personnelList.length === 0) {
+    showNotification('請輸入人員');
+    return;
+  }
+  
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'batchAddPersonnel',
+      sessionToken,
+      personnelList
+    })
+  });
+  
+  const result = await response.json();
+  if (result.status === 'ok') {
+    showNotification(result.message);
+    document.querySelector('.modal').remove();
+  }
 }
 
 // 增強版搜尋功能 - 可搜尋所有項目
