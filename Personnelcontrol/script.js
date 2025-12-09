@@ -1117,7 +1117,7 @@ window.handleConfirmGroupReason = function (groupName, newStatus) {
 };
 
 // 確認群組原因
-async function confirmGroupReasonUpdate(groupName, newStatus) {
+function confirmGroupReason(groupName, newStatus) {
     const reasonModal = document.getElementById('group-reason-modal');
     if (!reasonModal) return;
 
@@ -1138,7 +1138,7 @@ async function confirmGroupReasonUpdate(groupName, newStatus) {
     }
 
     // 執行批次更新
-    await performBatchGroupUpdateViaAPI(groupName, newStatus, selectedReason);
+    performBatchGroupUpdate(groupName, newStatus, selectedReason);
     closeGroupReasonModal();
 }
 
@@ -2801,35 +2801,155 @@ function switchTab(tabName) {
 }
 
 // 批次全部操作
-function batchAll(action) {
+async function batchAll(action) {
+    // 檢查權限
+    if (userRole !== '管理') {
+        showNotification('只有管理員可以批次更新');
+        return;
+    }
+
     const data = currentView === 'personnel' ? currentData.employees : currentData.equipment;
     const newStatus = action === 'BoO' ?
         (currentView === 'personnel' ? 'BoO' : '在隊') :
         (currentView === 'personnel' ? '外出' : '應勤');
 
-    let updatedCount = 0;
+    // 如果是外出/應勤，詢問原因
+    if (newStatus === '外出' || newStatus === '應勤') {
+        showBatchAllReasonModal(newStatus);
+        return;
+    }
 
-    data.forEach(item => {
-        item.status = newStatus;
-        item.time_status = getCurrentTime();
+    // 歸隊/在隊，直接更新
+    await performBatchAllUpdate(newStatus, '');
+}
 
-        // 更新歷史紀錄
-        const historyText = item.time_history || '';
-        const historyLines = historyText.split('\n').filter(line => line.trim());
-        historyLines.unshift(`${newStatus} ${item.time_status}`);
+// 新增：顯示批次全部的原因彈窗
+function showBatchAllReasonModal(newStatus) {
+    const existingModal = document.getElementById('batch-all-reason-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
 
-        if (historyLines.length > 10) {
-            historyLines.length = 10;
-        }
+    const title = `全部${newStatus === '外出' ? '外出' : '應勤'} - 請選擇原因`;
 
-        item.time_history = historyLines.join('\n');
-        updatedCount++;
+    const reasonModal = document.createElement('div');
+    reasonModal.id = 'batch-all-reason-modal';
+    reasonModal.className = 'modal';
+
+    reasonModal.innerHTML = `
+        <div class="modal-content reason-modal-content">
+            <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+            <h3>${title}</h3>
+            <div class="modal-body">
+                <div class="reason-options" id="batch-all-reason-options">
+                    ${currentReasons.map(reason =>
+                        `<div class="reason-option" onclick="selectBatchAllReason(this, '${newStatus}')">${reason}</div>`
+                    ).join('')}
+                </div>
+                <div class="custom-reason-input" id="batch-all-custom-reason-input" style="display: none;">
+                    <input type="text" placeholder="請輸入自訂原因..." maxlength="50">
+                </div>
+                <div class="reason-actions">
+                    <button onclick="confirmBatchAllReason('${newStatus}')">確認</button>
+                    <button onclick="this.closest('.modal').remove()">取消</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(reasonModal);
+    reasonModal.style.display = 'block';
+}
+
+// 新增：選擇批次全部原因
+function selectBatchAllReason(element, newStatus) {
+    const reasonModal = document.getElementById('batch-all-reason-modal');
+    if (!reasonModal) return;
+
+    reasonModal.querySelectorAll('.reason-option').forEach(opt => {
+        opt.classList.remove('selected');
     });
 
-    // 更新畫面
-    renderView();
-    showNotification(`已更新 ${updatedCount} 筆資料為 ${newStatus}`);
-    closeModal('group-modal');
+    element.classList.add('selected');
+
+    if (element.textContent === '其他') {
+        const customInput = reasonModal.querySelector('#batch-all-custom-reason-input');
+        if (customInput) {
+            customInput.style.display = 'block';
+            customInput.querySelector('input')?.focus();
+        }
+    } else {
+        const customInput = reasonModal.querySelector('#batch-all-custom-reason-input');
+        if (customInput) {
+            customInput.style.display = 'none';
+        }
+    }
+}
+
+// 新增：確認批次全部原因
+async function confirmBatchAllReason(newStatus) {
+    const reasonModal = document.getElementById('batch-all-reason-modal');
+    if (!reasonModal) return;
+
+    let selectedReason = '';
+    const selectedOption = reasonModal.querySelector('.reason-option.selected');
+
+    if (selectedOption) {
+        selectedReason = selectedOption.textContent;
+
+        if (selectedReason === '其他') {
+            const customInput = reasonModal.querySelector('#batch-all-custom-reason-input input');
+            selectedReason = customInput?.value.trim() || '';
+        }
+    }
+
+    if (!selectedReason) {
+        showNotification('請選擇或輸入原因');
+        return;
+    }
+
+    reasonModal.remove();
+    await performBatchAllUpdate(newStatus, selectedReason);
+}
+
+// 新增：實際執行批次全部更新
+async function performBatchAllUpdate(newStatus, reason) {
+    try {
+        const sessionToken = sessionStorage.getItem('sessionToken');
+        const data = currentView === 'personnel' ? currentData.employees : currentData.equipment;
+        
+        // 取得所有 ID
+        const ids = data.map(item => item.id);
+
+        const response = await fetch(CONFIG.API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'batchUpdateAll',
+                sessionToken,
+                ids: ids,
+                status: newStatus,
+                reason: reason,
+                viewType: currentView
+            })
+        });
+
+        if (!response.ok) throw new Error('批次更新失敗');
+
+        const result = await response.json();
+        if (result.status !== 'ok') throw new Error(result.message || '批次更新失敗');
+
+        // 重新載入資料
+        await loadDataFromSupabase();
+        renderView();
+
+        showNotification(result.message);
+        closeModal('group-modal');
+
+    } catch (error) {
+        console.error('批次全部更新失敗：', error);
+        showNotification(`批次更新失敗：${error.message}`);
+    }
 }
 
 // 渲染快速控制清單
