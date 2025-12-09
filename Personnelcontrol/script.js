@@ -4041,36 +4041,161 @@ async function deleteSinglePersonnel(id, name) {
   }
 }
 
-// 批量加入彈窗
-function showBatchAddModal() {
+// 批次新增彈窗 - 優化版
+async function showBatchAddModal() {
+  // 取得所有群組
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'getMasterPersonnel',
+      sessionToken
+    })
+  });
+  const result = await response.json();
+  const personnel = result.masterPersonnel || [];
+  const groups = [...new Set(personnel.map(p => p.group_name))].filter(Boolean);
+  
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.innerHTML = `
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 95%; max-height: 90vh; margin: 2vh auto;">
       <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
-      <h3>批量加入人員</h3>
-      <p>請輸入人員清單（每行一個，格式：姓名,群組）</p>
-      <textarea id="batch-add-textarea" rows="10" style="width: 100%;" placeholder="張三,管理組
-李四,搜救組
-王五,後勤組"></textarea>
-      <button onclick="processBatchAdd()">確認加入</button>
+      <h3 style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <i class="fas fa-users-plus"></i> 批次新增人員
+      </h3>
+      
+      <!-- 選擇群組 -->
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">選擇加入群組</label>
+        <select id="batch-group-select" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px;">
+          ${groups.map(g => `<option value="${g}">${g}</option>`).join('')}
+          <option value="__custom__">📝 輸入新組別...</option>
+        </select>
+        <input type="text" id="batch-custom-group-input" placeholder="輸入新組別名稱" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; margin-top: 10px; display: none;">
+      </div>
+      
+      <!-- 輸入姓名 -->
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">輸入姓名</label>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="batch-name-input" placeholder="輸入人員姓名..." style="flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px;">
+          <button onclick="addPersonToList()" style="padding: 12px 20px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; white-space: nowrap;">
+            <i class="fas fa-plus"></i> 加入
+          </button>
+        </div>
+      </div>
+      
+      <!-- 人員清單 -->
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">待新增清單 (<span id="batch-count">0</span> 人)</label>
+        <div id="batch-person-list" style="max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9;"></div>
+      </div>
+      
+      <!-- 確認按鈕 -->
+      <button onclick="confirmBatchAdd()" style="width: 100%; padding: 15px; background: #2196F3; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
+        <i class="fas fa-check"></i> 確認新增
+      </button>
     </div>
   `;
+  
   document.body.appendChild(modal);
   modal.style.display = 'block';
+  
+  // 初始化清單
+  window.batchPersonList = [];
+  
+  // 選擇「輸入新組別」時顯示輸入框
+  document.getElementById('batch-group-select').onchange = function() {
+    const customInput = document.getElementById('batch-custom-group-input');
+    if (this.value === '__custom__') {
+      customInput.style.display = 'block';
+      customInput.focus();
+    } else {
+      customInput.style.display = 'none';
+    }
+  };
+  
+  // Enter 鍵快速加入
+  document.getElementById('batch-name-input').onkeypress = function(e) {
+    if (e.key === 'Enter') {
+      addPersonToList();
+    }
+  };
 }
-// 處理批量加入
-async function processBatchAdd() {
-  const textarea = document.getElementById('batch-add-textarea');
-  const lines = textarea.value.split('\n').filter(l => l.trim());
+
+
+// 加入人員到清單
+function addPersonToList() {
+  const nameInput = document.getElementById('batch-name-input');
+  const groupSelect = document.getElementById('batch-group-select');
+  const customGroupInput = document.getElementById('batch-custom-group-input');
   
-  const personnelList = lines.map(line => {
-    const [name, group_name] = line.split(',').map(s => s.trim());
-    return { name, group_name: group_name || '未分組' };
-  });
+  const name = nameInput.value.trim();
+  if (!name) {
+    showNotification('請輸入姓名');
+    return;
+  }
   
-  if (personnelList.length === 0) {
-    showNotification('請輸入人員');
+  let group = groupSelect.value;
+  if (group === '__custom__') {
+    group = customGroupInput.value.trim();
+    if (!group) {
+      showNotification('請輸入組別名稱');
+      return;
+    }
+  }
+  
+  // 加入清單
+  window.batchPersonList.push({ name, group_name: group });
+  
+  // 更新顯示
+  renderBatchPersonList();
+  
+  // 清空輸入框
+  nameInput.value = '';
+  nameInput.focus();
+}
+
+// 渲染批次新增清單
+function renderBatchPersonList() {
+  const listDiv = document.getElementById('batch-person-list');
+  const countSpan = document.getElementById('batch-count');
+  
+  if (window.batchPersonList.length === 0) {
+    listDiv.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">尚未加入任何人員</div>';
+    countSpan.textContent = '0';
+    return;
+  }
+  
+  countSpan.textContent = window.batchPersonList.length;
+  
+  listDiv.innerHTML = window.batchPersonList.map((person, index) => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px;">
+      <div>
+        <strong style="font-size: 15px;">${person.name}</strong>
+        <div style="font-size: 12px; color: #666; margin-top: 3px;">
+          <i class="fas fa-users"></i> ${person.group_name}
+        </div>
+      </div>
+      <button onclick="removePersonFromList(${index})" style="padding: 8px 12px; background: #F44336; color: white; border: none; border-radius: 5px; font-size: 13px;">
+        <i class="fas fa-times"></i> 取消
+      </button>
+    </div>
+  `).join('');
+}
+
+// 從清單移除人員
+function removePersonFromList(index) {
+  window.batchPersonList.splice(index, 1);
+  renderBatchPersonList();
+}
+
+// 確認批次新增
+async function confirmBatchAdd() {
+  if (window.batchPersonList.length === 0) {
+    showNotification('請先加入人員');
     return;
   }
   
@@ -4081,16 +4206,20 @@ async function processBatchAdd() {
     body: JSON.stringify({
       action: 'batchAddPersonnel',
       sessionToken,
-      personnelList
+      personnelList: window.batchPersonList
     })
   });
   
   const result = await response.json();
   if (result.status === 'ok') {
-    showNotification(result.message);
+    showNotification(`✅ ${result.message}`);
     document.querySelector('.modal').remove();
+  } else {
+    showNotification(`❌ 新增失敗：${result.message}`);
   }
 }
+
+
 
 // 增強版搜尋功能 - 可搜尋所有項目
 function setupEnhancedMissionSearch() {
