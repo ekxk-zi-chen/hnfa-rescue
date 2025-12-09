@@ -75,7 +75,9 @@ async function handleAction(action, body, supabase, JWT_SECRET, res) {
     'addToMasterPersonnel',
     'addToMasterEquipment',
     'refreshData',
-    'batchUpdateAll'
+    'editPersonnel',
+    'deletePersonnel',
+    'batchAddPersonnel'
   ];
 
   // 如果是人員管制相關的action，轉交給模組處理
