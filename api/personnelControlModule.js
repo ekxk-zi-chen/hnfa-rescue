@@ -3,11 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 
 // 獲取台灣時間
 function getTaiwanTime() {
+  // 建立 UTC+8 的台灣時間
   const now = new Date();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  const hours = now.getHours().toString().padStart(2, '0');
-  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const taiwanTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+
+  const month = (taiwanTime.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = taiwanTime.getUTCDate().toString().padStart(2, '0');
+  const hours = taiwanTime.getUTCHours().toString().padStart(2, '0');
+  const minutes = taiwanTime.getUTCMinutes().toString().padStart(2, '0');
+
   return `${month}/${day} ${hours}:${minutes}`;
 }
 
@@ -16,7 +20,7 @@ function parseReasonFromHistory(historyText) {
   if (!historyText) return '';
   const lines = historyText.split('\n').filter(line => line.trim());
   if (lines.length === 0) return '';
-  
+
   const lastLine = lines[0];
   const match = lastLine.match(/\(([^)]+)\)/);
   return match ? match[1] : '';
@@ -26,7 +30,7 @@ function parseReasonFromHistory(historyText) {
 export async function handlePersonnelControl(action, body, supabase, userData, res) {
   const userRole = userData.管理員 || "一般用戶";
   const isAdmin = userRole === '管理';
-  
+
   console.log(`[人員管制] action: ${action}, 用戶角色: ${userRole}`);
 
   try {
@@ -102,9 +106,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     if (action === 'updatePersonnelStatus') {
       // 檢查權限
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以更新狀態" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以更新狀態"
         });
       }
 
@@ -123,20 +127,20 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       // 更新歷史紀錄
       const historyText = oldData.time_history || '';
       const historyLines = historyText.split('\n').filter(line => line.trim());
-      
+
       let historyEntry = status;
       if (reason && status === '外出') {
         historyEntry += ` (${reason})`;
       }
       historyEntry += ' ' + currentTime;
-      
+
       historyLines.unshift(historyEntry);
-      
+
       // 只保留最近20筆
       if (historyLines.length > 20) {
         historyLines.length = 20;
       }
-      
+
       const newHistory = historyLines.join('\n');
 
       // 更新資料庫
@@ -165,9 +169,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 更新器材狀態 ======
     if (action === 'updateEquipmentStatus') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以更新狀態" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以更新狀態"
         });
       }
 
@@ -184,19 +188,19 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
 
       const historyText = oldData.time_history || '';
       const historyLines = historyText.split('\n').filter(line => line.trim());
-      
+
       let historyEntry = status;
       if (reason && status === '應勤') {
         historyEntry += ` (${reason})`;
       }
       historyEntry += ' ' + currentTime;
-      
+
       historyLines.unshift(historyEntry);
-      
+
       if (historyLines.length > 20) {
         historyLines.length = 20;
       }
-      
+
       const newHistory = historyLines.join('\n');
 
       const { data, error } = await supabase
@@ -224,9 +228,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 批次更新群組狀態 ======
     if (action === 'batchUpdateGroupStatus') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以批次更新" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以批次更新"
         });
       }
 
@@ -264,19 +268,19 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       const updatePromises = items.map(item => {
         const historyText = item.time_history || '';
         const historyLines = historyText.split('\n').filter(line => line.trim());
-        
+
         let historyEntry = status;
         if (reason && (status === '外出' || status === '應勤')) {
           historyEntry += ` (${reason})`;
         }
         historyEntry += ' ' + currentTime;
-        
+
         historyLines.unshift(historyEntry);
-        
+
         if (historyLines.length > 20) {
           historyLines.length = 20;
         }
-        
+
         const newHistory = historyLines.join('\n');
 
         return supabase
@@ -310,9 +314,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 管理任務人員（勾選加入/移除） ======
     if (action === 'manageMissionPersonnel') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以管理任務人員" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以管理任務人員"
         });
       }
 
@@ -329,7 +333,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
         // 將人員加入當前任務
         const { error } = await supabase
           .from('personnel_control')
-          .update({ 
+          .update({
             is_active: true,
             status: 'BoO',
             time_status: getTaiwanTime(),
@@ -348,7 +352,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
         // 將人員從當前任務移除
         const { error } = await supabase
           .from('personnel_control')
-          .update({ 
+          .update({
             is_active: false,
             updated_at: new Date().toISOString()
           })
@@ -366,9 +370,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 管理任務器材 ======
     if (action === 'manageMissionEquipment') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以管理任務器材" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以管理任務器材"
         });
       }
 
@@ -384,7 +388,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       if (actionType === 'add') {
         const { error } = await supabase
           .from('equipment_control')
-          .update({ 
+          .update({
             is_active: true,
             status: '在隊',
             time_status: getTaiwanTime(),
@@ -402,7 +406,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       } else if (actionType === 'remove') {
         const { error } = await supabase
           .from('equipment_control')
-          .update({ 
+          .update({
             is_active: false,
             updated_at: new Date().toISOString()
           })
@@ -420,9 +424,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 新增人員到總資料庫 ======
     if (action === 'addToMasterPersonnel') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以新增人員" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以新增人員"
         });
       }
 
@@ -461,9 +465,9 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     // ====== 新增器材到總資料庫 ======
     if (action === 'addToMasterEquipment') {
       if (!isAdmin) {
-        return res.status(403).json({ 
-          status: "error", 
-          message: "只有管理員可以新增器材" 
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以新增器材"
         });
       }
 
@@ -503,7 +507,7 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
     if (action === 'refreshData') {
       // 這個action不需要權限檢查，任何人都可以刷新
       const viewType = body.viewType || 'personnel';
-      
+
       let data;
       if (viewType === 'personnel') {
         const { data: personnel, error } = await supabase
@@ -531,6 +535,80 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
         status: "ok",
         message: "資料刷新成功",
         data: data || []
+      });
+    }
+
+    // ====== 批次更新所有項目 ======
+    if (action === 'batchUpdateAll') {
+      if (!isAdmin) {
+        return res.status(403).json({
+          status: "error",
+          message: "只有管理員可以批次更新"
+        });
+      }
+
+      const { ids, status, reason, viewType } = body;
+      const currentTime = getTaiwanTime();
+
+      let tableName;
+      if (viewType === 'personnel') {
+        tableName = 'personnel_control';
+      } else {
+        tableName = 'equipment_control';
+      }
+
+      // 找出所有項目
+      const { data: items, error: fetchError } = await supabase
+        .from(tableName)
+        .select('*')
+        .in('id', ids);
+
+      if (fetchError) throw fetchError;
+
+      // 逐一更新
+      const updatePromises = items.map(item => {
+        const historyText = item.time_history || '';
+        const historyLines = historyText.split('\n').filter(line => line.trim());
+
+        let historyEntry = status;
+        if (reason && (status === '外出' || status === '應勤')) {
+          historyEntry += ` (${reason})`;
+        }
+        historyEntry += ' ' + currentTime;
+
+        historyLines.unshift(historyEntry);
+
+        if (historyLines.length > 20) {
+          historyLines.length = 20;
+        }
+
+        const newHistory = historyLines.join('\n');
+
+        return supabase
+          .from(tableName)
+          .update({
+            status: status,
+            time_status: currentTime,
+            time_history: newHistory,
+            reason: reason || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.id);
+      });
+
+      const results = await Promise.all(updatePromises);
+      const hasError = results.some(result => result.error);
+
+      if (hasError) {
+        return res.status(500).json({
+          status: "error",
+          message: "部分項目更新失敗"
+        });
+      }
+
+      return res.status(200).json({
+        status: "ok",
+        message: `已更新 ${items.length} 個項目`
       });
     }
 
