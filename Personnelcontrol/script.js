@@ -1922,7 +1922,7 @@ function enableAdminFeatures() {
     // 工具列按鈕
     toolbarContent.innerHTML = `
         <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
-            <i class="fas fa-users"></i> 管理任務人員
+            <i class="fas fa-users"></i> <span>管理任務人員</span>
         </button>
         <button onclick="showEditPersonnelModal()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-user-edit"></i> 編輯人員資料
