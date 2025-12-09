@@ -1922,7 +1922,7 @@ function enableAdminFeatures() {
     // 工具列按鈕
     toolbarContent.innerHTML = `
         <button onclick="showMissionManagement()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
-            <i class="fas fa-users"></i> <span>管理任務人員</span>
+            <i class="fas fa-users"></i> 管理任務人員
         </button>
         <button onclick="showEditPersonnelModal()" style="padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; white-space: pre-line;">
             <i class="fas fa-user-edit"></i> 編輯人員資料
@@ -3730,7 +3730,6 @@ async function showMissionManagement() {
 
 // 顯示編輯人員彈窗
 async function showEditPersonnelModal() {
-  // 載入總資料庫
   const sessionToken = sessionStorage.getItem('sessionToken');
   const response = await fetch(CONFIG.API_BASE, {
     method: 'POST',
@@ -3744,50 +3743,259 @@ async function showEditPersonnelModal() {
   const result = await response.json();
   const personnel = result.masterPersonnel || [];
   
-  // 建立彈窗（類似任務管理的樣式）
+  // 取得所有群組
+  const groups = [...new Set(personnel.map(p => p.group_name))].filter(Boolean);
+  
+  // 建立彈窗
+  const existingModal = document.getElementById('edit-personnel-modal');
+  if (existingModal) existingModal.remove();
+  
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.id = 'edit-personnel-modal';
   modal.innerHTML = `
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 95%; max-height: 90vh; margin: 2vh auto;">
       <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
-      <h3>編輯人員資料</h3>
-      <div id="edit-personnel-list"></div>
+      <h3 style="display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-edit"></i> 編輯人員資料
+      </h3>
+      
+      <!-- 搜尋框 -->
+      <div class="search-box" style="margin: 15px 0;">
+        <input type="text" id="edit-search-input" placeholder="搜尋人員姓名或群組..." style="width: 100%; padding: 10px;">
+        <i class="fas fa-search"></i>
+      </div>
+      
+      <!-- 人員列表 -->
+      <div id="edit-personnel-list" style="max-height: 60vh; overflow-y: auto;"></div>
     </div>
   `;
   
   document.body.appendChild(modal);
   modal.style.display = 'block';
   
-  // 渲染人員列表（每個都可以編輯/刪除）
+  // 渲染人員列表（按群組分組）
+  renderEditPersonnelList(personnel, groups);
+  
+  // 設置搜尋功能
+  document.getElementById('edit-search-input').oninput = function() {
+    const searchTerm = this.value.toLowerCase();
+    const items = document.querySelectorAll('.edit-person-item');
+    const groupHeaders = document.querySelectorAll('.edit-group-header');
+    
+    items.forEach(item => {
+      const name = item.dataset.name.toLowerCase();
+      const group = item.dataset.group.toLowerCase();
+      if (name.includes(searchTerm) || group.includes(searchTerm)) {
+        item.style.display = 'flex';
+        // 顯示所屬群組
+        const groupHeader = item.closest('.edit-group-container').previousElementSibling;
+        if (groupHeader) groupHeader.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+    
+    // 隱藏沒有項目的群組
+    groupHeaders.forEach(header => {
+      const groupContainer = header.nextElementSibling;
+      const visibleItems = groupContainer.querySelectorAll('.edit-person-item[style*="display: flex"]');
+      if (visibleItems.length === 0 && searchTerm) {
+        header.style.display = 'none';
+        groupContainer.style.display = 'none';
+      }
+    });
+  };
+}
+
+// 渲染編輯人員列表
+function renderEditPersonnelList(personnel, groups) {
   const listDiv = document.getElementById('edit-personnel-list');
+  listDiv.innerHTML = '';
+  
+  // 按群組分組
+  const groupedData = {};
   personnel.forEach(p => {
-    const item = document.createElement('div');
-    item.innerHTML = `
-      <div style="display: flex; justify-content: space-between; padding: 10px; border: 1px solid #eee; margin: 5px;">
-        <div>
-          <strong>${p.name}</strong> - ${p.group_name}
-        </div>
-        <div>
-          <button onclick="editSinglePersonnel(${p.id})">編輯</button>
-          <button onclick="deleteSinglePersonnel(${p.id}, '${p.name}')">刪除</button>
-        </div>
+    const group = p.group_name || '未分組';
+    if (!groupedData[group]) groupedData[group] = [];
+    groupedData[group].push(p);
+  });
+  
+  // 渲染每個群組
+  Object.keys(groupedData).sort().forEach(groupName => {
+    // 群組標題
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'edit-group-header';
+    groupHeader.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: #e8f5e8;
+      border-left: 4px solid #4CAF50;
+      cursor: pointer;
+      margin-bottom: 5px;
+      border-radius: 8px;
+    `;
+    
+    groupHeader.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+        <strong>${groupName}</strong> (${groupedData[groupName].length})
       </div>
     `;
-    listDiv.appendChild(item);
+    
+    // 群組內容
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'edit-group-container';
+    groupContainer.style.cssText = `
+      display: none;
+      padding: 10px;
+      margin-bottom: 15px;
+    `;
+    
+    groupedData[groupName].forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'edit-person-item';
+      item.dataset.name = p.name;
+      item.dataset.group = groupName;
+      item.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid #eee;
+        margin-bottom: 5px;
+        background: white;
+        border-radius: 8px;
+      `;
+      
+      item.innerHTML = `
+        <div>
+          <strong style="font-size: 15px;">${p.name}</strong>
+          <div style="font-size: 12px; color: #666; margin-top: 3px;">${groupName}</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button onclick="editSinglePersonnel(${p.id}, '${p.name}', '${groupName}')" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 5px; font-size: 13px;">
+            <i class="fas fa-edit"></i> 編輯
+          </button>
+          <button onclick="deleteSinglePersonnel(${p.id}, '${p.name}')" style="padding: 8px 12px; background: #F44336; color: white; border: none; border-radius: 5px; font-size: 13px;">
+            <i class="fas fa-trash"></i> 刪除
+          </button>
+        </div>
+      `;
+      
+      groupContainer.appendChild(item);
+    });
+    
+    // 點擊群組標題展開/收合
+    groupHeader.addEventListener('click', function() {
+      const icon = this.querySelector('i');
+      if (groupContainer.style.display === 'none') {
+        groupContainer.style.display = 'block';
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        groupContainer.style.display = 'none';
+        icon.style.transform = 'rotate(-90deg)';
+      }
+    });
+    
+    listDiv.appendChild(groupHeader);
+    listDiv.appendChild(groupContainer);
   });
 }
 
 // 編輯單一人員
-async function editSinglePersonnel(id) {
-  const newName = prompt('輸入新名稱（留空不改）:');
-  const newGroup = prompt('輸入新群組（留空不改）:');
+async function editSinglePersonnel(id, currentName, currentGroup) {
+  // 取得所有群組
+  const sessionToken = sessionStorage.getItem('sessionToken');
+  const response = await fetch(CONFIG.API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'getMasterPersonnel',
+      sessionToken
+    })
+  });
+  const result = await response.json();
+  const personnel = result.masterPersonnel || [];
+  const groups = [...new Set(personnel.map(p => p.group_name))].filter(Boolean);
   
-  const updates = {};
-  if (newName) updates.name = newName;
-  if (newGroup) updates.group_name = newGroup;
+  // 建立編輯彈窗
+  const editModal = document.createElement('div');
+  editModal.className = 'modal';
+  editModal.style.zIndex = '2001';
+  editModal.innerHTML = `
+    <div class="modal-content" style="max-width: 400px;">
+      <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+      <h3 style="margin-bottom: 20px;">
+        <i class="fas fa-user-edit"></i> 編輯人員
+      </h3>
+      
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">姓名</label>
+        <input type="text" id="edit-name-input" value="${currentName}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">組別</label>
+        <select id="edit-group-select" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+          ${groups.map(g => `<option value="${g}" ${g === currentGroup ? 'selected' : ''}>${g}</option>`).join('')}
+          <option value="__custom__">📝 新增自訂組別...</option>
+        </select>
+        <input type="text" id="edit-custom-group-input" placeholder="輸入新組別名稱" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; margin-top: 10px; display: none;">
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <button onclick="confirmEditPerson(${id})" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold;">
+          <i class="fas fa-check"></i> 確定
+        </button>
+        <button onclick="this.closest('.modal').remove()" style="flex: 1; padding: 12px; background: #f0f0f0; border: none; border-radius: 8px; font-weight: bold;">
+          <i class="fas fa-times"></i> 取消
+        </button>
+      </div>
+    </div>
+  `;
   
-  if (Object.keys(updates).length === 0) return;
+  document.body.appendChild(editModal);
+  editModal.style.display = 'block';
+  
+  // 選擇「新增自訂組別」時顯示輸入框
+  document.getElementById('edit-group-select').onchange = function() {
+    const customInput = document.getElementById('edit-custom-group-input');
+    if (this.value === '__custom__') {
+      customInput.style.display = 'block';
+      customInput.focus();
+    } else {
+      customInput.style.display = 'none';
+    }
+  };
+}
+
+// 確認編輯人員
+async function confirmEditPerson(id) {
+  const newName = document.getElementById('edit-name-input').value.trim();
+  const groupSelect = document.getElementById('edit-group-select');
+  const customGroupInput = document.getElementById('edit-custom-group-input');
+  
+  let newGroup = groupSelect.value;
+  if (newGroup === '__custom__') {
+    newGroup = customGroupInput.value.trim();
+    if (!newGroup) {
+      showNotification('請輸入新組別名稱');
+      return;
+    }
+  }
+  
+  if (!newName) {
+    showNotification('請輸入姓名');
+    return;
+  }
+  
+  const updates = {
+    name: newName,
+    group_name: newGroup
+  };
   
   const sessionToken = sessionStorage.getItem('sessionToken');
   const response = await fetch(CONFIG.API_BASE, {
@@ -3803,8 +4011,11 @@ async function editSinglePersonnel(id) {
   
   const result = await response.json();
   if (result.status === 'ok') {
-    showNotification('更新成功');
+    showNotification('✅ 更新成功');
+    document.querySelectorAll('.modal').forEach(m => m.remove());
     showEditPersonnelModal(); // 重新載入
+  } else {
+    showNotification('❌ 更新失敗：' + result.message);
   }
 }
 
