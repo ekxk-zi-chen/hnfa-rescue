@@ -612,6 +612,98 @@ export async function handlePersonnelControl(action, body, supabase, userData, r
       });
     }
 
+    // ====== 編輯人員資料 ======
+    if (action === 'editPersonnel') {
+      if (!isAdmin) {
+        return res.status(403).json({ status: "error", message: "只有管理員可以編輯" });
+      }
+
+      const { id, updates } = body;
+
+      const { data, error } = await supabase
+        .from('personnel_control')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return res.status(200).json({
+        status: "ok",
+        message: "人員資料已更新",
+        personnel: data
+      });
+    }
+
+    // ====== 刪除人員（軟刪除） ======
+    if (action === 'deletePersonnel') {
+      if (!isAdmin) {
+        return res.status(403).json({ status: "error", message: "只有管理員可以刪除" });
+      }
+
+      const { id } = body;
+
+      // 軟刪除：設為 is_master = false, is_active = false
+      const { error } = await supabase
+        .from('personnel_control')
+        .update({
+          is_master: false,
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      return res.status(200).json({
+        status: "ok",
+        message: "人員已刪除"
+      });
+    }
+
+    // ====== 批量加入人員 ======
+    if (action === 'batchAddPersonnel') {
+      if (!isAdmin) {
+        return res.status(403).json({ status: "error", message: "只有管理員可以批量加入" });
+      }
+
+      const { personnelList } = body; // [{ name, group_name, ... }, ...]
+
+      if (!personnelList || !Array.isArray(personnelList) || personnelList.length === 0) {
+        return res.status(400).json({ status: "error", message: "請提供人員清單" });
+      }
+
+      const dataToInsert = personnelList.map(p => ({
+        name: p.name,
+        group_name: p.group_name || '未分組',
+        photo: p.photo || 'default.jpg',
+        status: 'BoO',
+        time_status: getTaiwanTime(),
+        time_history: `BoO ${getTaiwanTime()}`,
+        is_master: true,
+        is_active: false, // 先不加入任務
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { data, error } = await supabase
+        .from('personnel_control')
+        .insert(dataToInsert)
+        .select();
+
+      if (error) throw error;
+
+      return res.status(200).json({
+        status: "ok",
+        message: `已批量新增 ${data.length} 位人員`,
+        personnel: data
+      });
+    }
+
     // ====== 未知的action ======
     return res.status(400).json({
       status: "error",
