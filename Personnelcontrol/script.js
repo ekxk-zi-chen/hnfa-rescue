@@ -1117,7 +1117,7 @@ window.handleConfirmGroupReason = function (groupName, newStatus) {
 };
 
 // 確認群組原因
-function confirmGroupReason(groupName, newStatus) {
+async function confirmGroupReasonUpdate(groupName, newStatus) {
     const reasonModal = document.getElementById('group-reason-modal');
     if (!reasonModal) return;
 
@@ -1138,7 +1138,7 @@ function confirmGroupReason(groupName, newStatus) {
     }
 
     // 執行批次更新
-    performBatchGroupUpdate(groupName, newStatus, selectedReason);
+    await performBatchGroupUpdateViaAPI(groupName, newStatus, selectedReason);
     closeGroupReasonModal();
 }
 
