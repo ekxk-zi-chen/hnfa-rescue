@@ -743,7 +743,7 @@
   ">
       🖼️ 全屏繪圖
     </button>
-    
+
   </div>
   <br>
   <div class="app">
@@ -751,6 +751,7 @@
     <div class="mobile-toolbar">
       <button id="mobileDrawBtn" title="繪製場地">📐</button>
       <button id="mobileSelectBtn" title="選擇模式">👆</button>
+      <button id="mobileDeleteBtn" title="刪除選中物件" style="background: #ef4444;">🗑️</button>
       <button id="mobileZoomIn" title="放大">➕</button>
       <button id="mobileZoomOut" title="縮小">➖</button>
       <button id="mobileAutoArrange" title="AI排版">🤖</button>
@@ -912,6 +913,11 @@
       <div class="toolbar">
         <div class="small">目前模式：<span id="modeLabel" style="color:#10b981;font-weight:bold">繪製場地</span></div>
         <div style="flex:1"></div>
+
+        <!-- 新增刪除按鈕 -->
+        <button id="desktopDeleteBtn" class="small" style="background: #ef4444; color: white;" title="刪除選中物件">🗑️
+          刪除</button>
+
         <!-- 全屏繪圖按鈕 -->
         <button id="fullscreenDrawBtn" class="small" title="全屏繪圖">全屏繪圖🖼️</button>
 
@@ -2581,15 +2587,19 @@
     // ========== 刪除選中物件 ==========
     // 找到 deleteSelectedItem 函數（約在第1191行），修改為：
     function deleteSelectedItem() {
-      if (!state.selectedItem) return;
+      if (!state.selectedItem) {
+        showMobileToast('沒有選中的物件');
+        return;
+      }
 
       if (confirm('確定要刪除此物件嗎？')) {
         const index = state.placed.findIndex(item => item.id === state.selectedItem.id);
         if (index !== -1) {
           state.placed.splice(index, 1);
-          state.selectedItem = null; // 重置選中項
+          state.selectedItem = null; // 重要：重置選中狀態
           updatePlacedGraphics();
           closeEditModal();
+          showMobileToast('物件已刪除');
         }
       }
     }
@@ -3706,6 +3716,7 @@
         updateViewTransform();
       });
 
+
       document.getElementById('zoomOutBtn').addEventListener('click', () => {
         state.zoom = Math.max(0.1, state.zoom / 1.2);
         updateViewTransform();
@@ -3799,6 +3810,43 @@
           }
         }
       });
+
+      function handleDelete() {
+        if (!state.selectedItem) {
+          showMobileToast('請先選擇要刪除的物件');
+          return;
+        }
+
+        // 桌面版用 confirm，手機版直接刪除（或用 toast 確認）
+        const shouldDelete = window.innerWidth > 900
+          ? confirm('確定要刪除此物件嗎？')
+          : true; // 手機版直接刪除
+
+        if (shouldDelete) {
+          const index = state.placed.findIndex(item => item.id === state.selectedItem.id);
+          if (index !== -1) {
+            state.placed.splice(index, 1);
+            state.selectedItem = null;
+            updatePlacedGraphics();
+            showMobileToast('物件已刪除');
+
+            // 如果編輯視窗是開啟的，也關閉它
+            closeEditModal();
+          }
+        }
+      }
+
+      // 綁定手機刪除按鈕
+      const mobileDeleteBtn = document.getElementById('mobileDeleteBtn');
+      if (mobileDeleteBtn) {
+        mobileDeleteBtn.addEventListener('click', handleDelete);
+      }
+
+      // 綁定桌面刪除按鈕
+      const desktopDeleteBtn = document.getElementById('desktopDeleteBtn');
+      if (desktopDeleteBtn) {
+        desktopDeleteBtn.addEventListener('click', handleDelete);
+      }
 
       // 創建鎖定邊界按鈕
       lockBtn = document.createElement('button');
