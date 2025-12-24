@@ -28,20 +28,21 @@ export class GroupService {
                 .select('*')
                 .eq('group_id', groupId)
                 .eq('is_active', true)
-                .maybeSingle(); // 💡 使用 maybeSingle 以避免找不到資料時拋錯
+                .maybeSingle(); // 修正: 改用 maybeSingle
 
             if (error) {
-                if (error.code === 'PGRST116') {
-                    // 找不到資料
-                    console.log(`ℹ️ 群組 ${groupId} 未設定或未啟用`);
-                    return null;
-                }
-                throw error;
+                console.error('❌ 查詢群組設定報錯:', error.message);
+                return null;
+            }
+
+            if (!data) {
+                console.log(`ℹ️ 資料庫查無此群組: ${groupId}`);
+                return null;
             }
 
             return data;
-        } catch (error) {
-            console.error('❌ 取得群組設定失敗:', error);
+        } catch (error: any) {
+            console.error('🔥 getGroupSettings 發生崩潰:', error.message);
             return null;
         }
     }
@@ -145,22 +146,23 @@ export class GroupService {
      */
     async getUserState(userId: string): Promise<UserState | null> {
         try {
+            // 修正 1: 改用本地時間格式，對齊 timestamp without time zone
+            const now = new Date().toLocaleString('sv-SE').replace(' ', 'T');
+
             const { data, error } = await supabase
                 .from('line_user_states')
                 .select('*')
                 .eq('user_id', userId)
-                .gt('expires_at', new Date().toISOString())
-                .maybeSingle(); // 💡 重點：把 .single() 改成 .maybeSingle()
+                .gt('expires_at', now)
+                .maybeSingle(); // 修正 2: 絕對要用 maybeSingle
 
             if (error) {
-                // maybeSingle 不會因為沒資料噴 PGRST116，所以這裡只會處理真正的連線錯誤
-                console.warn(`⚠️ Supabase 連線抖動: ${error.message}`);
+                console.error('⚠️ Supabase 查詢狀態抖動:', error.message);
                 return null;
             }
-
-            return data; // 如果沒資料，data 會是 null，程式會優雅地走下去
+            return data;
         } catch (error: any) {
-            console.error('🔥 發生網路層級錯誤:', error.message);
+            console.error('🔥 getUserState 發生崩潰:', error.message);
             return null;
         }
     }
