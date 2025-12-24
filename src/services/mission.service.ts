@@ -1,7 +1,7 @@
 // src/services/mission.service.ts
 
-import { supabase } from '../integrations/supabase.client';
-import { ActiveMission, ReportSubmission } from '../types/line-event';
+import { supabase } from '../integrations/supabase.client.js';
+import { ActiveMission, ReportSubmission } from '../types/line-event.js';
 
 // ==================== 任務服務 ====================
 
@@ -235,5 +235,6 @@ export class MissionService {
 }
 
 // ==================== 匯出單例 ====================
+
 
 export const missionService = new MissionService();
