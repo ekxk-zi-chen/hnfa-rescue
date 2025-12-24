@@ -28,7 +28,7 @@ export class GroupService {
                 .select('*')
                 .eq('group_id', groupId)
                 .eq('is_active', true)
-                .single();
+                .maybeSingle(); // 💡 使用 maybeSingle 以避免找不到資料時拋錯
 
             if (error) {
                 if (error.code === 'PGRST116') {
