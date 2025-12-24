@@ -1,0 +1,8 @@
+{
+  "buildCommand": "echo 'No build command needed'",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node@3"
+    }
+  }
+}
