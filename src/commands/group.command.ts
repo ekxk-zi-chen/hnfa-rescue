@@ -34,10 +34,11 @@ export async function handleGroupMessage(event: MessageEvent): Promise<void> {
       console.log('⚠️ 無法取得 groupId 或 userId');
       return;
     }
-
+    
+    console.log('--- 🛡️ 準備連線 Supabase ---'); // 💡 放在 await 之前
     // 3. 檢查群組設定
     const groupSettings = await groupService.getGroupSettings(groupId);
-    console.log(`🔎 正在查詢資料庫中的群組: ${groupId}`);
+    console.log('--- 🛡️ Supabase 回傳了！ ---'); // 💡 放在 await 之後
 
     if (!groupSettings) {
       console.log(`❌ 資料庫查無此群組設定，或群組未啟用！`);
