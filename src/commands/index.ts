@@ -19,8 +19,27 @@ import { handleMissionSelection, handleReportContent } from './report.command.js
  */
 export async function handleEvent(event: LineEvent): Promise<void> {
   try {
-    console.log(`📨 收到事件: ${event.type}, 來源: ${event.source.type}`);
+    // ✅ 新增：詳細的 debug 資訊
+    console.log('========== 事件詳細資訊 ==========');
+    console.log(`事件類型: ${event.type}`);
+    console.log(`來源類型: ${event.source.type}`);
+    
+    if (event.source.type === 'group') {
+      console.log(`群組 ID: ${event.source.groupId}`);
+      console.log(`使用者 ID: ${event.source.userId}`);
+    } else if (event.source.type === 'user') {
+      console.log(`使用者 ID: ${event.source.userId}`);
+    }
+    
+    if (event.type === 'message' && 'message' in event) {
+      const msgEvent = event as MessageEvent;
+      if (msgEvent.message.type === 'text') {
+        console.log(`訊息內容: ${(msgEvent.message as TextMessage).text}`);
+      }
+    }
+    console.log('=====================================');
 
+    console.log(`📨 收到事件: ${event.type}, 來源: ${event.source.type}`);
     // ==================== Message Event ====================
     if (event.type === 'message') {
       await handleMessageEvent(event as MessageEvent);
