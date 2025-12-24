@@ -144,29 +144,24 @@ export class GroupService {
      * @returns 使用者狀態（如果不存在或已過期則回傳 null）
      */
     async getUserState(userId: string): Promise<UserState | null> {
-        // 💡 加上 try-catch 是為了防止連線噴錯導致整個機器人當機
         try {
             const { data, error } = await supabase
                 .from('line_user_states')
                 .select('*')
                 .eq('user_id', userId)
                 .gt('expires_at', new Date().toISOString())
-                .single();
+                .maybeSingle(); // 💡 重點：把 .single() 改成 .maybeSingle()
 
             if (error) {
-                // PGRST116 是「正常」的查無資料，其他則是「連線異常」
-                if (error.code === 'PGRST116') return null;
-
-                // 💡 這裡記錄錯誤，但不拋出 throw，讓流程能繼續走「一般訊息處理」
-                console.warn(`⚠️ Supabase 連線抖動 (Code: ${error.code}): ${error.message}`);
+                // maybeSingle 不會因為沒資料噴 PGRST116，所以這裡只會處理真正的連線錯誤
+                console.warn(`⚠️ Supabase 連線抖動: ${error.message}`);
                 return null;
             }
 
-            return data;
+            return data; // 如果沒資料，data 會是 null，程式會優雅地走下去
         } catch (error: any) {
-            // 💡 這裡捕捉你日誌中的 fetch failed 或 ECONNRESET
-            console.error('🔥 發生網路層級錯誤 (可能為 Vercel 冷啟動或 DNS 抖動):', error.message);
-            return null; // 即使斷線，也回傳 null 讓後面的程式碼能跑
+            console.error('🔥 發生網路層級錯誤:', error.message);
+            return null;
         }
     }
 
