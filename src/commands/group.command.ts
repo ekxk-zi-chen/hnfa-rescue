@@ -61,7 +61,8 @@ export async function handleGroupMessage(event: MessageEvent): Promise<void> {
     const content = groupService.extractContent(text, groupSettings.command_prefix);
 
     // 7. 根據指令前綴決定處理方式
-    if (groupSettings.command_prefix === '#任務回報') {
+    if (content.startsWith('任務回報')) {
+      console.log(`成功執行指令:進入到handleMissionReport`);
       await handleMissionReport(event, userId, groupId, content);
     } else {
       // 未來可擴充其他指令
