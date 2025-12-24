@@ -1,22 +1,11 @@
 // api/line/webhook.ts
 
-import { LineWebhookBody } from '../../src/types/line-event';
-import { lineClient } from '../../src/integrations/line.client';
-import { handleEvent } from '../../src/commands/index';
+import { LineWebhookBody } from '../../src/types/line-event.js';
+import { lineClient } from '../../src/integrations/line.client.js';
+import { handleEvent } from '../../src/commands/index.js';
 
 // ==================== LINE Webhook 唯一入口 ====================
 
-/**
- * LINE Webhook Handler
- * 
- * 職責：
- * ❌ 不寫業務邏輯
- * ❌ 不碰資料庫
- * ✅ 只做三件事：
- *    1. 驗證簽名
- *    2. 解析事件
- *    3. 轉交處理
- */
 export default async function handler(req: any, res: any): Promise<void> {
   
   // ==================== CORS 處理 ====================
