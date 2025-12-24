@@ -1,6 +1,6 @@
 // src/commands/index.ts
 
-import { LineEvent, MessageEvent, PostbackEvent, TextMessage } from '../types/line-event.js';
+import { JoinEvent, LeaveEvent, LineEvent, MessageEvent, PostbackEvent, TextMessage } from '../types/line-event.js';
 import { lineClient } from '../integrations/line.client.js';
 import { groupService } from '../services/group.service.js';
 import { handleGroupMessage } from './group.command.js';
@@ -42,25 +42,25 @@ export async function handleEvent(event: LineEvent): Promise<void> {
     console.log(`📨 收到事件: ${event.type}, 來源: ${event.source.type}`);
     // ==================== Message Event ====================
     if (event.type === 'message') {
-      await handleMessageEvent(event as MessageEvent);
+      await handleMessageEvent(event as MessageEvent).catch(err => console.error('❌ 訊息處理崩潰:', err));
       return;
     }
 
     // ==================== Postback Event ====================
     if (event.type === 'postback') {
-      await handlePostbackEvent(event as PostbackEvent);
+      await handlePostbackEvent(event as PostbackEvent).catch(err => console.error('❌ 按鈕處理崩潰:', err));
       return;
     }
 
     // ==================== Join Event ====================
     if (event.type === 'join') {
-      await handleJoinEvent(event);
+      await handleJoinEvent(event as JoinEvent).catch(err => console.error('❌ 加入事件處理崩潰:', err));
       return;
     }
 
     // ==================== Leave Event ====================
     if (event.type === 'leave') {
-      await handleLeaveEvent(event);
+      await handleLeaveEvent(event as LeaveEvent).catch(err => console.error('❌ 離開事件處理崩潰:', err));
       return;
     }
 
@@ -105,17 +105,18 @@ async function handleMessageEvent(event: MessageEvent): Promise<void> {
 async function handleGroupMessageEvent(event: MessageEvent): Promise<void> {
   try {
     const userId = lineClient.getUserId(event);
+    if (!userId) return;
 
-    if (!userId) {
-      console.log('⚠️ 無法取得 userId');
-      return;
+    // 💡 關鍵改動：這裡最容易因為網路抖動報錯
+    let userState = null;
+    try {
+      userState = await groupService.getUserState(userId);
+    } catch (dbError) {
+      // 如果資料庫掛了，我們記錄一下，但讓 userState 保持 null，程式繼續往下跑
+      console.error('⚠️ 無法取得使用者狀態(可能資料庫斷線)，跳過狀態檢查:', dbError);
     }
 
-    // 檢查使用者是否處於「等待輸入」狀態
-    const userState = await groupService.getUserState(userId);
-
     if (userState && userState.state_type === 'waiting_report_content') {
-      // 使用者正在輸入回報內容
       if (event.message.type === 'text') {
         const textMessage = event.message as TextMessage;
         await handleReportContent(event, userId, textMessage.text);
@@ -123,11 +124,11 @@ async function handleGroupMessageEvent(event: MessageEvent): Promise<void> {
       }
     }
 
-    // 否則，當作一般群組訊息處理
+    // 💡 即使上面 getUserState 失敗了，我們依然嘗試執行一般群組指令處理
     await handleGroupMessage(event);
 
   } catch (error) {
-    console.error('❌ 處理群組訊息事件失敗:', error);
+    console.error('❌ 處理群組訊息事件完全失敗:', error);
   }
 }
 
