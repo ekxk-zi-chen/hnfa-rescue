@@ -1,10 +1,10 @@
 // src/commands/report.command.ts
 
-import { MessageEvent, PostbackEvent } from '../types/line-event';
-import { lineClient } from '../integrations/line.client';
-import { groupService } from '../services/group.service';
-import { missionService } from '../services/mission.service';
-import { parsePostback } from '../utils/parsePostback';
+import { MessageEvent, PostbackEvent } from '../types/line-event.js';
+import { lineClient } from '../integrations/line.client.js';
+import { groupService } from '../services/group.service.js';
+import { missionService } from '../services/mission.service.js';
+import { parsePostback } from '../utils/parsePostback.js';
 
 // ==================== 任務回報處理 ====================
 
