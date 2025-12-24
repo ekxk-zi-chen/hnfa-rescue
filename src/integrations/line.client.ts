@@ -8,7 +8,7 @@ import {
   QuickReply,
   QuickReplyItem,
   PostbackAction
-} from '../types/line-event';
+} from '../types/line-event.js';
 /**
  * QuickReply 使用範例：
  * {
