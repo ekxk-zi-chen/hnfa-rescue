@@ -1,10 +1,10 @@
 // src/commands/index.ts
 
-import { LineEvent, MessageEvent, PostbackEvent, TextMessage } from '../types/line-event';
-import { lineClient } from '../integrations/line.client';
-import { groupService } from '../services/group.service';
-import { handleGroupMessage } from './group.command';
-import { handleMissionSelection, handleReportContent } from './report.command';
+import { LineEvent, MessageEvent, PostbackEvent, TextMessage } from '../types/line-event.js';
+import { lineClient } from '../integrations/line.client.js';
+import { groupService } from '../services/group.service.js';
+import { handleGroupMessage } from './group.command.js';
+import { handleMissionSelection, handleReportContent } from './report.command.js';
 
 // ==================== 事件路由器（總機）====================
 
