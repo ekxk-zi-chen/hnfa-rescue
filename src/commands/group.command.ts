@@ -57,21 +57,23 @@ export async function handleGroupMessage(event: MessageEvent): Promise<void> {
       return; // 不是指令，忽略
     }
 
-    // 6. 移除指令前綴，取得內容
+    // 6. 移除指令前綴，取得內容 (這行一定要留著，因為 content 靠它產生)
     const content = groupService.extractContent(text, groupSettings.command_prefix);
 
-    // 7. 根據指令前綴決定處理方式
-    if (content.startsWith('任務回報')) {
-      console.log(`成功執行指令:進入到handleMissionReport`);
+    // 7. 根據指令決定處理方式
+    // 💡 這裡加上一個「或」的判斷：
+    // 情況 A：前綴是 #，所以 content 開頭是「任務回報」
+    // 情況 B：前綴就是 #任務回報，所以 content 可能是空的 (代表精準匹配)
+    if (content.startsWith('任務回報') || groupSettings.command_prefix === '#任務回報') {
+      console.log(`🎯 成功觸發！前綴: ${groupSettings.command_prefix}, 內容: ${content}`);
       await handleMissionReport(event, userId, groupId, content);
     } else {
-      // 未來可擴充其他指令
-      console.log(`⚠️ 未知指令: ${groupSettings.command_prefix}`);
+      console.log(`⚠️ 未知指令內容: "${content}" (前綴為: ${groupSettings.command_prefix})`);
     }
 
   } catch (error) {
     console.error('❌ 處理群組訊息失敗:', error);
-    
+
     // 發生錯誤時回覆使用者
     try {
       await lineClient.replyText(
