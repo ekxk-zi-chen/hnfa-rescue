@@ -102,33 +102,51 @@ async function handleMessageEvent(event: MessageEvent): Promise<void> {
 /**
  * 處理群組訊息事件
  */
+/**
+ * 處理群組訊息事件 (強化偵錯版)
+ */
 async function handleGroupMessageEvent(event: MessageEvent): Promise<void> {
+  console.log('📍 [Step 1] 進入 handleGroupMessageEvent');
+  
   try {
+    // 1. 取得使用者 ID
     const userId = lineClient.getUserId(event);
-    if (!userId) return;
+    console.log(`📍 [Step 2] 取得 userId: "${userId}"`);
 
-    // 💡 關鍵改動：這裡最容易因為網路抖動報錯
-    let userState = null;
-    try {
-      userState = await groupService.getUserState(userId);
-    } catch (dbError) {
-      // 如果資料庫掛了，我們記錄一下，但讓 userState 保持 null，程式繼續往下跑
-      console.error('⚠️ 無法取得使用者狀態(可能資料庫斷線)，跳過狀態檢查:', dbError);
+    if (!userId) {
+      console.log('⚠️ [Step 2.5] 因為 userId 為空，終止執行');
+      return;
     }
 
+    // 2. 查詢使用者狀態
+    let userState = null;
+    console.log('📍 [Step 3] 準備向 Supabase 查詢 userState...');
+    
+    try {
+      userState = await groupService.getUserState(userId);
+      console.log(`📍 [Step 4] 查詢結束，userState 是否存在: ${!!userState}`);
+    } catch (dbError) {
+      console.error('⚠️ [Step 4 Error] 無法取得使用者狀態，跳過狀態檢查:', dbError);
+    }
+
+    // 3. 處理「等待回報內容」狀態
     if (userState && userState.state_type === 'waiting_report_content') {
+      console.log('📍 [Step 5] 命中 userState 狀態：waiting_report_content');
       if (event.message.type === 'text') {
         const textMessage = event.message as TextMessage;
+        console.log('📍 [Step 6] 呼叫 handleReportContent');
         await handleReportContent(event, userId, textMessage.text);
         return;
       }
     }
 
-    // 💡 即使上面 getUserState 失敗了，我們依然嘗試執行一般群組指令處理
+    // 4. 執行一般群組指令處理
+    console.log('📍 [Step 7] 準備呼叫 handleGroupMessage (處理 #任務回報 等指令)');
     await handleGroupMessage(event);
+    console.log('✅ [Step 8] handleGroupMessage 執行完畢');
 
   } catch (error) {
-    console.error('❌ 處理群組訊息事件完全失敗:', error);
+    console.error('❌ [Critical Error] 處理群組訊息事件完全失敗:', error);
   }
 }
 
