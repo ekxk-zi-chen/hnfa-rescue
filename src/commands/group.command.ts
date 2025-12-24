@@ -1,9 +1,9 @@
 // src/commands/group.command.ts
 
-import { MessageEvent, TextMessage } from '../types/line-event';
-import { lineClient } from '../integrations/line.client';
-import { groupService } from '../services/group.service';
-import { handleMissionReport } from './report.command';
+import { MessageEvent, TextMessage } from '../types/line-event.js';
+import { lineClient } from '../integrations/line.client.js';
+import { groupService } from '../services/group.service.js';
+import { handleMissionReport } from './report.command.js';
 
 // ==================== 群組訊息處理 ====================
 
