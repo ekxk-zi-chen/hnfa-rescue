@@ -274,7 +274,15 @@ export class LineClient {
         return null;
       }
 
-      return await response.json();
+      // ✅ 修正：明確指定型別
+      const result = await response.json() as {
+        displayName: string;
+        userId: string;
+        pictureUrl?: string;
+        statusMessage?: string;
+      };
+
+      return result;
     } catch (error) {
       console.error('❌ 取得使用者資料發生錯誤:', error);
       return null;
@@ -304,7 +312,14 @@ export class LineClient {
         return null;
       }
 
-      return await response.json();
+      // ✅ 修正：明確指定型別
+      const result = await response.json() as {
+        displayName: string;
+        userId: string;
+        pictureUrl?: string;
+      };
+
+      return result;
     } catch (error) {
       console.error('❌ 取得群組成員資料發生錯誤:', error);
       return null;
