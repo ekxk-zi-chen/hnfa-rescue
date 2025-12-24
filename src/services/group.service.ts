@@ -147,24 +147,33 @@ export class GroupService {
      * @returns 使用者狀態（如果不存在或已過期則回傳 null）
      */
     async getUserState(userId: string): Promise<UserState | null> {
+        console.log('🧪 [Inside Service] 開始執行 getUserState...');
         try {
-            // 💡 使用符合 timestamp without time zone 的比較字串
-            const now = new Date().toLocaleString('sv-SE').replace('T', ' ');
+            // 1. 先確認 supabase 物件是否存在
+            if (!supabase) {
+                console.error('❌ [Inside Service] Supabase client 未初始化');
+                return null;
+            }
+
+            // 💡 暫時註解掉時間判斷，我們先測最單純的查詢
+            console.log(`🧪 [Inside Service] 正在查詢 user_id: ${userId}`);
 
             const { data, error } = await supabase
                 .from('line_user_states')
                 .select('*')
                 .eq('user_id', userId)
-                .gt('expires_at', now) // 這裡的 now 不能帶有 T 或 Z
                 .maybeSingle();
 
             if (error) {
-                console.warn(`⚠️ Supabase 查詢狀態抖動: ${error.message}`);
+                console.error('⚠️ [Inside Service] Supabase 回報錯誤:', error.message);
                 return null;
             }
+
+            console.log('🧪 [Inside Service] 查詢成功');
             return data;
-        } catch (error: any) {
-            console.error('🔥 getUserState 發生崩潰:', error.message);
+        } catch (err: any) {
+            // 抓取最嚴重的崩潰錯誤
+            console.error('🔥 [Inside Service] 發生嚴重崩潰:', err?.message || err);
             return null;
         }
     }
