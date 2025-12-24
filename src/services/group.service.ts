@@ -143,29 +143,32 @@ export class GroupService {
    * @param userId - LINE user_id
    * @returns 使用者狀態（如果不存在或已過期則回傳 null）
    */
-  async getUserState(userId: string): Promise<UserState | null> {
+    async getUserState(userId: string): Promise<UserState | null> {
+    // 💡 加上 try-catch 是為了防止連線噴錯導致整個機器人當機
     try {
-      const { data, error } = await supabase
+        const { data, error } = await supabase
         .from('line_user_states')
         .select('*')
         .eq('user_id', userId)
-        .gt('expires_at', new Date().toISOString()) // 尚未過期
+        .gt('expires_at', new Date().toISOString())
         .single();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // 找不到資料
-          return null;
+        if (error) {
+        // PGRST116 是「正常」的查無資料，其他則是「連線異常」
+        if (error.code === 'PGRST116') return null;
+        
+        // 💡 這裡記錄錯誤，但不拋出 throw，讓流程能繼續走「一般訊息處理」
+        console.warn(`⚠️ Supabase 連線抖動 (Code: ${error.code}): ${error.message}`);
+        return null; 
         }
-        throw error;
-      }
 
-      return data;
-    } catch (error) {
-      console.error('❌ 取得使用者狀態失敗:', error);
-      return null;
+        return data;
+    } catch (error: any) {
+        // 💡 這裡捕捉你日誌中的 fetch failed 或 ECONNRESET
+        console.error('🔥 發生網路層級錯誤 (可能為 Vercel 冷啟動或 DNS 抖動):', error.message);
+        return null; // 即使斷線，也回傳 null 讓後面的程式碼能跑
     }
-  }
+    }
 
   /**
    * 清除使用者狀態
@@ -207,6 +210,5 @@ export class GroupService {
 }
 
 // ==================== 匯出單例 ====================
-
 
 export const groupService = new GroupService();
