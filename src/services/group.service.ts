@@ -1,7 +1,7 @@
 // src/services/group.service.ts
 
-import { supabase } from '../integrations/supabase.client';
-import { GroupSettings, UserState } from '../types/line-event';
+import { supabase } from '../integrations/supabase.client.js';
+import { GroupSettings, UserState } from '../types/line-event.js';
 
 // ==================== 群組設定服務 ====================
 
@@ -207,5 +207,6 @@ export class GroupService {
 }
 
 // ==================== 匯出單例 ====================
+
 
 export const groupService = new GroupService();
