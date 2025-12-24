@@ -115,9 +115,12 @@ export class GroupService {
         groupId?: string
     ): Promise<void> {
         try {
-            // 設定 15 分鐘後過期
             const expiresAt = new Date();
             expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+            // 💡 關鍵：手動轉為 YYYY-MM-DD HH:mm:ss 格式
+            const formattedExpiresAt = expiresAt.toLocaleString('sv-SE').replace('T', ' ');
+            const formattedUpdatedAt = new Date().toLocaleString('sv-SE').replace('T', ' ');
 
             const { error } = await supabase
                 .from('line_user_states')
@@ -126,12 +129,11 @@ export class GroupService {
                     state_type: stateType,
                     state_data: stateData,
                     group_id: groupId || null,
-                    expires_at: expiresAt.toISOString(),
-                    updated_at: new Date().toISOString()
+                    expires_at: formattedExpiresAt,
+                    updated_at: formattedUpdatedAt
                 });
 
             if (error) throw error;
-
             console.log(`✅ 設定使用者狀態: ${userId} → ${stateType}`);
         } catch (error) {
             console.error('❌ 設定使用者狀態失敗:', error);
@@ -146,18 +148,18 @@ export class GroupService {
      */
     async getUserState(userId: string): Promise<UserState | null> {
         try {
-            // 修正 1: 改用本地時間格式，對齊 timestamp without time zone
-            const now = new Date().toLocaleString('sv-SE').replace(' ', 'T');
+            // 💡 使用符合 timestamp without time zone 的比較字串
+            const now = new Date().toLocaleString('sv-SE').replace('T', ' ');
 
             const { data, error } = await supabase
                 .from('line_user_states')
                 .select('*')
                 .eq('user_id', userId)
-                .gt('expires_at', now)
-                .maybeSingle(); // 修正 2: 絕對要用 maybeSingle
+                .gt('expires_at', now) // 這裡的 now 不能帶有 T 或 Z
+                .maybeSingle();
 
             if (error) {
-                console.error('⚠️ Supabase 查詢狀態抖動:', error.message);
+                console.warn(`⚠️ Supabase 查詢狀態抖動: ${error.message}`);
                 return null;
             }
             return data;
