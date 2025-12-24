@@ -37,11 +37,13 @@ export async function handleGroupMessage(event: MessageEvent): Promise<void> {
 
     // 3. 檢查群組設定
     const groupSettings = await groupService.getGroupSettings(groupId);
+    console.log(`🔎 正在查詢資料庫中的群組: ${groupId}`);
 
     if (!groupSettings) {
-      console.log(`ℹ️ 群組 ${groupId} 未啟用或不存在設定`);
+      console.log(`❌ 資料庫查無此群組設定，或群組未啟用！`);
       return; // 靜默處理，不回應
     }
+    console.log(`✅ 成功拿到設定！Prefix 是: ${groupSettings.command_prefix}`);
 
     // 4. 驗證使用者權限
     if (!groupService.isUserAllowed(userId, groupSettings)) {
