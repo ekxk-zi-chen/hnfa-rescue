@@ -150,33 +150,28 @@ export class GroupService {
      * @returns 使用者狀態（如果不存在或已過期則回傳 null）
      */
     async getUserState(userId: string): Promise<UserState | null> {
-        console.log('🧪 [Inside Service] 開始執行 getUserState...');
+        console.log('🧪 [Inside Service] 啟動 getUserState (防禦模式)');
+
         try {
-            // 1. 先確認 supabase 物件是否存在
-            if (!supabase) {
-                console.error('❌ [Inside Service] Supabase client 未初始化');
-                return null;
-            }
+            // 🚀 關鍵改動：給它一個 Promise.race，如果 Supabase 3秒內沒回話，直接當作沒這回事
+            // 這樣可以防止 Vercel 因為 fetch 卡住而直接殺掉 Process
+            const result = await Promise.race([
+                supabase.from('line_user_states').select('*').eq('user_id', userId).maybeSingle(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('SUPABASE_TIMEOUT')), 3000))
+            ]) as any;
 
-            // 💡 暫時註解掉時間判斷，我們先測最單純的查詢
-            console.log(`🧪 [Inside Service] 正在查詢 user_id: ${userId}`);
-
-            const { data, error } = await supabase
-                .from('line_user_states')
-                .select('*')
-                .eq('user_id', userId)
-                .maybeSingle();
+            const { data, error } = result;
 
             if (error) {
-                console.error('⚠️ [Inside Service] Supabase 回報錯誤:', error.message);
+                console.log('⚠️ [Inside Service] 查詢有錯但沒崩潰:', error.message);
                 return null;
             }
 
-            console.log('🧪 [Inside Service] 查詢成功');
+            console.log('🧪 [Inside Service] 查詢成功結束');
             return data;
         } catch (err: any) {
-            // 抓取最嚴重的崩潰錯誤
-            console.error('🔥 [Inside Service] 發生嚴重崩潰:', err?.message || err);
+            // 這裡會抓到 fetch failed 或 timeout
+            console.log('🛡️ [Inside Service] 攔截到連線抖動，跳過狀態檢查繼續執行 Step 7');
             return null;
         }
     }
