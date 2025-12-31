@@ -6,6 +6,9 @@ export const config = {
 
 export default async function handler(req) {
   // 1. 只接受 POST 請求
+  if (req.method === 'GET') {
+    return new Response('Vercel 無情轉發機器運行中！請使用 POST 測試。', { status: 200 });
+  }
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', { status: 405 });
   }
@@ -16,7 +19,7 @@ export default async function handler(req) {
 
     // 3. 你的 GAS 部署網址 (記得換成你最新的那個)
     // 注意：網址結尾通常是 /exec
-    const GAS_URL = "https://script.google.com/macros/s/你的_Deployment_ID/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwPPgRYU_hsKv1rb9H1Rqo49sMh4P4UjY5559lGUEzhwpM_eIroz_W9xBYuvfCU87b-/exec";
 
     // 4. 🔥 無情轉發核心：waitUntil
     // 這行意思是：「Vercel 你聽著，雖然我馬上要回傳 Response 了，
