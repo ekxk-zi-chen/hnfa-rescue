@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DJI 搜救航線轉檔器</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; background: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h2 { color: #333; margin-top: 0; }
+        .setting { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; font-size: 0.9em; }
+        input[type="number"], input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 1em; }
+        button:hover { background: #0056b3; }
+        #status { margin-top: 15px; font-weight: bold; color: #28a745; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🛸 DJI 搜救航線轉檔</h2>
+    <p style="font-size: 0.8em; color: #666;">將原始 GPX 轉為 DJI 專用優化 KML (不卡頓、亮黃色)</p>
+    
+    <div class="setting">
+        <label>1. 選擇原始 GPX 檔案</label>
+        <input type="file" id="fileInput" accept=".gpx">
+    </div>
+
+    <div class="setting">
+        <label>2. 抽稀靈敏度 (Epsilon)</label>
+        <input type="number" id="epsilon" value="0.0005" step="0.0001">
+        <small>數字越大越順暢，建議 0.0005</small>
+    </div>
+
+    <div class="setting">
+        <label>3. 最大點數限制</label>
+        <input type="number" id="maxPoints" value="500">
+    </div>
+
+    <button onclick="processFile()">開始轉檔並下載</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    function processFile() {
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const epsilon = parseFloat(document.getElementById('epsilon').value);
+        const maxPoints = parseInt(document.getElementById('maxPoints').value);
+
+        if (!fileInput.files.length) {
+            alert("請先選擇 GPX 檔案！");
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(content, "text/xml");
+            
+            // 1. 提取座標
+            let coords = [];
+            const trkpts = xmlDoc.getElementsByTagName("trkpt");
+            
+            for (let i = 0; i < trkpts.length; i++) {
+                const lat = trkpts[i].getAttribute("lat");
+                const lon = trkpts[i].getAttribute("lon");
+                const eleEl = trkpts[i].getElementsByTagName("ele")[0];
+                const ele = eleEl ? eleEl.textContent : "0";
+                coords.push({lon, lat, ele});
+            }
+
+            if (coords.length === 0) {
+                alert("找不到有效的座標點！");
+                return;
+            }
+
+            // 2. 智慧抽稀
+            let simplified = [coords[0]];
+            for (let i = 1; i < coords.length; i++) {
+                const last = simplified[simplified.length - 1];
+                const curr = coords[i];
+                const dist = Math.sqrt(Math.pow(curr.lon - last.lon, 2) + Math.pow(curr.lat - last.lat, 2));
+                if (dist > epsilon) {
+                    simplified.push(curr);
+                }
+            }
+            if (coords.length > 1) simplified.push(coords[coords.length-1]);
+
+            // 3. 強制點數限制
+            if (simplified.length > maxPoints) {
+                const step = Math.floor(simplified.length / maxPoints);
+                let finalCoords = [];
+                for (let i = 0; i < simplified.length; i += step) {
+                    finalCoords.push(simplified[i]);
+                }
+                simplified = finalCoords;
+            }
+
+            // 4. 生成 KML 字串
+            const coordString = simplified.map(c => `${c.lon},${c.lat},${c.ele}`).join("\n");
+            const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>DJI_SAR_Route</name>
+    <Style id="djiStyle">
+      <LineStyle>
+        <color>ff00ffff</color>
+        <width>6</width>
+      </LineStyle>
+    </Style>
+    <Placemark>
+      <name>手動參考軌跡 (勿點執行)</name>
+      <styleUrl>#djiStyle</styleUrl>
+      <LineString>
+        <tessellate>1</tessellate>
+        <altitudeMode>clampToGround</altitudeMode>
+        <coordinates>${coordString}</coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+
+            // 5. 下載檔案
+            const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "DJI_READY_" + file.name.replace(".gpx", ".kml");
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            status.innerText = `✅ 轉換完成！點數：${simplified.length}`;
+        };
+
+        reader.readAsText(file);
+    }
+</script>
+</body>
+</html>
